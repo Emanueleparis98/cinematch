@@ -30,8 +30,32 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Versione
+        id: version
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $version = $env:INPUT_VERSION.Trim().TrimStart("v")
+          } else {
+            $version = $env:REF_NAME.TrimStart("v")
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Versione non valida: '$version' (atteso x.y.z)."
+          }
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          if ($cargo -ne $version) {
+            throw "Cargo.toml contiene $cargo, il tag dice ${version}: allinea la versione prima della release."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
       - name: Test
-        run: cargo test --all-targets
+        run: cargo test --release --all-targets
 
       - name: Build release
         run: cargo build --release
@@ -45,26 +69,6 @@ jobs:
           if (-not $info.FileVersion -or $info.ProductName -ne "CineMatch") {
             throw "Metadati o icona non incorporati nell'eseguibile."
           }
-
-      - name: Versione
-        id: version
-        shell: pwsh
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ inputs.version }}".Trim().TrimStart("v")
-          } else {
-            $version = "${{ github.ref_name }}".TrimStart("v")
-          }
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Versione non valida: '$version' (atteso x.y.z)."
-          }
-          $cargo = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
-            Select-Object -First 1).Matches.Groups[1].Value
-          if ($cargo -ne $version) {
-            throw "Cargo.toml contiene $cargo, il tag dice $version: allinea la versione prima della release."
-          }
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "tag=v$version" >> $env:GITHUB_OUTPUT
 
       - name: Firma eseguibile (opzionale)
         if: ${{ env.HAS_SIGNING_CERT == 'true' }}

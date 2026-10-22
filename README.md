@@ -346,7 +346,7 @@ e invisibile.
 src/
 ├─ main.rs            bootstrap eframe (glow di default, wgpu con CINEMATCH_RENDERER=wgpu)
 ├─ app.rs             stato, barra di comando, ricerca asincrona, pannelli
-update.rs          manifesto release, download setup, SHA-256, avvio installer
+├─ update.rs          manifesto release, download setup, SHA-256, avvio installer
 ├─ domain/
 │  ├─ taxonomy.rs     caricamento tassonomia (decenni, generi, paesi, mood, correnti)
 │  ├─ model.rs        Facets, Movie, Details, ordinamento
