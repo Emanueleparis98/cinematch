@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CineMatch — il cinema giusto, senza perderti nel catalogo</title>
+  <meta name="description" content="CineMatch è l'app Windows per esplorare film su TMDB con vincoli reali, una chat che consiglia cinque titoli e aggiornamenti dentro l'app. Scarica l'installer per-utente.">
+  <meta name="theme-color" content="#05080f">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CineMatch — cinema a vincoli">
+  <meta property="og:description" content="Cinque film, un perché e un consiglio. Chat e griglia su TMDB, in un'app Windows.">
+  <meta property="og:image" content="https://emanueleparis98.github.io/cinematch/assets/app-chat.png">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/cinematch.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Vai al contenuto</a>
+
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="CineMatch, home">
+      <img src="assets/cinematch.png" alt="" width="34" height="34">
+      <span>Cine<span>Match</span></span>
+    </a>
+    <nav aria-label="Navigazione principale">
+      <a href="#funzioni">Funzioni</a>
+      <a href="#aggiornamenti">Aggiornamenti</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-gh" href="https://github.com/Emanueleparis98/cinematch" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+    <a class="btn btn-small" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
+      Scarica <span class="hide-sm">per Windows</span>
+    </a>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot"></span> Windows 10/11 · installer per-utente · nessun UAC</p>
+        <h1>Il cinema giusto,<br><span>senza perderti</span> nel catalogo.</h1>
+        <p class="lede">CineMatch trasforma una frase in cinque film reali, scelti su TMDB, con il perché e un consiglio pratico. Oppure esplora la griglia con vincoli che si spiegano da soli.</p>
+
+        <div class="hero-actions">
+          <a class="btn btn-download" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
+            <svg class="win" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm8.7-1.2L21 3v8.5h-9.3V4.3ZM3 12.7h7.5v7.1L3 18.7v-6Zm8.7 0H21V21l-9.3-1.3v-7Z"/></svg>
+            <span>Scarica per Windows</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="btn btn-quiet" href="https://github.com/Emanueleparis98/cinematch/releases/latest">Note di versione <span aria-hidden="true">↗</span></a>
+        </div>
+
+        <p class="download-meta" aria-live="polite">
+          <span data-version>Ultima versione</span>
+          <span class="sep">·</span>
+          <span data-size>installer completo</span>
+          <span class="sep">·</span>
+          <span>64-bit</span>
+        </p>
+        <p class="fine">Download e installazione partono solo quando lo chiedi tu.</p>
+      </div>
+
+      <div class="hero-shot">
+        <div class="shot-glow" aria-hidden="true"></div>
+        <figure class="window">
+          <img src="assets/app-chat.png" width="1200" height="900" alt="CineMatch, schermata iniziale della chat con quattro spunti e il campo di scrittura">
+        </figure>
+        <div class="float-card">
+          <span class="float-icon">✦</span>
+          <span><strong>Una richiesta.</strong><br>Cinque film, non un elenco infinito.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="strip" aria-label="Caratteristiche rapide">
+      <span>TMDB dal vivo</span>
+      <span>Interpretazione locale o AI</span>
+      <span>Vincoli spiegati</span>
+      <span>Dati sul tuo PC</span>
+    </section>
+
+    <section class="section" id="funzioni">
+      <div class="section-head">
+        <p class="eyebrow">Non l'ennesimo motore di ricerca</p>
+        <h2>Meno scrolling. Più decisioni.</h2>
+        <p>CineMatch non prova a mostrarti tutto. Ti aiuta a scegliere, e ti dice sempre perché una combinazione funziona — o perché non può esistere.</p>
+      </div>
+
+      <div class="features">
+        <article class="feature">
+          <div class="feature-num">01</div>
+          <h3>Vincoli veri, non filtri finti</h3>
+          <p>“Neorealismo” e “anni ’80” non possono convivere: il Neorealismo finisce nel 1954. CineMatch te lo impedisce e ti spiega il motivo, invece di restituire una lista vuota.</p>
+          <div class="constraint-demo" aria-hidden="true">
+            <span class="chip on">Neorealismo</span>
+            <span class="chip">anni ’80</span>
+            <span class="chip">Italia</span>
+            <span class="chip ghost">Guerra</span>
+            <span class="demo-note">periodo effettivo <b>1943–1954</b></span>
+          </div>
+        </article>
+
+        <article class="feature">
+          <div class="feature-num">02</div>
+          <h3>Una chat che va al punto</h3>
+          <p>Scrivi come parli. La risposta sono cinque film con poster, regia, durata, dove si vedono, il perché della scelta e un consiglio su come guardarli.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-num">03</div>
+          <h3>La griglia per esplorare</h3>
+          <p>Periodo, genere, paese, mood e metriche: una tavolozza che si restringe da sola. Filtri e scheda film non si contendono mai lo spazio.</p>
+        </article>
+
+        <article class="feature">
+          <div class="feature-num">04</div>
+          <h3>I tuoi dati restano tuoi</h3>
+          <p>Chiavi e configurazione vivono in <code>%APPDATA%\\CineMatch</code>. Gli aggiornamenti sostituiscono solo i file dell'app e non toccano la tua libreria locale.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section updates" id="aggiornamenti">
+      <div class="updates-copy">
+        <p class="eyebrow">Aggiornamenti senza attrito</p>
+        <h2>L'app se ne accorge.<br>Tu decidi quando.</h2>
+        <p>CineMatch controlla le release all'avvio e ogni sei ore. Quando c'è una nuova versione, l'ingranaggio mostra un puntino: apri le Impostazioni e scegli tu se scaricare.</p>
+        <ol class="steps">
+          <li><span>1</span><div><strong>Controllo silenzioso</strong><p>Solo una richiesta al manifesto della release. Nessun download automatico.</p></div></li>
+          <li><span>2</span><div><strong>Setup completo, verificato</strong><p>Scarica l'installer ufficiale e ne controlla l'hash SHA-256 prima di offrirti di installarlo.</p></div></li>
+          <li><span>3</span><div><strong>Riavvio dentro l'app</strong><p>Il setup per-utente aggiorna i file e rilancia CineMatch. Configurazione e dati restano dove sono.</p></div></li>
+        </ol>
+      </div>
+      <div class="update-panel" aria-label="Esempio della sezione Aggiornamenti nelle Impostazioni">
+        <div class="panel-glow" aria-hidden="true"></div>
+        <div class="panel-head"><span>IMPOSTAZIONI</span><span class="panel-x">✕</span></div>
+        <div class="panel-block">
+          <div class="panel-label">AGGIORNAMENTI <span class="panel-link">Controlla</span></div>
+          <div class="panel-version">CineMatch <span data-version>versione</span> <b>→</b> <b class="cyan">aggiornamento</b></div>
+          <p>Una versione più recente è pronta. Il setup conserva configurazione, chiavi e dati locali.</p>
+          <div class="panel-progress"><span></span></div>
+          <div class="panel-btn">Installa e riavvia</div>
+        </div>
+        <div class="panel-block dim">
+          <div class="panel-label">TMDB</div>
+          <div class="fake-input">••••••••••••••••••••••••••••••••</div>
+          <div class="panel-label">INTERPRETE DELLE RICHIESTE</div>
+          <div class="fake-row"><span class="fake-tab on">Regole offline</span><span class="fake-tab">Ollama</span><span class="fake-tab">OpenAI</span></div>
+        </div>
+        <div class="panel-foot">Il download parte solo dopo il tuo clic.</div>
+      </div>
+    </section>
+
+    <section class="section quote-section">
+      <blockquote>
+        <p>“Non tutte le combinazioni di tassonomia sono ammesse. Il programma spiega sempre il perché.”</p>
+        <footer>Il principio su cui è costruito CineMatch</footer>
+      </blockquote>
+    </section>
+
+    <section class="section faq" id="faq">
+      <div class="section-head">
+        <p class="eyebrow">Prima di installare</p>
+        <h2>Domande rapide</h2>
+      </div>
+      <div class="faq-grid">
+        <details open>
+          <summary>Serve un account o una chiave API?</summary>
+          <p>Serve una chiave API TMDB gratuita. Al primo avvio CineMatch apre le Impostazioni e ti guida: crei un account TMDB, copi la chiave e la incolli. La chiave resta sul tuo PC.</p>
+        </details>
+        <details>
+          <summary>L'installer richiede i permessi di amministratore?</summary>
+          <p>No. È un installer Inno Setup per-utente: installa in <code>%LocalAppData%\\Programs\\CineMatch</code> e non richiede UAC. La disinstallazione è in Impostazioni → App.</p>
+        </details>
+        <details>
+          <summary>Gli aggiornamenti cancellano la mia configurazione?</summary>
+          <p>No. Il setup sostituisce solo i file dell'applicazione. Configurazione, chiavi API, poster in cache e voti IMDb restano in <code>%APPDATA%\\CineMatch</code>.</p>
+        </details>
+        <details>
+          <summary>L'app è firmata digitalmente?</summary>
+          <p>La pipeline è pronta per firmare Authenticode l'eseguibile e il setup quando è disponibile un certificato. Fino ad allora Windows può mostrare l'avviso “editore sconosciuto”: puoi verificare il download dal repository GitHub ufficiale.</p>
+        </details>
+        <details>
+          <summary>Perché l'anteprima dice “senza UAC” e poi Windows chiede conferma?</summary>
+          <p>Windows SmartScreen può chiedere conferma per un installer non ancora firmato. Non è un prompt di amministratore: l'installazione resta nel tuo profilo.</p>
+        </details>
+        <details>
+          <summary>Funziona offline?</summary>
+          <p>La ricerca dei film passa da TMDB, quindi serve la connessione. L'interpretazione a regole è offline; i quattro spunti della home si generano in locale. Con Ollama puoi tenere anche l'AI sul tuo PC.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="cta-final" id="download">
+      <div>
+        <p class="eyebrow">Pronto per la prossima visione?</p>
+        <h2>Scarica CineMatch.</h2>
+        <p>Installer completo per Windows 10/11 a 64 bit. Per-utente, senza admin.</p>
+      </div>
+      <div class="cta-actions">
+        <a class="btn btn-download" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
+          <svg class="win" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm8.7-1.2L21 3v8.5h-9.3V4.3ZM3 12.7h7.5v7.1L3 18.7v-6Zm8.7 0H21V21l-9.3-1.3v-7Z"/></svg>
+          <span>Scarica per Windows</span>
+          <span class="arrow" aria-hidden="true">↓</span>
+        </a>
+        <span class="download-meta" aria-live="polite"><span data-version>Ultima versione</span> · <span data-size>installer completo</span></span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/cinematch.png" alt="" width="26" height="26">
+      <span>Cine<span>Match</span></span>
+    </div>
+    <p>Esplorazione cinematografica a vincoli. Windows 10/11, 64-bit.</p>
+    <nav aria-label="Link utili">
+      <a href="https://github.com/Emanueleparis98/cinematch">Repository</a>
+      <a href="https://github.com/Emanueleparis98/cinematch/releases">Release</a>
+      <a href="https://github.com/Emanueleparis98/cinematch/issues">Segnala un problema</a>
+    </nav>
+    <p class="tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB. Uso non commerciale secondo i termini TMDB.</p>
+    <p class="fine">© 2026 Emanuele Paris · CineMatch non è affiliato a TMDB.</p>
+  </footer>
+</body>
+</html>

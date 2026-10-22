@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione senza v (es. 0.1.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # Solo il booleano: il certificato resta esposto ai due step di firma.
+      HAS_SIGNING_CERT: ${{ secrets.SIGN_PFX_BASE64 != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --all-targets
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Verifica metadati eseguibile
+        shell: pwsh
+        run: |
+          $exe = "target\\release\\cinematch.exe"
+          if (-not (Test-Path $exe)) { throw "cinematch.exe non trovato." }
+          $info = (Get-Item $exe).VersionInfo
+          if (-not $info.FileVersion -or $info.ProductName -ne "CineMatch") {
+            throw "Metadati o icona non incorporati nell'eseguibile."
+          }
+
+      - name: Versione
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim().TrimStart("v")
+          } else {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Versione non valida: '$version' (atteso x.y.z)."
+          }
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          if ($cargo -ne $version) {
+            throw "Cargo.toml contiene $cargo, il tag dice $version: allinea la versione prima della release."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Firma eseguibile (opzionale)
+        if: ${{ env.HAS_SIGNING_CERT == 'true' }}
+        shell: pwsh
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cinematch.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe non trovato." }
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGN_PFX_PASSWORD /tr http://timestamp.digicert.com /td SHA256 target\release\cinematch.exe
+          if ($LASTEXITCODE -ne 0) { throw "Firma dell'eseguibile fallita." }
+
+      - name: Installa Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Crea installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe non trovato." }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" "installer\cinematch.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Compilazione installer fallita." }
+
+      - name: Firma installer (opzionale)
+        if: ${{ env.HAS_SIGNING_CERT == 'true' }}
+        shell: pwsh
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cinematch.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          $setup = Get-ChildItem dist\CineMatch-Setup-*.exe | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGN_PFX_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Firma dell'installer fallita." }
+
+      - name: Manifest aggiornamenti
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "${{ steps.version.outputs.tag }}"
+          $setup = Get-ChildItem dist\CineMatch-Setup-*.exe | Select-Object -First 1
+          if (-not $setup) { throw "Installer non trovato." }
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $url = "https://github.com/Emanueleparis98/cinematch/releases/download/$tag/$($setup.Name)"
+          $manifest = [ordered]@{
+            version = $version
+            published_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            notes_url = "https://github.com/Emanueleparis98/cinematch/releases/tag/$tag"
+            installer = [ordered]@{
+              url = $url
+              sha256 = $hash
+              size = $setup.Length
+            }
+          }
+          $json = $manifest | ConvertTo-Json -Depth 4
+          [IO.File]::WriteAllText((Join-Path (Get-Location) "dist\latest.json"), $json, [Text.UTF8Encoding]::new($false))
+          Get-Content dist\latest.json
+
+      - name: Pubblica release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: CineMatch ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/CineMatch-Setup-*.exe
+            dist/latest.json
+
+      - name: Salva artefatti
+        uses: actions/upload-artifact@v4
+        with:
+          name: CineMatch-Setup-${{ steps.version.outputs.version }}
+          path: dist/*
+
+      - name: Avviso firma
+        if: ${{ env.HAS_SIGNING_CERT != 'true' }}
+        shell: pwsh
+        run: |
+          Add-Content $env:GITHUB_STEP_SUMMARY "### Installer non firmato"
+          Add-Content $env:GITHUB_STEP_SUMMARY "Aggiungi i secret SIGN_PFX_BASE64 e SIGN_PFX_PASSWORD per firmare Authenticode eseguibile e setup."
