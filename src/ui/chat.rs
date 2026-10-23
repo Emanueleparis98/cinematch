@@ -94,6 +94,8 @@ pub struct Actions {
     pub regenerate: Option<usize>,
     pub retry: Option<usize>,
     pub stop: bool,
+    pub explain: Option<u64>,
+    pub compare: Option<usize>,
     pub show_all: Option<usize>,
     pub new_chat: bool,
     pub suggestion: Option<String>,
@@ -823,6 +825,18 @@ fn answer_view(
         {
             actions.show_all = Some(index);
         }
+        if a.cards.len() >= 2
+            && theme::chip(
+                ui,
+                "Confronta i primi due",
+                false,
+                true,
+                Some("Mette a confronto i primi due film di questa risposta"),
+            )
+            .clicked()
+        {
+            actions.compare = Some(index);
+        }
         if theme::chip(
             ui,
             "↻  Rigenera",
@@ -1173,6 +1187,18 @@ fn film_card(
                                 .clicked()
                             {
                                 actions.similar_to = Some(card.movie.title.clone());
+                            }
+                            if ui
+                                .add(
+                                    egui::Button::new(RichText::new("Spiega").size(12.0))
+                                        .fill(Color32::TRANSPARENT)
+                                        .stroke(Stroke::new(1.0_f32, theme::BORDER))
+                                        .rounding(Rounding::same(10.0)),
+                                )
+                                .on_hover_text("Spiega perché questo film è nella lista")
+                                .clicked()
+                            {
+                                actions.explain = Some(card.movie.id);
                             }
                         });
                     });

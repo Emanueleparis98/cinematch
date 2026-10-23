@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -171,6 +171,411 @@ impl SettingsDraft {
     }
 }
 
+/// Minuscole, senza punteggiatura: il confronto fra titoli non dipende da
+/// virgolette, accenti o spazi doppi.
+fn normalize_title(raw: &str) -> String {
+    raw.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[derive(Clone)]
+struct MemoryItem {
+    title: String,
+    id: Option<u64>,
+}
+
+/// Film gia visti o scartati in questa sessione. La chiave e il titolo
+/// normalizzato, cosi lo stesso film non entra due volte.
+#[derive(Clone, Default)]
+struct FilmMemory {
+    seen: BTreeMap<String, MemoryItem>,
+    rejected: BTreeMap<String, MemoryItem>,
+}
+
+impl FilmMemory {
+    fn count(&self) -> usize {
+        self.seen.len() + self.rejected.len()
+    }
+
+    fn mark(&mut self, seen: bool, id: Option<u64>, title: &str) {
+        let key = normalize_title(title);
+        if key.is_empty() {
+            return;
+        }
+        if let Some(id) = id {
+            self.seen.retain(|_, item| item.id != Some(id));
+            self.rejected.retain(|_, item| item.id != Some(id));
+        }
+        self.seen.remove(&key);
+        self.rejected.remove(&key);
+        let target = if seen {
+            &mut self.seen
+        } else {
+            &mut self.rejected
+        };
+        target.insert(
+            key,
+            MemoryItem {
+                title: title.trim().to_string(),
+                id,
+            },
+        );
+    }
+
+    fn forget_seen(&mut self, key: &str) {
+        self.seen.remove(key);
+    }
+
+    fn forget_rejected(&mut self, key: &str) {
+        self.rejected.remove(key);
+    }
+
+    fn snapshot(&self) -> MemorySnapshot {
+        let mut snap = MemorySnapshot::default();
+        for item in self.seen.values().chain(self.rejected.values()) {
+            if let Some(id) = item.id {
+                snap.ids.insert(id);
+            }
+            let key = normalize_title(&item.title);
+            if !key.is_empty() {
+                snap.titles.insert(key);
+            }
+        }
+        snap
+    }
+}
+
+#[derive(Clone, Default)]
+struct MemorySnapshot {
+    ids: HashSet<u64>,
+    titles: HashSet<String>,
+}
+
+impl MemorySnapshot {
+    fn contains(&self, movie: &Movie) -> bool {
+        self.ids.contains(&movie.id)
+            || self.titles.contains(&normalize_title(&movie.title))
+            || self
+                .titles
+                .contains(&normalize_title(&movie.original_title))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MemoryKind {
+    Seen,
+    Rejected,
+}
+
+fn parse_memory_command(text: &str) -> Option<(MemoryKind, Option<String>)> {
+    let lower = text.to_lowercase();
+    const SEEN: &[&str] = &[
+        "ho gia visto",
+        "ho già visto",
+        "l'ho gia visto",
+        "l'ho già visto",
+        "ho visto",
+        "l'ho visto",
+        "gia visto",
+        "già visto",
+    ];
+    const REJECTED: &[&str] = &[
+        "non mi interessa",
+        "non mi interessano",
+        "non mi piacciono",
+        "non mi piace",
+        "non voglio vedere",
+        "scartalo",
+        "scarta",
+        "escludi",
+        "boccia",
+    ];
+    for (kind, cues) in [(MemoryKind::Seen, SEEN), (MemoryKind::Rejected, REJECTED)] {
+        for cue in cues {
+            if let Some(pos) = lower.find(cue) {
+                return Some((kind, memory_target(&text[pos + cue.len()..])));
+            }
+        }
+    }
+    None
+}
+
+fn memory_target(raw: &str) -> Option<String> {
+    let mut t = raw.trim().trim_matches(['"', '“', '”', '\'', ' ']);
+    let lower = t.to_lowercase();
+    for prefix in ["il film ", "la film ", "un film ", "film "] {
+        if lower.starts_with(prefix) {
+            t = t[prefix.len()..].trim();
+            break;
+        }
+    }
+    let lower = t.to_lowercase();
+    if lower.is_empty()
+        || ["questo", "questa", "questi", "queste", "il primo", "la prima"]
+            .iter()
+            .any(|p| lower == *p || lower.starts_with(&format!("{p} ")))
+    {
+        None
+    } else {
+        Some(t.trim_matches(['.', ',', ';', ':', '!', '?', ' ']).to_string())
+    }
+}
+
+fn is_generic_target(raw: &str) -> bool {
+    const GENERIC: [&str; 21] = [
+        "film",
+        "commedia",
+        "horror",
+        "dramma",
+        "thriller",
+        "azione",
+        "romantico",
+        "fantascienza",
+        "animazione",
+        "documentario",
+        "finale",
+        "trama",
+        "regia",
+        "attori",
+        "genere",
+        "italiano",
+        "francese",
+        "americano",
+        "inglese",
+        "giapponese",
+        "coreano",
+    ];
+    normalize_title(raw)
+        .split_whitespace()
+        .any(|w| GENERIC.contains(&w))
+}
+
+fn find_card_by_title<'a>(
+    entries: &'a [chat::Entry],
+    target: &str,
+) -> Option<&'a chat::Card> {
+    let target = normalize_title(target);
+    if target.is_empty() {
+        return None;
+    }
+    let mut best: Option<&chat::Card> = None;
+    let mut best_len = 0usize;
+    for entry in entries.iter().rev() {
+        for card in &entry.answer.cards {
+            let title = normalize_title(&card.movie.title);
+            let original = normalize_title(&card.movie.original_title);
+            let hit = title == target
+                || original == target
+                || (target.len() >= 4
+                    && (target.contains(&title) || title.contains(&target)));
+            if hit && title.len() >= best_len {
+                best = Some(card);
+                best_len = title.len();
+            }
+        }
+    }
+    best
+}
+
+fn find_card_by_id(entries: &[chat::Entry], id: u64) -> Option<chat::Card> {
+    entries
+        .iter()
+        .rev()
+        .flat_map(|e| e.answer.cards.iter())
+        .find(|c| c.movie.id == id)
+        .cloned()
+}
+
+fn last_cards(entries: &[chat::Entry]) -> Vec<chat::Card> {
+    entries
+        .iter()
+        .rev()
+        .find(|e| !e.answer.cards.is_empty())
+        .map(|e| e.answer.cards.clone())
+        .unwrap_or_default()
+}
+
+fn looks_like_explain(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    ["perche", "perché", "spiega", "spiegami", "come mai"]
+        .iter()
+        .any(|cue| lower.contains(cue))
+}
+
+fn looks_like_compare(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    ["confronta", "confronto", "differenza tra", "meglio tra"]
+        .iter()
+        .any(|cue| lower.contains(cue))
+}
+
+fn cards_mentioned(entries: &[chat::Entry], text: &str) -> Vec<chat::Card> {
+    let hay = normalize_title(text);
+    let mut found: Vec<(usize, chat::Card)> = Vec::new();
+    for card in entries
+        .iter()
+        .flat_map(|e| e.answer.cards.iter())
+    {
+        let title = normalize_title(&card.movie.title);
+        if title.len() < 4 {
+            continue;
+        }
+        if let Some(pos) = hay.find(&title) {
+            if !found.iter().any(|(_, c)| c.movie.id == card.movie.id) {
+                found.push((pos, card.clone()));
+            }
+        }
+    }
+    found.sort_by_key(|(pos, _)| *pos);
+    found.into_iter().map(|(_, card)| card).collect()
+}
+
+fn explanation_text(tax: &Taxonomy, card: &chat::Card) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let year = card
+        .movie
+        .year
+        .map(|y| format!(" ({y})"))
+        .unwrap_or_default();
+    lines.push(format!("«{}»{}", card.movie.title, year));
+    if let Some(meta) = &card.meta {
+        let mut facts: Vec<String> = Vec::new();
+        if let Some(dir) = &meta.director {
+            facts.push(format!("regia di {dir}"));
+        }
+        if let Some(runtime) = meta.runtime {
+            facts.push(format!("{runtime} min"));
+        }
+        if !facts.is_empty() {
+            lines.push(facts.join(" · "));
+        }
+    }
+    let genres = card
+        .movie
+        .genre_ids
+        .iter()
+        .filter_map(|g| tax.genre_name(*g))
+        .take(3)
+        .collect::<Vec<_>>();
+    if !genres.is_empty() {
+        lines.push(genres.join(" · "));
+    }
+    if card.movie.votes > 0 {
+        lines.push(format!(
+            "TMDB {:.1} su {} voti.",
+            card.movie.rating,
+            theme::thousands(card.movie.votes)
+        ));
+    }
+    if !card.perche.trim().is_empty() {
+        lines.push(card.perche.trim().to_string());
+    }
+    if !card.consiglio.trim().is_empty() {
+        lines.push(format!("Consiglio: {}", card.consiglio.trim()));
+    }
+    if let Some(meta) = &card.meta {
+        if !meta.flatrate.is_empty() {
+            lines.push(format!(
+                "In abbonamento su {}.",
+                meta.flatrate.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+            ));
+        } else if !meta.rent.is_empty() {
+            lines.push(format!(
+                "A noleggio su {}.",
+                meta.rent.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
+    }
+    lines.join("\n")
+}
+
+fn comparison_text(tax: &Taxonomy, a: &chat::Card, b: &chat::Card) -> String {
+    let line = |card: &chat::Card| -> String {
+        let mut bits = vec![format!("«{}»", card.movie.title)];
+        if let Some(year) = card.movie.year {
+            bits.push(format!("{year}"));
+        }
+        if let Some(meta) = &card.meta {
+            if let Some(dir) = &meta.director {
+                bits.push(format!("di {dir}"));
+            }
+            if let Some(runtime) = meta.runtime {
+                bits.push(format!("{runtime} min"));
+            }
+        }
+        if card.movie.votes > 0 {
+            bits.push(format!(
+                "TMDB {:.1} ({} voti)",
+                card.movie.rating,
+                theme::thousands(card.movie.votes)
+            ));
+        }
+        let genres = card
+            .movie
+            .genre_ids
+            .iter()
+            .filter_map(|g| tax.genre_name(*g))
+            .take(3)
+            .collect::<Vec<_>>();
+        if !genres.is_empty() {
+            bits.push(genres.join(" · "));
+        }
+        format!("• {}", bits.join(" · "))
+    };
+    let mut lines = vec![
+        "Ecco i dati che ho, senza inventare altro:".to_string(),
+        line(a),
+        line(b),
+    ];
+    let mut notes: Vec<String> = Vec::new();
+    if (a.movie.rating - b.movie.rating).abs() >= 0.2 && a.movie.votes > 0 && b.movie.votes > 0 {
+        let (better, worse) = if a.movie.rating > b.movie.rating {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        notes.push(format!(
+            "«{}» ha il voto TMDB più alto ({:.1} contro {:.1}).",
+            better.movie.title, better.movie.rating, worse.movie.rating
+        ));
+    }
+    let runtime = |card: &chat::Card| card.meta.as_ref().and_then(|m| m.runtime);
+    if let (Some(ra), Some(rb)) = (runtime(a), runtime(b)) {
+        if ra.abs_diff(rb) >= 15 {
+            let short = if ra < rb { a } else { b };
+            notes.push(format!(
+                "«{}» è più corto ({} min contro {}).",
+                short.movie.title,
+                ra.min(rb),
+                ra.max(rb)
+            ));
+        }
+    }
+    if a.movie.votes > 0 && b.movie.votes > 0 && a.movie.votes.abs_diff(b.movie.votes) >= 1000 {
+        let (popular, other) = if a.movie.votes > b.movie.votes {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        notes.push(format!(
+            "«{}» ha molti più voti ({} contro {}).",
+            popular.movie.title,
+            theme::thousands(popular.movie.votes),
+            theme::thousands(other.movie.votes)
+        ));
+    }
+    if notes.is_empty() {
+        notes.push("Sono due proposte vicine: scegli in base al genere o alla durata.".into());
+    }
+    lines.push(notes.join(" "));
+    lines.join("\n")
+}
+
 /// Se il modello scritto non esiste più, sceglie il predefinito del provider.
 fn preferred_model(provider: &str, current: &str, models: &[ModelInfo]) -> Option<String> {
     if models.iter().any(|m| m.id == current.trim()) {
@@ -266,6 +671,9 @@ pub struct App {
     chat_cancel: Option<Arc<AtomicBool>>,
     /// Contesto dei seguiti della chat: separato dai filtri della griglia.
     chat_context: Intent,
+    /// Film visti/scartati: valgono per tutte le ricerche di questa sessione.
+    memory: FilmMemory,
+    show_memory: bool,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
     chat_jump: bool,
     /// Composer ridotto a barra mentre si legge la conversazione.
@@ -371,6 +779,8 @@ impl App {
             chat_busy: false,
             chat_cancel: None,
             chat_context: Intent::default(),
+            memory: FilmMemory::default(),
+            show_memory: false,
             chat_jump: false,
             chat_composer_collapsed: false,
             chat_scroll_last: 0.0,
@@ -954,13 +1364,170 @@ impl App {
         self.suggestion_next_at = now + suggestions::ROTATION_SECS;
     }
 
-    /// Invia il contenuto del composer come messaggio di chat.
-    fn send_chat(&mut self) {
-        if self.tmdb.is_none() {
-            self.show_settings = true;
-            self.toast("Inserisci la chiave API TMDB per cercare.");
+    /// Aggiunge una risposta solo testo: spiegazioni, confronti e comandi di
+    /// memoria non sono nuove ricerche e non devono toccare il contesto.
+    fn push_text_answer(&mut self, user: String, intro: String, understood: String) {
+        if self.chat_busy {
+            self.toast("Attendi la risposta in corso.");
             return;
         }
+        let now = self.ctx.input(|i| i.time);
+        self.chat.push(chat::Entry {
+            user,
+            answer: chat::Answer {
+                intro,
+                understood,
+                done_at: now,
+                ..Default::default()
+            },
+        });
+        self.chat_jump = true;
+        self.chat_composer_collapsed = false;
+        self.chat_scroll_last = 0.0;
+        self.suggestion_hovered = false;
+        self.focus = Some(ViewMode::Chat);
+    }
+
+    fn handle_memory_command(&mut self, text: &str) -> bool {
+        let Some((kind, target)) = parse_memory_command(text) else {
+            return false;
+        };
+        let target = match target {
+            Some(t) if !t.trim().is_empty() => t,
+            _ => match last_cards(&self.chat).first() {
+                Some(card) => card.movie.title.clone(),
+                None => {
+                    self.push_text_answer(
+                        text.to_string(),
+                        "Dimmi il titolo esatto del film che hai visto o che vuoi scartare.".into(),
+                        "memoria".into(),
+                    );
+                    return true;
+                }
+            },
+        };
+        let card = find_card_by_title(&self.chat, &target).cloned();
+        let (id, title) = if let Some(card) = card {
+            (Some(card.movie.id), card.movie.title)
+        } else {
+            if is_generic_target(&target) || normalize_title(&target).is_empty() {
+                return false;
+            }
+            (None, target)
+        };
+        self.memory.mark(kind == MemoryKind::Seen, id, &title);
+        if let Some(id) = id {
+            for entry in &mut self.chat {
+                entry.answer.cards.retain(|c| c.movie.id != id);
+            }
+        }
+        let stato = if kind == MemoryKind::Seen {
+            "già visto"
+        } else {
+            "scartato"
+        };
+        self.push_text_answer(
+            text.to_string(),
+            format!("Segno «{title}» come {stato}: lo escludo dalle prossime proposte."),
+            "memoria".into(),
+        );
+        true
+    }
+
+    fn handle_meta_command(&mut self, text: &str) -> bool {
+        if looks_like_compare(text) {
+            let mentioned = cards_mentioned(&self.chat, text);
+            let latest = last_cards(&self.chat);
+            let pair = if mentioned.len() >= 2 {
+                Some((mentioned[0].clone(), mentioned[1].clone()))
+            } else if let Some(first) = mentioned.first() {
+                latest
+                    .iter()
+                    .find(|c| c.movie.id != first.movie.id)
+                    .map(|second| (first.clone(), second.clone()))
+            } else if latest.len() >= 2 {
+                Some((latest[0].clone(), latest[1].clone()))
+            } else {
+                None
+            };
+            if let Some((a, b)) = pair {
+                self.compare_cards(a, b);
+            } else {
+                self.push_text_answer(
+                    text.to_string(),
+                    "Per un confronto mi servono due film già proposti: prima chiedimi un consiglio."
+                        .into(),
+                    "confronto".into(),
+                );
+            }
+            return true;
+        }
+        if looks_like_explain(text) {
+            let mentioned = cards_mentioned(&self.chat, text);
+            let latest = last_cards(&self.chat);
+            let lower = text.to_lowercase();
+            let frame = ["questo", "questa", "questi", "il primo", "la prima", "consigli"]
+                .iter()
+                .any(|cue| lower.contains(cue));
+            let card = mentioned
+                .into_iter()
+                .next()
+                .or_else(|| if frame || latest.len() == 1 { latest.first().cloned() } else { None });
+            if let Some(card) = card {
+                self.explain_card(card);
+                return true;
+            }
+            if latest.is_empty() {
+                self.push_text_answer(
+                    text.to_string(),
+                    "Prima chiedimi un consiglio: poi posso spiegarti perché ho scelto un film."
+                        .into(),
+                    "spiegazione".into(),
+                );
+                return true;
+            }
+        }
+        false
+    }
+
+    fn explain_movie(&mut self, id: u64) {
+        if let Some(card) = find_card_by_id(&self.chat, id) {
+            self.explain_card(card);
+        } else {
+            self.toast("Non ho più la scheda di quel film.");
+        }
+    }
+
+    fn explain_card(&mut self, card: chat::Card) {
+        let user = format!("Perché «{}»?", card.movie.title);
+        let intro = explanation_text(&self.tax, &card);
+        self.push_text_answer(user, intro, "spiegazione".into());
+    }
+
+    fn compare_answer(&mut self, index: usize) {
+        let Some(entry) = self.chat.get(index) else {
+            return;
+        };
+        if entry.answer.cards.len() < 2 {
+            self.toast("Servono almeno due film da confrontare.");
+            return;
+        }
+        let a = entry.answer.cards[0].clone();
+        let b = entry.answer.cards[1].clone();
+        self.compare_cards(a, b);
+    }
+
+    fn compare_cards(&mut self, a: chat::Card, b: chat::Card) {
+        let user = format!(
+            "Confronta «{}» e «{}»",
+            a.movie.title, b.movie.title
+        );
+        let intro = comparison_text(&self.tax, &a, &b);
+        self.push_text_answer(user, intro, "confronto".into());
+    }
+
+    /// Invia il contenuto del composer come messaggio di chat.
+    fn send_chat(&mut self) {
         if self.chat_busy {
             self.toast("Attendi la risposta in corso…");
             return;
@@ -974,6 +1541,17 @@ impl App {
         self.chat_jump = true;
         self.chat_composer_collapsed = false;
         self.suggestion_hovered = false;
+        // Memoria, spiegazioni e confronti sono comandi locali: non sono
+        // nuove ricerche e funzionano anche senza una chiamata AI.
+        if self.handle_memory_command(&text) || self.handle_meta_command(&text) {
+            self.focus = Some(ViewMode::Chat);
+            return;
+        }
+        if self.tmdb.is_none() {
+            self.show_settings = true;
+            self.toast("Inserisci la chiave API TMDB per cercare.");
+            return;
+        }
         // «Altri» e simili: stessi criteri, ma senza i film gia mostrati.
         let action = classify_chat_action(&text, &self.chat_context);
         let exclude: Vec<u64> = if action == ChatAction::Replace {
@@ -984,7 +1562,8 @@ impl App {
         } else {
             Vec::new()
         };
-        self.spawn_chat(text, exclude, None);
+        let memory = self.memory.snapshot();
+        self.spawn_chat(text, exclude, None, memory);
         // Il composer resta a fuoco: la chat e una conversazione, si resta li.
         self.focus = Some(ViewMode::Chat);
     }
@@ -1054,9 +1633,11 @@ impl App {
                     line.push_str(" · ");
                 }
                 line.push_str(&format!("Ho proposto: {titles}"));
-            }
-            if line.is_empty() && !a.intro.is_empty() {
-                line = a.intro.clone();
+            } else if !a.intro.is_empty() {
+                if !line.is_empty() {
+                    line.push_str(" · ");
+                }
+                line.push_str(&a.intro);
             }
             if !line.is_empty() {
                 out.push(("assistente".into(), theme::truncate(&line, 220)));
@@ -1065,13 +1646,19 @@ impl App {
         out
     }
 
-    fn spawn_chat(&mut self, text: String, exclude: Vec<u64>, reuse: Option<Intent>) {
+    fn spawn_chat(
+        &mut self,
+        text: String,
+        exclude: Vec<u64>,
+        reuse: Option<Intent>,
+        memory: MemorySnapshot,
+    ) {
         let index = self.chat.len();
         self.chat.push(chat::Entry {
             user: text.clone(),
             answer: chat::Answer::busy(),
         });
-        self.spawn_chat_worker(index, text, exclude, reuse);
+        self.spawn_chat_worker(index, text, exclude, reuse, memory);
     }
 
     /// «Rigenera»: stessi criteri, altri film (esclude quelli mostrati).
@@ -1093,7 +1680,8 @@ impl App {
         if let Some(entry) = self.chat.get_mut(index) {
             entry.answer = chat::Answer::busy();
         }
-        self.spawn_chat_worker(index, text, exclude, reuse);
+        let memory = self.memory.snapshot();
+        self.spawn_chat_worker(index, text, exclude, reuse, memory);
     }
 
     /// «Vedi tutti in griglia»: i filtri capiti dalla chat diventano la
@@ -1134,6 +1722,7 @@ impl App {
         text: String,
         exclude: Vec<u64>,
         reuse: Option<Intent>,
+        memory: MemorySnapshot,
     ) {
         let Some((tmdb, cancel)) = self.tmdb.as_ref().map(|t| {
             let (client, cancel) = t.cancellable();
@@ -1362,7 +1951,16 @@ impl App {
                 // momento: la riga «Capito» lo dice, senza inventare criteri.
                 payload.understood = "film del momento".into();
             }
+            let before_filter = movies.len();
             movies.retain(|m| !exclude.contains(&m.id));
+            if title.is_none() {
+                movies.retain(|m| !memory.contains(m));
+            }
+            if movies.len() < before_filter {
+                payload
+                    .notes
+                    .push("Ho escluso i film già visti o scartati.".into());
+            }
             movies.truncate(20);
             if cancel.load(Ordering::Relaxed) {
                 return;
@@ -1526,6 +2124,12 @@ impl App {
         }
         if let Some(i) = a.retry {
             self.regenerate(i);
+        }
+        if let Some(id) = a.explain {
+            self.explain_movie(id);
+        }
+        if let Some(i) = a.compare {
+            self.compare_answer(i);
         }
         if let Some(i) = a.show_all {
             self.show_all_in_grid(i);
@@ -1934,6 +2538,7 @@ impl App {
         let mut do_search = false;
         let mut toggle_filters = false;
         let mut new_chat = false;
+        let mut show_memory = false;
 
         egui::TopBottomPanel::top("header")
             .frame(
@@ -2196,10 +2801,37 @@ impl App {
                                         .rounding(egui::Rounding::same(9.0))
                                         .min_size(egui::vec2(0.0, 26.0)),
                                     )
-                                    .on_hover_text("Svuota la conversazione (resta in memoria)")
+                                    .on_hover_text(
+                                        "Svuota la conversazione (la memoria dei film resta)",
+                                    )
                                     .clicked()
                                 {
                                     new_chat = true;
+                                }
+                                let memory_count = self.memory.count();
+                                let memory_label = if compact {
+                                    "M".to_string()
+                                } else if memory_count > 0 {
+                                    format!("Memoria · {memory_count}")
+                                } else {
+                                    "Memoria".to_string()
+                                };
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new(memory_label).size(11.0),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
+                                        .rounding(egui::Rounding::same(9.0))
+                                        .min_size(egui::vec2(0.0, 26.0)),
+                                    )
+                                    .on_hover_text(
+                                        "Film visti, scartati e cronologia della conversazione",
+                                    )
+                                    .clicked()
+                                {
+                                    show_memory = true;
                                 }
                                 if self.chat_busy {
                                     ui.add_space(2.0);
@@ -2235,6 +2867,9 @@ impl App {
         }
         if new_chat {
             self.new_chat();
+        }
+        if show_memory {
+            self.show_memory = true;
         }
     }
 
@@ -2692,6 +3327,144 @@ impl App {
             self.spawn_search(false);
         }
         ui.add_space(2.0);
+    }
+
+    fn memory_window(&mut self, ctx: &egui::Context) {
+        let mut open = true;
+        let mut forget_seen: Option<String> = None;
+        let mut forget_rejected: Option<String> = None;
+        let mut clear_seen = false;
+        let mut clear_rejected = false;
+        egui::Window::new("Memoria e cronologia")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(true)
+            .vscroll(true)
+            .default_width(560.0)
+            .show(ctx, |ui| {
+                ui.label(
+                    egui::RichText::new("Film visti")
+                        .size(12.0)
+                        .strong()
+                        .color(theme::ACCENT),
+                );
+                if self.memory.seen.is_empty() {
+                    ui.label(
+                        egui::RichText::new("Nessun film segnato come visto.")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                } else {
+                    for (key, item) in &self.memory.seen {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(&item.title).size(11.5));
+                            if ui.small_button("Dimentica").clicked() {
+                                forget_seen = Some(key.clone());
+                            }
+                        });
+                    }
+                }
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new("Film scartati")
+                        .size(12.0)
+                        .strong()
+                        .color(theme::ACCENT),
+                );
+                if self.memory.rejected.is_empty() {
+                    ui.label(
+                        egui::RichText::new("Nessun film scartato.")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                } else {
+                    for (key, item) in &self.memory.rejected {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(&item.title).size(11.5));
+                            if ui.small_button("Dimentica").clicked() {
+                                forget_rejected = Some(key.clone());
+                            }
+                        });
+                    }
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if !self.memory.seen.is_empty() && ui.small_button("Svuota visti").clicked() {
+                        clear_seen = true;
+                    }
+                    if !self.memory.rejected.is_empty()
+                        && ui.small_button("Svuota scartati").clicked()
+                    {
+                        clear_rejected = true;
+                    }
+                });
+                ui.label(
+                    egui::RichText::new(
+                        "La memoria vale per questa sessione. I film visti e scartati non vengono riproposti nelle ricerche.",
+                    )
+                    .size(10.0)
+                    .color(theme::DIM),
+                );
+                ui.add_space(8.0);
+                ui.separator();
+                ui.label(
+                    egui::RichText::new("Cronologia")
+                        .size(12.0)
+                        .strong()
+                        .color(theme::ACCENT),
+                );
+                if self.chat.is_empty() {
+                    ui.label(
+                        egui::RichText::new("Nessuna conversazione ancora.")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                } else {
+                    for entry in self.chat.iter().rev().take(30) {
+                        ui.label(
+                            egui::RichText::new(format!("Tu: {}", entry.user))
+                                .size(11.0)
+                                .strong(),
+                        );
+                        let a = &entry.answer;
+                        if !a.cards.is_empty() {
+                            let titles = a
+                                .cards
+                                .iter()
+                                .map(|c| c.movie.title.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            ui.label(
+                                egui::RichText::new(format!("Consigliati: {titles}"))
+                                    .size(10.5)
+                                    .color(theme::DIM),
+                            );
+                        } else if !a.intro.is_empty() {
+                            ui.label(
+                                egui::RichText::new(theme::truncate(&a.intro, 180))
+                                    .size(10.5)
+                                    .color(theme::DIM),
+                            );
+                        }
+                        ui.add_space(5.0);
+                    }
+                }
+            });
+        if let Some(key) = forget_seen {
+            self.memory.forget_seen(&key);
+        }
+        if let Some(key) = forget_rejected {
+            self.memory.forget_rejected(&key);
+        }
+        if clear_seen {
+            self.memory.seen.clear();
+        }
+        if clear_rejected {
+            self.memory.rejected.clear();
+        }
+        if !open {
+            self.show_memory = false;
+        }
     }
 
     fn settings_window(&mut self, ctx: &egui::Context) {
@@ -3359,6 +4132,9 @@ impl eframe::App for App {
         if self.show_settings {
             self.settings_window(ctx);
         }
+        if self.show_memory {
+            self.memory_window(ctx);
+        }
         self.toast_overlay(ctx);
         if self.loading
             || self.detail_loading
@@ -3449,6 +4225,8 @@ impl App {
                 self.guide_open = false;
             } else if self.show_settings {
                 self.show_settings = false;
+            } else if self.show_memory {
+                self.show_memory = false;
             } else if self.detail.is_some() || self.detail_loading {
                 self.close_detail();
             } else if self.filters_open {
@@ -4625,5 +5403,103 @@ mod tests {
         assert!(!allowed_url("file:///C:/Windows/System32/calc.exe"));
         assert!(!allowed_url("https://example.com/\ncalc"));
         assert!(!allowed_url("https://"));
+    }
+}
+
+#[cfg(test)]
+mod phase1_tests {
+    use super::*;
+    use crate::domain::model::Movie;
+
+    fn card(id: u64, title: &str, year: u16, rating: f32, runtime: u32) -> chat::Card {
+        chat::Card {
+            movie: Movie {
+                id,
+                title: title.into(),
+                original_title: title.into(),
+                year: Some(year),
+                rating,
+                votes: 10_000,
+                genre_ids: vec![18],
+                ..Default::default()
+            },
+            perche: format!("«{title}» rientra nei criteri della ricerca."),
+            consiglio: "Apri la scheda per i dettagli.".into(),
+            meta: Some(chat::CardMeta {
+                director: Some("Regista".into()),
+                runtime: Some(runtime),
+                ..Default::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn memoria_riconosce_visto_scarto_e_questo_film() {
+        let (kind, target) = parse_memory_command("ho già visto Il Padrino").unwrap();
+        assert_eq!(kind, MemoryKind::Seen);
+        assert_eq!(target.as_deref(), Some("Il Padrino"));
+
+        let (kind, target) = parse_memory_command("scarta questo film").unwrap();
+        assert_eq!(kind, MemoryKind::Rejected);
+        assert!(target.is_none());
+        assert!(is_generic_target("la commedia"));
+    }
+
+    #[test]
+    fn la_memoria_esclude_id_e_titoli() {
+        let mut memory = FilmMemory::default();
+        memory.mark(true, Some(1), "Il Padrino");
+        let same_id = Movie {
+            id: 1,
+            title: "Altro titolo".into(),
+            ..Default::default()
+        };
+        let same_title = Movie {
+            id: 2,
+            title: "Il Padrino".into(),
+            ..Default::default()
+        };
+        let snap = memory.snapshot();
+        assert!(snap.contains(&same_id));
+        assert!(snap.contains(&same_title));
+
+        memory.mark(false, None, "Il Padrino");
+        assert!(memory.seen.is_empty());
+        assert_eq!(memory.rejected.len(), 1);
+    }
+
+    #[test]
+    fn spiegazione_e_confronto_restano_sui_dati() {
+        let tax = Taxonomy::load();
+        let a = card(1, "Il Padrino", 1972, 8.7, 175);
+        let b = card(2, "Il Padrino - Parte II", 1974, 8.6, 202);
+
+        let exp = explanation_text(&tax, &a);
+        assert!(exp.contains("Il Padrino"));
+        assert!(exp.contains("Consiglio") || exp.contains("Consiglio:"));
+
+        let cmp = comparison_text(&tax, &a, &b);
+        assert!(cmp.contains("Il Padrino"));
+        assert!(cmp.contains("Parte II"));
+        assert!(cmp.contains("più corto"));
+    }
+
+    #[test]
+    fn i_titoli_menzionati_si_trovano_nella_chat() {
+        let a = card(1, "Il Padrino", 1972, 8.7, 175);
+        let b = card(2, "Quei bravi ragazzi", 1990, 8.5, 145);
+        let entries = vec![chat::Entry {
+            user: "consigli".into(),
+            answer: chat::Answer {
+                cards: vec![a, b],
+                ..Default::default()
+            },
+        }];
+        assert_eq!(
+            find_card_by_title(&entries, "padrino").map(|c| c.movie.id),
+            Some(1)
+        );
+        let mentioned = cards_mentioned(&entries, "confronta Il Padrino e Quei bravi ragazzi");
+        assert_eq!(mentioned.len(), 2);
     }
 }
