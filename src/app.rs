@@ -118,6 +118,12 @@ pub struct ChatPoolResult {
     pub relevance: HashMap<u64, f32>,
 }
 
+struct PersonPool {
+    result: ChatPoolResult,
+    label: String,
+    person: String,
+}
+
 #[derive(Clone)]
 struct SettingsDraft {
     tmdb_key: String,
@@ -183,15 +189,6 @@ fn normalize_title(raw: &str) -> String {
         .join(" ")
 }
 
-fn find_card_by_id(entries: &[chat::Entry], id: u64) -> Option<chat::Card> {
-    entries
-        .iter()
-        .rev()
-        .flat_map(|e| e.answer.cards.iter())
-        .find(|c| c.movie.id == id)
-        .cloned()
-}
-
 fn last_cards(entries: &[chat::Entry]) -> Vec<chat::Card> {
     entries
         .iter()
@@ -213,6 +210,119 @@ fn looks_like_compare(text: &str) -> bool {
     ["confronta", "confronto", "differenza tra", "meglio tra"]
         .iter()
         .any(|cue| lower.contains(cue))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PersonRole {
+    Any,
+    Director,
+    Actor,
+}
+
+#[derive(Clone)]
+struct PersonQuery {
+    name: String,
+    role: PersonRole,
+}
+
+fn is_generic_person_name(name: &str) -> bool {
+    let words = normalize_title(name);
+    if words.split_whitespace().count() != 1 {
+        return false;
+    }
+    const GENERIC: [&str; 21] = [
+        "film",
+        "cinema",
+        "commedia",
+        "horror",
+        "dramma",
+        "thriller",
+        "azione",
+        "romantico",
+        "fantascienza",
+        "animazione",
+        "documentario",
+        "guerra",
+        "amore",
+        "famiglia",
+        "cani",
+        "gatti",
+        "cane",
+        "gatto",
+        "mare",
+        "spazio",
+        "viaggio",
+    ];
+    GENERIC.contains(&words.as_str())
+}
+
+fn person_query(text: &str) -> Option<PersonQuery> {
+    let lower = text.to_lowercase();
+    const CUES: [(&str, PersonRole); 13] = [
+        ("film diretti da ", PersonRole::Director),
+        ("diretto da ", PersonRole::Director),
+        ("diretti da ", PersonRole::Director),
+        ("regia di ", PersonRole::Director),
+        ("regista ", PersonRole::Director),
+        ("registi ", PersonRole::Director),
+        ("film interpretati da ", PersonRole::Actor),
+        ("interpretato da ", PersonRole::Actor),
+        ("interpretati da ", PersonRole::Actor),
+        ("attrice ", PersonRole::Actor),
+        ("attore ", PersonRole::Actor),
+        ("film con ", PersonRole::Actor),
+        ("film di ", PersonRole::Any),
+    ];
+    for (cue, role) in CUES {
+        let Some(pos) = lower.find(cue) else { continue };
+        let rest = &text[pos + cue.len()..];
+        let end = rest
+            .find(['?', '.', ',', ';', '!', '\n'])
+            .unwrap_or(rest.len());
+        let mut name = rest[..end]
+            .trim()
+            .trim_matches(['"', '“', '”', '\'', ' '])
+            .to_string();
+        if let Some((first, _)) = name.split_once(" e ") {
+            name = first.trim().to_string();
+        }
+        if name.len() < 3
+            || name.len() > 80
+            || is_generic_person_name(&name)
+            || normalize_title(&name).is_empty()
+        {
+            continue;
+        }
+        return Some(PersonQuery { name, role });
+    }
+    None
+}
+
+fn seen_title_in_query(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    const CUES: [&str; 6] = [
+        "ho gia visto ",
+        "ho già visto ",
+        "l'ho gia visto ",
+        "l'ho già visto ",
+        "ho visto ",
+        "l'ho visto ",
+    ];
+    for cue in CUES {
+        let Some(pos) = lower.find(cue) else { continue };
+        let rest = &text[pos + cue.len()..];
+        let end = rest
+            .find([',', '.', '?', ';', '!', '\n'])
+            .unwrap_or(rest.len());
+        let mut title = rest[..end].trim().trim_matches(['"', '“', '”', '\'', ' ']).to_string();
+        if let Some((first, _)) = title.split_once(" e ") {
+            title = first.trim().to_string();
+        }
+        if title.len() >= 3 {
+            return Some(title);
+        }
+    }
+    None
 }
 
 fn cards_mentioned(entries: &[chat::Entry], text: &str) -> Vec<chat::Card> {
@@ -1240,14 +1350,6 @@ impl App {
         false
     }
 
-    fn explain_movie(&mut self, id: u64) {
-        if let Some(card) = find_card_by_id(&self.chat, id) {
-            self.explain_card(card);
-        } else {
-            self.toast("Non ho più la scheda di quel film.");
-        }
-    }
-
     fn explain_card(&mut self, card: chat::Card) {
         let user = format!("Perché «{}»?", card.movie.title);
         let intro = explanation_text(&self.tax, &card);
@@ -1546,6 +1648,27 @@ impl App {
                     .as_ref()
                     .map(|i| i.mode.eq_ignore_ascii_case("off_topic"))
                     .unwrap_or(false);
+            let seen_title = seen_title_in_query(&text);
+            let person_lookup = person_query(&text)
+                .or_else(|| {
+                    intent
+                        .as_ref()
+                        .and_then(|i| i.person.clone())
+                        .map(|name| PersonQuery {
+                            name,
+                            role: PersonRole::Any,
+                        })
+                })
+                .or_else(|| {
+                    if follow {
+                        base.person.as_ref().map(|name| PersonQuery {
+                            name: name.clone(),
+                            role: PersonRole::Any,
+                        })
+                    } else {
+                        None
+                    }
+                });
             let mut eff = if follow {
                 base.facets.clone()
             } else {
@@ -1624,26 +1747,65 @@ impl App {
             });
             ctx.request_repaint();
 
-            let pool = match chat_pool(
-                &tmdb,
-                &tax,
-                &eff,
-                &themes,
-                &known,
-                title.as_deref(),
-                similar.as_deref(),
-                &mut payload.notes,
-            ) {
-                Ok(p) => p,
-                Err(_) if cancel.load(Ordering::Relaxed) => return,
-                Err(e) => {
-                    payload.error = Some(e);
-                    let _ = tx.send(Msg::ChatDone {
-                        gen,
-                        payload: Box::new(payload),
-                    });
-                    ctx.request_repaint();
-                    return;
+            let mut person_pool = None;
+            let mut person_label = None;
+            let mut person_name = None;
+            if let Some(query) = &person_lookup {
+                match chat_person_pool(
+                    &tmdb,
+                    &tax,
+                    &eff,
+                    query,
+                    seen_title.as_deref(),
+                    &mut payload.notes,
+                ) {
+                    Ok(Some(found)) => {
+                        person_label = Some(found.label.clone());
+                        person_name = Some(found.person.clone());
+                        person_pool = Some(found.result);
+                    }
+                    Ok(None) => {
+                        payload.notes.push(format!(
+                            "Non ho riconosciuto «{}» come regista o attore.",
+                            query.name
+                        ));
+                    }
+                    Err(_) if cancel.load(Ordering::Relaxed) => return,
+                    Err(e) => {
+                        payload.error = Some(e);
+                        let _ = tx.send(Msg::ChatDone {
+                            gen,
+                            payload: Box::new(payload),
+                        });
+                        ctx.request_repaint();
+                        return;
+                    }
+                }
+            }
+            let pool = if let Some(found) = person_pool {
+                found
+            } else {
+                match chat_pool(
+                    &tmdb,
+                    &tax,
+                    &eff,
+                    &themes,
+                    &known,
+                    title.as_deref(),
+                    similar.as_deref(),
+                    &mut payload.notes,
+                ) {
+                    Ok(p) => p,
+                    Err(_) if cancel.load(Ordering::Relaxed) => return,
+                    Err(e) => {
+                        payload.error = Some(e);
+                        let _ = tx.send(Msg::ChatDone {
+                            gen,
+                            payload: Box::new(payload),
+                        });
+                        ctx.request_repaint();
+                        return;
+                    }
                 }
             };
             let ChatPoolResult {
@@ -1662,22 +1824,29 @@ impl App {
             payload.limit = limit.clone();
             payload.grid_ready = grid_ready;
             payload.understood = describe_chat(&tax, &used_facets, &themes);
-            if themes.is_empty() {
-                if let Some(s) = similar.as_deref() {
-                    payload.understood = format!("simili a «{s}»");
-                } else if let Some(t) = title.as_deref() {
-                    payload.understood =
-                        if payload.understood.eq_ignore_ascii_case("ricerca libera") {
-                            format!("titolo «{t}»")
-                        } else {
-                            format!("titolo «{t}» · {}", payload.understood)
-                        };
+            if let Some(label) = &person_label {
+                payload.understood = label.clone();
+                payload.context.person = person_name.clone();
+                payload.context.free_text = None;
+                payload.context.similar_to = None;
+            } else {
+                if themes.is_empty() {
+                    if let Some(s) = similar.as_deref() {
+                        payload.understood = format!("simili a «{s}»");
+                    } else if let Some(t) = title.as_deref() {
+                        payload.understood =
+                            if payload.understood.eq_ignore_ascii_case("ricerca libera") {
+                                format!("titolo «{t}»")
+                            } else {
+                                format!("titolo «{t}» · {}", payload.understood)
+                            };
+                    }
                 }
-            }
-            if off_topic && used_facets.is_empty() && themes.is_empty() {
-                // Una domanda senza legame con i filtri mostra i film del
-                // momento: la riga «Capito» lo dice, senza inventare criteri.
-                payload.understood = "film del momento".into();
+                if off_topic && used_facets.is_empty() && themes.is_empty() {
+                    // Una domanda senza legame con i filtri mostra i film del
+                    // momento: la riga «Capito» lo dice, senza inventare criteri.
+                    payload.understood = "film del momento".into();
+                }
             }
             movies.retain(|m| !exclude.contains(&m.id));
             movies.truncate(20);
@@ -1840,9 +2009,6 @@ impl App {
         }
         if let Some(i) = a.retry {
             self.regenerate(i);
-        }
-        if let Some(id) = a.explain {
-            self.explain_movie(id);
         }
         if let Some(i) = a.show_all {
             self.show_all_in_grid(i);
@@ -4106,6 +4272,116 @@ pub fn chat_pool(
     })
 }
 
+fn sort_movies(movies: &mut [Movie], sort: Sort) {
+    movies.sort_by(|a, b| match sort {
+        Sort::Newest => b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)),
+        Sort::Oldest => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
+        Sort::Rating => b
+            .rating
+            .partial_cmp(&a.rating)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        Sort::Votes => b.votes.cmp(&a.votes),
+        Sort::Popularity => {
+            let sa = a.rating * (1.0 + a.votes as f32).ln();
+            let sb = b.rating * (1.0 + b.votes as f32).ln();
+            sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    });
+}
+
+/// Cerca la filmografia di un regista o attore. `Ok(None)` significa che il
+/// nome non è stato riconosciuto: in quel caso il chiamante può ripiegare
+/// sulla ricerca normale.
+fn chat_person_pool(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    eff: &Facets,
+    query: &PersonQuery,
+    seen: Option<&str>,
+    _notes: &mut Vec<String>,
+) -> Result<Option<PersonPool>, String> {
+    let results = tmdb.search_person(&query.name)?;
+    let target = normalize_title(&query.name);
+    let person = results
+        .iter()
+        .find(|p| normalize_title(&p.name) == target)
+        .or_else(|| {
+            results.iter().find(|p| {
+                let name = normalize_title(&p.name);
+                target.len() >= 5 && (name.contains(&target) || target.contains(&name))
+            })
+        });
+    let Some(person) = person else {
+        return Ok(None);
+    };
+
+    let credits = tmdb.person_credits(person.id)?;
+    let directed: Vec<Movie> = credits
+        .crew
+        .iter()
+        .filter(|c| c.job.eq_ignore_ascii_case("Director"))
+        .map(|c| Movie::from(c.movie.clone()))
+        .collect();
+    let acted: Vec<Movie> = credits.cast.iter().cloned().map(Movie::from).collect();
+    let (chosen, verb) = match query.role {
+        PersonRole::Director => (directed, "diretto da"),
+        PersonRole::Actor => (acted, "interpretato da"),
+        PersonRole::Any => {
+            if person.known_for_department.eq_ignore_ascii_case("Directing")
+                || (person.known_for_department != "Acting" && !directed.is_empty())
+            {
+                (directed, "diretto da")
+            } else {
+                (acted, "interpretato da")
+            }
+        }
+    };
+    let mut movies = dedupe(chosen);
+    if let Some(seen) = seen {
+        let key = normalize_title(seen);
+        movies.retain(|m| {
+            let title = normalize_title(&m.title);
+            let original = normalize_title(&m.original_title);
+            !(title == key
+                || original == key
+                || (key.len() >= 4
+                    && (key.contains(&title) || title.contains(&key))))
+        });
+    }
+    let mut movies = filter_movies(movies, tax, eff);
+    sort_movies(&mut movies, eff.sort);
+    let total = movies.len() as u32;
+    let limit = if total == 0 {
+        Some(format!("Nessun film {verb} «{}» con questi criteri.", person.name))
+    } else {
+        None
+    };
+    movies.truncate(20);
+    let reasons = movies
+        .iter()
+        .map(|m| (m.id, format!("{verb} {}", person.name)))
+        .collect::<HashMap<_, _>>();
+    let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
+    let label = match verb {
+        "diretto da" => format!("film diretti da «{}»", person.name),
+        _ => format!("film con «{}»", person.name),
+    };
+    Ok(Some(PersonPool {
+        result: ChatPoolResult {
+            movies,
+            total,
+            facets: eff.clone(),
+            keyword_pairs: Vec::new(),
+            limit,
+            grid_ready: false,
+            reasons,
+            relevance,
+        },
+        label,
+        person: person.name.clone(),
+    }))
+}
+
 struct ThemeCandidate {
     movie: Movie,
     matched: Vec<bool>,
@@ -4965,6 +5241,29 @@ mod phase1_tests {
                 ..Default::default()
             }),
         }
+    }
+
+    #[test]
+    fn riconosce_registi_attori_e_il_film_appena_visto() {
+        let q = person_query("ho visto ladri di biciclette, altri film di vittorio de sica?")
+            .expect("persona");
+        assert_eq!(q.name.to_lowercase(), "vittorio de sica");
+        assert_eq!(q.role, PersonRole::Any);
+        assert_eq!(
+            seen_title_in_query("ho visto ladri di biciclette, altri film di vittorio de sica?")
+                .as_deref(),
+            Some("ladri di biciclette")
+        );
+
+        assert_eq!(
+            person_query("film con Vittorio De Sica").map(|q| q.role),
+            Some(PersonRole::Actor)
+        );
+        assert_eq!(
+            person_query("regia di Vittorio De Sica").map(|q| q.role),
+            Some(PersonRole::Director)
+        );
+        assert!(person_query("film di guerra").is_none());
     }
 
     #[test]

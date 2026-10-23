@@ -93,7 +93,6 @@ pub struct Actions {
     pub similar_to: Option<String>,
     pub retry: Option<usize>,
     pub stop: bool,
-    pub explain: Option<u64>,
     pub show_all: Option<usize>,
     pub new_chat: bool,
     /// Offset dello scroll in questo frame: l'app lo usa per capire se si
@@ -1108,18 +1107,6 @@ fn film_card(
                                 .clicked()
                             {
                                 actions.similar_to = Some(card.movie.title.clone());
-                            }
-                            if ui
-                                .add(
-                                    egui::Button::new(RichText::new("Spiega").size(12.0))
-                                        .fill(Color32::TRANSPARENT)
-                                        .stroke(Stroke::new(1.0_f32, theme::BORDER))
-                                        .rounding(Rounding::same(10.0)),
-                                )
-                                .on_hover_text("Spiega perché questo film è nella lista")
-                                .clicked()
-                            {
-                                actions.explain = Some(card.movie.id);
                             }
                         });
                     });

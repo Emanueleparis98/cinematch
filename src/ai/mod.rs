@@ -87,6 +87,7 @@ impl Intent {
             && self.themes.iter().all(Theme::is_empty)
             && self.free_text.is_none()
             && self.similar_to.is_none()
+            && self.person.is_none()
     }
 }
 
@@ -216,6 +217,8 @@ pub struct Intent {
     pub themes: Vec<Theme>,
     pub free_text: Option<String>,
     pub similar_to: Option<String>,
+    /// Regista o attore citato esplicitamente («film di De Sica»).
+    pub person: Option<String>,
     /// Modalita dichiarata dall'interprete: «faceted», «title», «similar»,
     /// «mixed» oppure «reset» (in chat: ricominciare da zero).
     pub mode: String,
@@ -1505,6 +1508,9 @@ fn context_digest(tax: &Taxonomy, it: &Intent) -> String {
     if let Some(t) = &it.similar_to {
         parts.push(format!("simile a: {t}"));
     }
+    if let Some(p) = &it.person {
+        parts.push(format!("persona: {p}"));
+    }
     if parts.is_empty() {
         "nessuno".to_string()
     } else {
@@ -1585,6 +1591,8 @@ struct LlmAnswer {
     title: Option<String>,
     #[serde(default)]
     similar_to: Option<String>,
+    #[serde(default)]
+    person: Option<String>,
     #[serde(default)]
     reason: Option<String>,
 }
@@ -1769,7 +1777,7 @@ impl LlmProvider {
              L'utente puo scrivere in modo libero e colloquiale: estrai tutti i vincoli che riconosci e ignora il resto.\n\
              Usa SOLO gli identificatori elencati qui sotto per le facce; per gli argomenti liberi usa `themes`.\n\n{}\n\n\
              Rispondi esclusivamente con un oggetto JSON con questa forma:\n\
-             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"action\":\"new|refine|replace|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"themes\":[{{\"label\":\"...\",\"concepts\":[{{\"label\":\"...\",\"terms\":[\"...\"],\"keywords\":[\"...\"]}}],\"seed_titles\":[\"...\"]}}],\"title\":null,\"similar_to\":null,\"reason\":\"\"}}\n\
+             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"action\":\"new|refine|replace|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"themes\":[{{\"label\":\"...\",\"concepts\":[{{\"label\":\"...\",\"terms\":[\"...\"],\"keywords\":[\"...\"]}}],\"seed_titles\":[\"...\"]}}],\"title\":null,\"similar_to\":null,\"person\":null,\"reason\":\"\"}}\n\
              Come riempire i campi:\n\
              - `decades`: id dei decenni («anni 80» -> \"1980s\"). Se scegli un movimento, NON aggiungere decenni incompatibili col suo periodo.\n\
              - `movements`: la corrente cinematografica quando la richiesta la nomina o la descrive.\n\
@@ -1784,7 +1792,7 @@ impl LlmProvider {
              - `runtime`: intervallo in minuti [minimo, massimo]. «corti»/«cortometraggi» -> [0,40]; «sotto i 90 minuti» -> [0,90]; «lunghi» -> [150,400].\n\
              - `sort`: \"vote_average.desc\" (migliori), \"vote_count.desc\" (piu votati), \"primary_release_date.desc\" (recenti), \"primary_release_date.asc\" (classici) oppure null.\n\
              - `intent`: la modalita della ricerca; «reset» solo in chat, quando l'utente chiede esplicitamente di ricominciare da zero.\n\
-             - `title`: solo se l'utente cerca un film preciso. `similar_to`: solo se chiede film simili a un titolo.\n\
+             - `title`: solo se l'utente cerca un film preciso. `similar_to`: solo se chiede film simili a un titolo. `person`: il nome di un regista o attore quando chiede «film di/regia di/con ...»; non metterlo anche in `title` o `similar_to`.\n\
              - `reason`: una frase in italiano che spiega l'interpretazione mostrata all'utente.\n\
              Se un tema non ha keyword TMDB affidabili, lascia `keywords` vuoto: e meglio un tema non risolto che una keyword sbagliata. Genera solo combinazioni storicamente sensate; non inventare identificatori; usa null quando un campo non serve.",
             tax.prompt_summary()
@@ -2220,6 +2228,7 @@ impl LlmProvider {
             themes: parse_themes(ans.themes),
             free_text,
             similar_to: ans.similar_to.filter(|s| !s.trim().is_empty()),
+            person: ans.person.filter(|s| !s.trim().is_empty()),
             mode,
             action,
             notes,

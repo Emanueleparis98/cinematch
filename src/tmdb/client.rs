@@ -10,7 +10,9 @@ use serde::de::DeserializeOwned;
 
 use crate::domain::constraints::DiscoverQuery;
 use crate::domain::model::{Details, Sort};
-use crate::tmdb::models::{ApiDetails, KeywordResults, PagedMovies};
+use crate::tmdb::models::{
+    ApiDetails, KeywordResults, PagedMovies, Person, PersonCredits, PersonSearch,
+};
 
 pub const API_BASE: &str = "https://api.themoviedb.org/3";
 pub const IMG_BASE: &str = "https://image.tmdb.org/t/p/";
@@ -443,6 +445,21 @@ impl Tmdb {
         let res: PagedMovies = self.get("/search/movie", &p)?;
         self.list_store(key, &res);
         Ok(res)
+    }
+
+    /// Cerca una persona (regista o attore) per nome.
+    pub fn search_person(&self, query: &str) -> Result<Vec<Person>, String> {
+        let p = vec![
+            ("query".to_string(), query.to_string()),
+            ("include_adult".into(), "false".into()),
+        ];
+        let res: PersonSearch = self.get("/search/person", &p)?;
+        Ok(res.results)
+    }
+
+    /// Filmografia completa: cast e crew (per riconoscere la regia).
+    pub fn person_credits(&self, id: u64) -> Result<PersonCredits, String> {
+        self.get(&format!("/person/{id}/movie_credits"), &[])
     }
 
     pub fn trending(&self, page: u32) -> Result<PagedMovies, String> {

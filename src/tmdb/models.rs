@@ -73,6 +73,40 @@ pub struct PagedMovies {
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
+pub struct Person {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub known_for_department: String,
+    #[serde(default)]
+    pub popularity: f32,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct PersonSearch {
+    #[serde(default)]
+    pub results: Vec<Person>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct CrewCredit {
+    #[serde(flatten)]
+    pub movie: ApiMovie,
+    #[serde(default)]
+    pub job: String,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct PersonCredits {
+    #[serde(default)]
+    pub cast: Vec<ApiMovie>,
+    #[serde(default)]
+    pub crew: Vec<CrewCredit>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct GenreRef {
     #[serde(default)]
     pub id: u32,
