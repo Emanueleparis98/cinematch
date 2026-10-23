@@ -5,7 +5,7 @@
 
 use egui::{Align2, Color32, FontId, Rect, RichText, Rounding, Sense, Stroke};
 
-use crate::domain::model::{Facets, ImdbRating, Movie, Sort};
+use crate::domain::model::{Facets, ImdbRating, Movie};
 use crate::domain::suggestions::Suggestion;
 use crate::domain::taxonomy::Taxonomy;
 use crate::tmdb::poster_url;
@@ -91,14 +91,11 @@ pub struct Entry {
 pub struct Actions {
     pub open_detail: Option<u64>,
     pub similar_to: Option<String>,
-    pub regenerate: Option<usize>,
     pub retry: Option<usize>,
     pub stop: bool,
     pub explain: Option<u64>,
-    pub compare: Option<usize>,
     pub show_all: Option<usize>,
     pub new_chat: bool,
-    pub suggestion: Option<String>,
     /// Offset dello scroll in questo frame: l'app lo usa per capire se si
     /// sta leggendo verso l'alto e minimizzare il composer.
     pub scroll_offset: f32,
@@ -809,12 +806,10 @@ fn answer_view(
         ui.add_space(10.0);
     }
 
-    ui.add_space(2.0);
-    ui.horizontal_wrapped(|ui| {
-        if a.grid_ready
-            && a.total > 0
-            && !a.facets.is_empty()
-            && theme::chip(
+    if a.grid_ready && a.total > 0 && !a.facets.is_empty() {
+        ui.add_space(2.0);
+        ui.horizontal_wrapped(|ui| {
+            if theme::chip(
                 ui,
                 &format!("Vedi tutti i {} in griglia", theme::thousands(a.total)),
                 false,
@@ -822,85 +817,11 @@ fn answer_view(
                 Some("Apre la griglia con gli stessi criteri"),
             )
             .clicked()
-        {
-            actions.show_all = Some(index);
-        }
-        if a.cards.len() >= 2
-            && theme::chip(
-                ui,
-                "Confronta i primi due",
-                false,
-                true,
-                Some("Mette a confronto i primi due film di questa risposta"),
-            )
-            .clicked()
-        {
-            actions.compare = Some(index);
-        }
-        if theme::chip(
-            ui,
-            "↻  Rigenera",
-            false,
-            true,
-            Some("Esclude questi film e propone altri titoli pertinenti"),
-        )
-        .clicked()
-        {
-            actions.regenerate = Some(index);
-        }
-        ui.label(
-            RichText::new("Non ti convincono? Scrivi cosa cambiare.")
-                .size(11.0)
-                .color(theme::FAINT),
-        );
-    });
-    // Proseguimenti contestuali: niente chip che ripetono un vincolo gia
-    // attivo o che non cambierebbero la ricerca.
-    let ideas = follow_up_ideas(a);
-    if !ideas.is_empty() {
-        ui.add_space(7.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Continua:").size(11.0).color(theme::FAINT));
-            for idea in ideas {
-                if theme::chip(ui, idea, false, true, None).clicked() {
-                    actions.suggestion = Some(idea.to_string());
-                }
+            {
+                actions.show_all = Some(index);
             }
         });
     }
-}
-
-/// Idee di seguito pertinenti ai criteri gia attivi. Al massimo quattro, in
-/// ordine di utilita: recente, italiano, corto, voto, piu leggero.
-fn follow_up_ideas(a: &Answer) -> Vec<&'static str> {
-    let mut out: Vec<&'static str> = Vec::new();
-    let recent = a.facets.sort == Sort::Newest
-        || a.facets
-            .decades
-            .iter()
-            .any(|d| d.starts_with("202") || d == "2010s");
-    if !recent {
-        out.push("e uno più recente?");
-    }
-    if a.facets.countries.len() != 1 || a.facets.countries[0] != "IT" {
-        out.push("solo italiani");
-    }
-    if a.facets.runtime.is_none() {
-        out.push("più corti");
-    }
-    if a.facets.min_rating.unwrap_or(0.0) < 7.0 {
-        out.push("voto più alto");
-    }
-    let dark = a
-        .facets
-        .genres
-        .iter()
-        .any(|g| matches!(g, 18 | 27 | 53 | 10752));
-    if (dark || !a.facets.genres.contains(&35)) && out.len() < 4 {
-        out.push("più leggero");
-    }
-    out.truncate(4);
-    out
 }
 
 /// Avanzamento della pipeline: tre tappe, quella attiva pulsa; sotto, la
@@ -1218,31 +1139,6 @@ fn film_card(
             card_hover,
         );
     });
-}
-
-#[cfg(test)]
-mod follow_up_tests {
-    use super::{follow_up_ideas, Answer};
-    use crate::domain::model::Sort;
-
-    #[test]
-    fn le_chip_rispettano_i_vincoli_gia_attivi() {
-        let ideas = follow_up_ideas(&Answer::default());
-        assert_eq!(ideas.len(), 4);
-        assert!(ideas.contains(&"solo italiani"));
-        assert!(ideas.contains(&"più corti"));
-
-        let mut a = Answer::default();
-        a.facets.countries = vec!["IT".into()];
-        a.facets.sort = Sort::Newest;
-        a.facets.runtime = Some((0, 100));
-        a.facets.min_rating = Some(7.5);
-        a.facets.genres = vec![35];
-        assert!(follow_up_ideas(&a).is_empty());
-
-        a.facets.genres = vec![18];
-        assert_eq!(follow_up_ideas(&a), ["più leggero"]);
-    }
 }
 
 #[cfg(test)]
