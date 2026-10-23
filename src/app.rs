@@ -5316,6 +5316,32 @@ mod phase1_tests {
             role: PersonRole::Actor,
         };
         assert_eq!(choose_person(&comparable, &mario).map(|p| p.id), Some(4));
+
+        // Omonimi con lo stesso ruolo: vince il più popolare; nessun
+        // risultato resta un caso gestito.
+        let two_directors = vec![
+            Person {
+                id: 5,
+                name: "Mario Rossi".into(),
+                known_for_department: "Directing".into(),
+                popularity: 1.0,
+            },
+            Person {
+                id: 6,
+                name: "Mario Rossi".into(),
+                known_for_department: "Directing".into(),
+                popularity: 2.0,
+            },
+        ];
+        let director = PersonQuery {
+            name: "Mario Rossi".into(),
+            role: PersonRole::Director,
+        };
+        assert_eq!(
+            choose_person(&two_directors, &director).map(|p| p.id),
+            Some(6)
+        );
+        assert!(choose_person(&[], &director).is_none());
     }
 
     #[test]

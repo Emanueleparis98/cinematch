@@ -132,6 +132,8 @@ pub struct Tmdb {
     list_cache: Arc<Mutex<HashMap<String, PagedMovies>>>,
     details_cache: Arc<Mutex<HashMap<u64, Details>>>,
     keyword_cache: Arc<Mutex<HashMap<String, Option<u64>>>>,
+    person_cache: Arc<Mutex<HashMap<String, Vec<Person>>>>,
+    credits_cache: Arc<Mutex<HashMap<u64, PersonCredits>>>,
     /// Solo il client della chat lo imposta: stop interrompe richieste e
     /// letture del corpo senza toccare la griglia.
     cancel: Option<Arc<AtomicBool>>,
@@ -161,6 +163,8 @@ impl Tmdb {
             list_cache: Arc::new(Mutex::new(HashMap::new())),
             details_cache: Arc::new(Mutex::new(HashMap::new())),
             keyword_cache: Arc::new(Mutex::new(HashMap::new())),
+            person_cache: Arc::new(Mutex::new(HashMap::new())),
+            credits_cache: Arc::new(Mutex::new(HashMap::new())),
             cancel: None,
         }
     }
@@ -178,6 +182,8 @@ impl Tmdb {
             list_cache: self.list_cache.clone(),
             details_cache: self.details_cache.clone(),
             keyword_cache: self.keyword_cache.clone(),
+            person_cache: self.person_cache.clone(),
+            credits_cache: self.credits_cache.clone(),
             cancel: Some(cancel.clone()),
         };
         (copy, cancel)
@@ -449,17 +455,41 @@ impl Tmdb {
 
     /// Cerca una persona (regista o attore) per nome.
     pub fn search_person(&self, query: &str) -> Result<Vec<Person>, String> {
+        let name = query.trim().to_lowercase();
+        if let Ok(cache) = self.person_cache.lock() {
+            if let Some(hit) = cache.get(&name) {
+                return Ok(hit.clone());
+            }
+        }
         let p = vec![
             ("query".to_string(), query.to_string()),
             ("include_adult".into(), "false".into()),
         ];
         let res: PersonSearch = self.get("/search/person", &p)?;
+        if let Ok(mut cache) = self.person_cache.lock() {
+            if cache.len() > 100 {
+                cache.clear();
+            }
+            cache.insert(name, res.results.clone());
+        }
         Ok(res.results)
     }
 
     /// Filmografia completa: cast e crew (per riconoscere la regia).
     pub fn person_credits(&self, id: u64) -> Result<PersonCredits, String> {
-        self.get(&format!("/person/{id}/movie_credits"), &[])
+        if let Ok(cache) = self.credits_cache.lock() {
+            if let Some(hit) = cache.get(&id) {
+                return Ok(hit.clone());
+            }
+        }
+        let res: PersonCredits = self.get(&format!("/person/{id}/movie_credits"), &[])?;
+        if let Ok(mut cache) = self.credits_cache.lock() {
+            if cache.len() > 120 {
+                cache.clear();
+            }
+            cache.insert(id, res.clone());
+        }
+        Ok(res)
     }
 
     pub fn trending(&self, page: u32) -> Result<PagedMovies, String> {
@@ -571,7 +601,32 @@ fn keyword_variants(keyword: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{keyword_variants, Tmdb, CANCELLED};
+    use crate::tmdb::models::{Person, PersonCredits};
     use std::sync::atomic::Ordering;
+
+    #[test]
+    fn persone_e_filmografie_restano_in_cache() {
+        let tmdb = Tmdb::new("x".into(), "it-IT".into());
+        let person = Person {
+            id: 12_329,
+            name: "Vittorio De Sica".into(),
+            known_for_department: "Directing".into(),
+            popularity: 1.4,
+        };
+        tmdb.person_cache
+            .lock()
+            .unwrap()
+            .insert("vittorio de sica".into(), vec![person]);
+        assert_eq!(
+            tmdb.search_person("  Vittorio De Sica ").unwrap()[0].id,
+            12_329
+        );
+        tmdb.credits_cache
+            .lock()
+            .unwrap()
+            .insert(12_329, PersonCredits::default());
+        assert!(tmdb.person_credits(12_329).unwrap().cast.is_empty());
+    }
 
     #[test]
     fn annullare_la_chat_ferma_la_richiesta() {
