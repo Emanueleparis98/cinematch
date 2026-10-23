@@ -17,7 +17,7 @@ use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::infra::winclock;
 use crate::tmdb::client::{describe_credential, Tmdb};
-use crate::tmdb::models::PagedMovies;
+use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
 use crate::ui::images::ImageStore;
@@ -296,6 +296,41 @@ fn person_query(text: &str) -> Option<PersonQuery> {
         return Some(PersonQuery { name, role });
     }
     None
+}
+
+fn choose_person<'a>(results: &'a [Person], query: &PersonQuery) -> Option<&'a Person> {
+    let target = normalize_title(&query.name);
+    let exact = results
+        .iter()
+        .filter(|p| normalize_title(&p.name) == target)
+        .collect::<Vec<_>>();
+    let pool = if exact.is_empty() {
+        results
+            .iter()
+            .filter(|p| {
+                let name = normalize_title(&p.name);
+                target.len() >= 5 && (name.contains(&target) || target.contains(&name))
+            })
+            .collect::<Vec<_>>()
+    } else {
+        exact
+    };
+    if pool.is_empty() {
+        return None;
+    }
+    let score = |p: &Person| {
+        let role_bonus = match query.role {
+            PersonRole::Director if p.known_for_department.eq_ignore_ascii_case("Directing") => 0.5,
+            PersonRole::Actor if p.known_for_department.eq_ignore_ascii_case("Acting") => 0.5,
+            _ => 0.0,
+        };
+        p.popularity + role_bonus
+    };
+    pool.into_iter().max_by(|a, b| {
+        score(a)
+            .partial_cmp(&score(b))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })
 }
 
 fn seen_title_in_query(text: &str) -> Option<String> {
@@ -4301,17 +4336,7 @@ fn chat_person_pool(
     _notes: &mut Vec<String>,
 ) -> Result<Option<PersonPool>, String> {
     let results = tmdb.search_person(&query.name)?;
-    let target = normalize_title(&query.name);
-    let person = results
-        .iter()
-        .find(|p| normalize_title(&p.name) == target)
-        .or_else(|| {
-            results.iter().find(|p| {
-                let name = normalize_title(&p.name);
-                target.len() >= 5 && (name.contains(&target) || target.contains(&name))
-            })
-        });
-    let Some(person) = person else {
+    let Some(person) = choose_person(&results, query) else {
         return Ok(None);
     };
 
@@ -5241,6 +5266,56 @@ mod phase1_tests {
                 ..Default::default()
             }),
         }
+    }
+
+    #[test]
+    fn gli_omonimi_si_scelgono_dal_ruolo() {
+        let people = vec![
+            Person {
+                id: 1,
+                name: "Vittorio De Sica".into(),
+                known_for_department: "Directing".into(),
+                popularity: 1.4,
+            },
+            Person {
+                id: 2,
+                name: "Vittorio De Sica".into(),
+                known_for_department: "Acting".into(),
+                popularity: 0.3,
+            },
+        ];
+        let any = PersonQuery {
+            name: "Vittorio De Sica".into(),
+            role: PersonRole::Any,
+        };
+        let actor = PersonQuery {
+            role: PersonRole::Actor,
+            ..any.clone()
+        };
+        assert_eq!(choose_person(&people, &any).map(|p| p.id), Some(1));
+        // Il De Sica famoso è anche attore: il ruolo non deve far scegliere
+        // l'omonimo attore minore.
+        assert_eq!(choose_person(&people, &actor).map(|p| p.id), Some(1));
+
+        let comparable = vec![
+            Person {
+                id: 3,
+                name: "Mario Rossi".into(),
+                known_for_department: "Directing".into(),
+                popularity: 1.0,
+            },
+            Person {
+                id: 4,
+                name: "Mario Rossi".into(),
+                known_for_department: "Acting".into(),
+                popularity: 0.9,
+            },
+        ];
+        let mario = PersonQuery {
+            name: "Mario Rossi".into(),
+            role: PersonRole::Actor,
+        };
+        assert_eq!(choose_person(&comparable, &mario).map(|p| p.id), Some(4));
     }
 
     #[test]
