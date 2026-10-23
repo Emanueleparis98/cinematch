@@ -1,12 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::ai::{
-    build_provider, cheapest_models, curator, list_models, model_details, Intent, IntentProvider,
-    LlmConfig, LlmKind, LlmProvider, ModelInfo,
+    build_provider, cheapest_models, curator, is_follow_up, list_models, model_details, Intent,
+    IntentProvider, LlmConfig, LlmKind, LlmProvider, ModelInfo, Theme, ThemeConcept,
 };
 use crate::domain::constraints::{self, Prune};
 use crate::domain::model::{toggle, Details, Facets, Movie, Sort};
@@ -89,13 +89,31 @@ struct ChatPayload {
     intro: String,
     cards: Vec<chat::Card>,
     understood: String,
+    limit: Option<String>,
     notes: Vec<String>,
     total: u32,
     facets: Facets,
     keyword_pairs: Vec<(String, u64)>,
+    /// Contesto effettivo prima della ricerca: serve ai seguiti e a «Rigenera».
+    context: Intent,
+    /// La griglia puo rappresentare questi criteri senza perdere i temi.
+    grid_ready: bool,
     /// Intento interpretato, riusato dalla griglia senza nuove chiamate AI.
     intent: Option<(String, Intent)>,
     error: Option<String>,
+}
+
+/// Esito della ricerca della chat: candidati reali, criteri davvero usati e
+/// una spiegazione onesta quando non tutti i criteri sono coperti.
+pub struct ChatPoolResult {
+    pub movies: Vec<Movie>,
+    pub total: u32,
+    pub facets: Facets,
+    pub keyword_pairs: Vec<(String, u64)>,
+    pub limit: Option<String>,
+    pub grid_ready: bool,
+    pub reasons: HashMap<u64, String>,
+    pub relevance: HashMap<u64, f32>,
 }
 
 #[derive(Clone)]
@@ -140,6 +158,8 @@ pub struct App {
     chat: Vec<chat::Entry>,
     chat_gen: u64,
     chat_busy: bool,
+    /// Contesto dei seguiti della chat: separato dai filtri della griglia.
+    chat_context: Intent,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
     chat_jump: bool,
     /// Composer ridotto a barra mentre si legge la conversazione.
@@ -242,6 +262,7 @@ impl App {
             chat: Vec::new(),
             chat_gen: 0,
             chat_busy: false,
+            chat_context: Intent::default(),
             chat_jump: false,
             chat_composer_collapsed: false,
             chat_scroll_last: 0.0,
@@ -524,15 +545,14 @@ impl App {
                     }
                     self.chat_busy = false;
                     let p = *payload;
-                    self.facets = p.facets.clone();
-                    self.prune = constraints::pruning(&self.tax, &self.facets);
+                    // La chat non tocca la griglia: l'unico passaggio esplicito
+                    // e «Vedi tutti in griglia». Qui si aggiorna solo il
+                    // contesto interno dei seguiti.
+                    self.chat_context = p.context.clone();
                     for pair in p.keyword_pairs.clone() {
                         if !self.keyword_map.iter().any(|(k, _)| k == &pair.0) {
                             self.keyword_map.push(pair);
                         }
-                    }
-                    if p.intent.is_some() {
-                        self.ai_cache = p.intent.clone();
                     }
                     let titles: Vec<String> = p
                         .cards
@@ -545,12 +565,15 @@ impl App {
                         entry.answer.state = chat::State::Done;
                         entry.answer.intro = p.intro;
                         entry.answer.understood = p.understood;
+                        entry.answer.limit = p.limit;
                         entry.answer.notes = p.notes;
                         entry.answer.cards = p.cards;
                         entry.answer.total = p.total;
                         entry.answer.error = p.error;
                         entry.answer.facets = p.facets;
                         entry.answer.keyword_pairs = p.keyword_pairs;
+                        entry.answer.context = Some(p.context);
+                        entry.answer.grid_ready = p.grid_ready;
                         entry.answer.intent = p.intent;
                         entry.answer.done_at = self.ctx.input(|i| i.time);
                     }
@@ -843,6 +866,7 @@ impl App {
         self.chat.clear();
         self.chat_gen += 1;
         self.chat_busy = false;
+        self.chat_context = Intent::default();
         self.chat_draft.clear();
         self.chat_jump = false;
         self.chat_composer_collapsed = false;
@@ -882,7 +906,7 @@ impl App {
         self.spawn_chat_worker(index, text, exclude, None);
     }
 
-    /// «Rigenera i 5»: stessi criteri, altri film (esclude quelli mostrati).
+    /// «Rigenera»: stessi criteri, altri film (esclude quelli mostrati).
     fn regenerate(&mut self, index: usize) {
         if self.chat_busy {
             self.toast("Attendi la risposta in corso…");
@@ -893,7 +917,11 @@ impl App {
         };
         let text = entry.user.clone();
         let exclude: Vec<u64> = entry.answer.cards.iter().map(|c| c.movie.id).collect();
-        let reuse = entry.answer.intent.as_ref().map(|(_, it)| it.clone());
+        let reuse = entry
+            .answer
+            .context
+            .clone()
+            .or_else(|| entry.answer.intent.as_ref().map(|(_, it)| it.clone()));
         if exclude.is_empty() {
             return;
         }
@@ -910,9 +938,13 @@ impl App {
             return;
         };
         let user = entry.user.clone();
+        if !entry.answer.grid_ready || entry.answer.facets.is_empty() {
+            self.toast("Questa richiesta non si traduce in filtri di griglia.");
+            return;
+        }
         let facets = entry.answer.facets.clone();
         let pairs = entry.answer.keyword_pairs.clone();
-        let intent = entry.answer.intent.clone();
+        let intent = entry.answer.context.clone();
         self.facets = facets;
         for pair in pairs {
             if !self.keyword_map.iter().any(|(k, _)| k == &pair.0) {
@@ -920,7 +952,7 @@ impl App {
             }
         }
         if let Some(intent) = intent {
-            self.ai_cache = Some(intent);
+            self.ai_cache = Some((user.clone(), intent));
         }
         self.prune = constraints::pruning(&self.tax, &self.facets);
         self.grid_query = user;
@@ -946,7 +978,7 @@ impl App {
         let gen = self.chat_gen;
         self.chat_busy = true;
 
-        let base = self.facets.clone();
+        let base = self.chat_context.clone();
         let known = self.keyword_map.clone();
         let tax = self.tax.clone();
         let provider = self.provider.clone();
@@ -960,20 +992,29 @@ impl App {
                 intro: String::new(),
                 cards: Vec::new(),
                 understood: String::new(),
+                limit: None,
                 notes: Vec::new(),
                 total: 0,
-                facets: base.clone(),
+                facets: Facets::default(),
                 keyword_pairs: Vec::new(),
+                context: base.clone(),
+                grid_ready: false,
                 intent: None,
                 error: None,
             };
 
-            // 1) Interpreta il messaggio: memoria breve + filtri attivi.
-            //    «Rigenera i 5» riusa l'intento gia' calcolato: stessa
-            //    richiesta, stessi criteri, nessuna nuova chiamata AI.
+            // 1) Interpreta il messaggio. Il contesto dei seguiti e locale
+            //    alla chat: i filtri della griglia non c'entrano.
+            let reuse_ctx = reuse.is_some();
+            let follow = is_follow_up(&text);
+            let empty = Intent::default();
+            // Una richiesta nuova non vede il contesto precedente: cosi il
+            // modello non puo trascinare filtri o temi vecchi per inerzia.
+            let parse_active = if follow { &base } else { &empty };
+            let parse_history: &[(String, String)] = if follow { &history } else { &[] };
             let intent = match reuse {
                 Some(it) => Some(it),
-                None => match provider.parse_chat(&text, &tax, &history, &base) {
+                None => match provider.parse_chat(&text, &tax, parse_history, parse_active) {
                     Ok(it) => Some(it),
                     Err(e) => {
                         payload.notes.push(format!("Interprete non disponibile: {e}"));
@@ -981,36 +1022,53 @@ impl App {
                     }
                 },
             };
-            let mut eff = base.clone();
+            let mut eff = if follow { base.facets.clone() } else { Facets::default() };
+            let mut themes = if follow { base.themes.clone() } else { Vec::new() };
             let off_topic = intent
                 .as_ref()
                 .map(|i| i.mode.eq_ignore_ascii_case("off_topic"))
                 .unwrap_or(false);
             if let Some(it) = &intent {
-                if provider.is_llm() && it.source == "AI" {
-                    // L'interprete di chat riceve i filtri attivi e restituisce
-                    // lo stato completo: sostituisce, cosi «e uno piu recente?»
-                    // toglie davvero gli anni '80 invece di sommarsi.
+                if reuse_ctx {
                     eff = it.facets.clone();
-                } else {
-                    // Il parser a regole (anche quando e il ripiego di un LLM
-                    // non raggiungibile) descrive solo il messaggio: va unito
-                    // ai filtri attivi, che non devono sparire.
+                    themes = it.themes.clone();
+                } else if provider.is_llm() && it.source == "AI" {
+                    // L'AI di chat riceve il contesto e restituisce lo stato
+                    // completo (o lo azzera se la richiesta e nuova).
+                    eff = it.facets.clone();
+                    themes = it.themes.clone();
+                } else if follow {
+                    // Il parser a regole descrive solo il messaggio: va unito
+                    // al contesto, che un seguito esplicito non deve perdere.
                     merge_facets(&mut eff, &it.facets);
+                    merge_themes(&mut themes, &it.themes);
+                } else {
+                    eff = it.facets.clone();
+                    themes = it.themes.clone();
+                }
+                if it.mode.eq_ignore_ascii_case("reset") {
+                    eff = Facets::default();
+                    themes.clear();
                 }
                 payload.notes.extend(it.notes.clone());
             }
             let (eff, removed) = constraints::sanitize(&tax, &eff);
             payload.notes.extend(removed);
+            payload.context = Intent {
+                facets: eff.clone(),
+                themes: themes.clone(),
+                free_text: intent.as_ref().and_then(|i| i.free_text.clone()),
+                similar_to: intent.as_ref().and_then(|i| i.similar_to.clone()),
+                ..Default::default()
+            };
             payload.facets = eff.clone();
-            payload.understood = describe(&tax, &eff, None);
+            payload.understood = describe_chat(&tax, &eff, &themes);
             if let Some(it) = intent.clone() {
                 payload.intent = Some((text.clone(), it));
             }
 
-            // 2) Parole chiave + candidati reali (fino a due pagine).
-            //    Se l'interprete non ha riconosciuto un titolo, non cerco
-            //    l'intera frase: una domanda o un «sorprendimi» non sono titoli.
+            // 2) Candidati reali. Se l'interprete non ha riconosciuto un
+            //    titolo, una frase o una domanda non diventano titoli.
             let _ = tx.send(Msg::ChatStage {
                 gen,
                 index,
@@ -1020,19 +1078,17 @@ impl App {
             let title = intent.as_ref().and_then(|i| i.free_text.clone());
             let similar = intent.as_ref().and_then(|i| i.similar_to.clone());
 
-            let (mut movies, eff, pairs) = match chat_pool(
+            let pool = match chat_pool(
                 &tmdb,
                 &tax,
                 &eff,
+                &themes,
                 &known,
                 title.as_deref(),
                 similar.as_deref(),
                 &mut payload.notes,
             ) {
-                Ok((m, total, eff, pairs)) => {
-                    payload.total = total;
-                    (m, eff, pairs)
-                }
+                Ok(p) => p,
                 Err(e) => {
                     payload.error = Some(e);
                     let _ = tx.send(Msg::ChatDone {
@@ -1043,21 +1099,44 @@ impl App {
                     return;
                 }
             };
-            payload.facets = eff.clone();
-            payload.understood = describe(&tax, &eff, None);
-            if off_topic && eff.is_empty() {
+            let ChatPoolResult {
+                mut movies,
+                total,
+                facets: used_facets,
+                keyword_pairs,
+                limit,
+                grid_ready,
+                reasons,
+                relevance,
+            } = pool;
+            payload.total = total;
+            payload.facets = used_facets.clone();
+            payload.keyword_pairs = keyword_pairs;
+            payload.limit = limit.clone();
+            payload.grid_ready = grid_ready;
+            payload.understood = describe_chat(&tax, &used_facets, &themes);
+            if themes.is_empty() {
+                if let Some(s) = similar.as_deref() {
+                    payload.understood = format!("simili a «{s}»");
+                } else if let Some(t) = title.as_deref() {
+                    payload.understood =
+                        if payload.understood.eq_ignore_ascii_case("ricerca libera") {
+                            format!("titolo «{t}»")
+                        } else {
+                            format!("titolo «{t}» · {}", payload.understood)
+                        };
+                }
+            }
+            if off_topic && used_facets.is_empty() && themes.is_empty() {
                 // Una domanda senza legame con i filtri mostra i film del
                 // momento: la riga «Capito» lo dice, senza inventare criteri.
                 payload.understood = "film del momento".into();
             }
-            payload.keyword_pairs = pairs;
             movies.retain(|m| !exclude.contains(&m.id));
             movies.truncate(20);
 
             if movies.is_empty() {
-                payload.error = Some(
-                    "Nessun film trovato per questa richiesta: prova ad allargare i criteri.".into(),
-                );
+                payload.intro = "Non ho trovato film che corrispondano davvero a questa richiesta. Preferisco non riempire la lista con titoli a caso.".into();
                 let _ = tx.send(Msg::ChatDone {
                     gen,
                     payload: Box::new(payload),
@@ -1066,18 +1145,27 @@ impl App {
                 return;
             }
 
-            // 3) Curatela: sceglie 5 film reali e scrive i commenti (streaming).
+            // 3) Curatela: sceglie fino a 5 film reali e scrive i commenti (streaming).
             let _ = tx.send(Msg::ChatStage {
                 gen,
                 index,
                 stage: 2,
             });
             ctx.request_repaint();
+            let make_candidate = |m: &Movie| {
+                candidate_of(
+                    &tax,
+                    m,
+                    reasons.get(&m.id).cloned(),
+                    relevance.get(&m.id).copied().unwrap_or(1.0),
+                )
+            };
             let req = curator::Request {
                 user_text: text.clone(),
                 understood: payload.understood.clone(),
-                history: history.clone(),
-                candidates: movies.iter().map(|m| candidate_of(&tax, m)).collect(),
+                limit: limit.clone(),
+                history: if follow { history.clone() } else { Vec::new() },
+                candidates: movies.iter().map(make_candidate).collect(),
             };
             let _ = tx.send(Msg::ChatStage {
                 gen,
@@ -1105,33 +1193,12 @@ impl App {
 
             // 4) Completa le scelte e carica la scheda dei film mostrati
             //    (regia, durata, disponibilita, IMDb): solo per loro.
-            let understood = payload.understood.clone();
-            let mut chosen: Vec<(u64, String, String)> = cur
+            let chosen: Vec<(u64, String, String)> = cur
                 .picks
                 .into_iter()
                 .map(|p| (p.id, p.perche, p.consiglio))
                 .collect();
-            let target = movies.len().min(5);
-            if chosen.len() < target {
-                let mut extras: Vec<&Movie> = movies
-                    .iter()
-                    .filter(|m| !chosen.iter().any(|(id, _, _)| *id == m.id))
-                    .collect();
-                extras.sort_by(|a, b| {
-                    curator::score(&candidate_of(&tax, b))
-                        .partial_cmp(&curator::score(&candidate_of(&tax, a)))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                for m in extras {
-                    if chosen.len() >= target {
-                        break;
-                    }
-                    let (perche, consiglio) =
-                        curator::pick_texts(&candidate_of(&tax, m), &understood);
-                    chosen.push((m.id, perche, consiglio));
-                }
-            }
-            // Le schede sono indipendenti: cinque richieste in parallelo
+            // Le schede sono indipendenti: le richieste in parallelo
             // riducono l'attesa senza cambiare l'ordine delle card.
             let cards = std::thread::scope(|scope| {
                 let mut pending = Vec::with_capacity(chosen.len());
@@ -3080,6 +3147,33 @@ impl App {
     }
 }
 
+fn merge_themes(base: &mut Vec<Theme>, extra: &[Theme]) {
+    for theme in extra {
+        if let Some(existing) = base
+            .iter_mut()
+            .find(|t| t.label.eq_ignore_ascii_case(&theme.label))
+        {
+            for concept in &theme.concepts {
+                if !existing
+                    .concepts
+                    .iter()
+                    .any(|c| c.label.eq_ignore_ascii_case(&concept.label))
+                {
+                    existing.concepts.push(concept.clone());
+                }
+            }
+            for title in &theme.seed_titles {
+                if !existing.seed_titles.contains(title) {
+                    existing.seed_titles.push(title.clone());
+                }
+            }
+        } else {
+            base.push(theme.clone());
+        }
+    }
+    base.truncate(2);
+}
+
 fn merge_facets(base: &mut Facets, extra: &Facets) {
     for v in &extra.decades {
         if !base.decades.contains(v) {
@@ -3338,55 +3432,307 @@ fn resolve_keywords(
     }
 }
 
-/// Costruisce il pool della chat. Temi e mood sono filtri AND molto severi:
-/// se lasciano meno di cinque film, si riprova senza e si restituiscono i
-/// filtri davvero usati, cosi risposta, nota e griglia restano coerenti.
-fn chat_pool(
+/// Costruisce il pool della chat. I temi liberi sono criteri semantici, non
+/// filtri di griglia: si cercano concetto per concetto e si tengono solo i
+/// film che ne coprono davvero una parte.
+#[allow(clippy::too_many_arguments)]
+pub fn chat_pool(
     tmdb: &Tmdb,
     tax: &Taxonomy,
     eff: &Facets,
+    themes: &[Theme],
     known: &[(String, u64)],
     title: Option<&str>,
     similar: Option<&str>,
     notes: &mut Vec<String>,
-) -> Result<(Vec<Movie>, u32, Facets, Vec<(String, u64)>), String> {
+) -> Result<ChatPoolResult, String> {
     let mut kw = known.to_vec();
     let mut pairs = Vec::new();
     resolve_keywords(tmdb, tax, eff, &mut kw, &mut pairs, notes);
-    let strict = chat_candidates(tmdb, tax, eff, &kw, title, similar, notes);
-    let has_soft = !eff.keywords.is_empty() || !eff.moods.is_empty();
-    let strict = match strict {
-        Ok((m, total, _)) if !has_soft || m.len() >= 5 => {
-            return Ok((m, total, eff.clone(), pairs));
-        }
-        other => other,
-    };
-    let strict_count = match &strict {
-        Ok((m, _, _)) => m.len(),
-        Err(_) => 0,
-    };
 
-    let mut broad = eff.clone();
-    broad.keywords.clear();
-    broad.moods.clear();
-    let mut kw2 = known.to_vec();
-    let mut pairs2 = Vec::new();
-    resolve_keywords(tmdb, tax, &broad, &mut kw2, &mut pairs2, notes);
-    match chat_candidates(tmdb, tax, &broad, &kw2, title, similar, notes) {
-        Ok((m, total, _)) if m.len() > strict_count => {
-            notes.push(
-                "Temi e mood erano troppo stretti su TMDB: li ho tolti per arrivare a cinque titoli."
-                    .into(),
-            );
-            Ok((m, total, broad, pairs2))
+    if !themes.is_empty() {
+        return chat_theme_pool(tmdb, tax, eff, themes, &kw, pairs, notes);
+    }
+
+    let (movies, total, _headline, exact) =
+        chat_candidates(tmdb, tax, eff, &kw, title, similar, notes)?;
+    let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
+    let limit = if movies.is_empty() {
+        Some("Nessun film corrisponde ai criteri: prova a togliere un vincolo.".into())
+    } else if !exact {
+        Some("I criteri esatti non bastavano: ho allargato solo quanto necessario.".into())
+    } else {
+        None
+    };
+    Ok(ChatPoolResult {
+        movies,
+        total,
+        facets: eff.clone(),
+        keyword_pairs: pairs,
+        limit,
+        // Titolo, «simile a» e criteri allargati non sono rappresentabili in
+        // griglia: il pulsante mostrerebbe risultati diversi dalla chat.
+        grid_ready: !eff.is_empty()
+            && title.is_none()
+            && similar.is_none()
+            && exact,
+        reasons: HashMap::new(),
+        relevance,
+    })
+}
+
+struct ThemeCandidate {
+    movie: Movie,
+    matched: Vec<bool>,
+}
+
+fn has_word(hay: &str, term: &str) -> bool {
+    if term.is_empty() {
+        return false;
+    }
+    hay.match_indices(term).any(|(at, _)| {
+        let before = hay[..at].chars().next_back();
+        let after = hay[at + term.len()..].chars().next();
+        !before.map(|c| c.is_alphanumeric()).unwrap_or(false)
+            && !after.map(|c| c.is_alphanumeric()).unwrap_or(false)
+    })
+}
+
+fn concept_matches(text: &str, concept: &ThemeConcept) -> bool {
+    let hay = text.to_lowercase();
+    concept
+        .terms
+        .iter()
+        .any(|term| has_word(&hay, term.trim().to_lowercase().as_str()))
+}
+
+fn add_theme_movie(
+    pool: &mut HashMap<u64, ThemeCandidate>,
+    concepts: &[ThemeConcept],
+    movie: Movie,
+    hint: Option<usize>,
+) {
+    let hay = format!(
+        "{} {} {}",
+        movie.title, movie.original_title, movie.overview
+    );
+    let matched = concepts
+        .iter()
+        .map(|c| concept_matches(&hay, c))
+        .collect::<Vec<_>>();
+    if hint.is_none() && !matched.iter().any(|m| *m) {
+        return;
+    }
+    let entry = pool.entry(movie.id).or_insert_with(|| ThemeCandidate {
+        movie,
+        matched: vec![false; concepts.len()],
+    });
+    if let Some(i) = hint {
+        if let Some(slot) = entry.matched.get_mut(i) {
+            *slot = true;
         }
-        _ => strict.map(|(m, total, _)| (m, total, eff.clone(), pairs)),
+    }
+    for (i, hit) in matched.into_iter().enumerate() {
+        if hit {
+            entry.matched[i] = true;
+        }
     }
 }
 
-/// Candidati reali per la chat: fino a due pagine, senza doppioni. Segue le
-/// stesse strade della griglia (titolo, simili, tendenze, geometria con
-/// rilassamento), cosi la chat non promette cose che la ricerca non trova.
+fn chat_theme_pool(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    eff: &Facets,
+    themes: &[Theme],
+    hard_kw: &[(String, u64)],
+    hard_pairs: Vec<(String, u64)>,
+    notes: &mut Vec<String>,
+) -> Result<ChatPoolResult, String> {
+    let concepts: Vec<ThemeConcept> = themes
+        .iter()
+        .flat_map(|t| t.concepts.iter().cloned())
+        .take(4)
+        .collect();
+    if concepts.is_empty() {
+        return Ok(ChatPoolResult {
+            movies: Vec::new(),
+            total: 0,
+            facets: eff.clone(),
+            keyword_pairs: hard_pairs,
+            limit: Some("Il tema non è stato tradotto in concetti verificabili.".into()),
+            grid_ready: false,
+            reasons: HashMap::new(),
+            relevance: HashMap::new(),
+        });
+    }
+
+    let mut queries: Vec<Vec<u64>> = Vec::with_capacity(concepts.len());
+    for concept in &concepts {
+        let mut ids: Vec<u64> = Vec::new();
+        for keyword in &concept.keywords {
+            match tmdb.keyword_id(keyword) {
+                Ok(Some(id)) => {
+                    if !ids.contains(&id) {
+                        ids.push(id);
+                    }
+                }
+                Ok(None) => notes.push(format!(
+                    "La keyword TMDB «{keyword}» per «{}» non esiste: uso solo la trama.",
+                    concept.label
+                )),
+                Err(e) => notes.push(format!(
+                    "Keyword «{keyword}» per «{}» non verificata: {e}",
+                    concept.label
+                )),
+            }
+        }
+        queries.push(ids);
+    }
+
+    let mut pool: HashMap<u64, ThemeCandidate> = HashMap::new();
+    let mut total = 0u32;
+    for (index, ids) in queries.iter().enumerate() {
+        // Una keyword per query: TMDB non sa combinare «hard AND (a OR b)».
+        // Cosi le alternative del concetto restano davvero alternative.
+        for id in ids {
+            let mut q = constraints::to_discover(tax, eff, hard_kw, 1)?;
+            if !q.keywords.contains(id) {
+                q.keywords.push(*id);
+            }
+            q.keywords_or = false;
+            let page = tmdb.discover(&q)?;
+            total = total.saturating_add(page.total_results);
+            for movie in page.results.into_iter().map(Movie::from) {
+                add_theme_movie(&mut pool, &concepts, movie, Some(index));
+            }
+        }
+    }
+
+    // Titoli proposti dall'AI e ricerca del tema: si accettano solo se la
+    // trama conferma almeno un concetto.
+    for theme in themes {
+        if !theme.label.trim().is_empty() {
+            if let Ok(page) = tmdb.search(&theme.label, 1) {
+                for movie in page.results.into_iter().take(5).map(Movie::from) {
+                    if eff.is_empty() || !filter_movies(vec![movie.clone()], tax, eff).is_empty() {
+                        add_theme_movie(&mut pool, &concepts, movie, None);
+                    }
+                }
+            }
+        }
+        for seed in &theme.seed_titles {
+            let Ok(page) = tmdb.search(seed, 1) else { continue };
+            let Some(first) = page.results.into_iter().next() else { continue };
+            let movie = Movie::from(first);
+            if !eff.is_empty() && filter_movies(vec![movie.clone()], tax, eff).is_empty() {
+                continue;
+            }
+            add_theme_movie(&mut pool, &concepts, movie, None);
+        }
+    }
+
+    let n = concepts.len();
+    // Due concetti bastano per il confronto (cane/gatto); con tre o piu
+    // concetti chiediamo almeno due segnali, altrimenti il "piu vicino" e
+    // solo un film qualsiasi che parla d'altro.
+    let need = if n <= 1 { n } else if n == 2 { 1 } else { 2 };
+    let mut ranked: Vec<ThemeCandidate> = pool.into_values().collect();
+    // I match completi restano in cima; se sono meno di cinque, i parziali
+    // dichiarati completano la scelta senza spacciarsi per corrispondenze piene.
+    ranked.retain(|c| c.matched.iter().filter(|m| **m).count() >= need);
+    ranked.sort_by(|a, b| {
+        let ca = a.matched.iter().filter(|m| **m).count();
+        let cb = b.matched.iter().filter(|m| **m).count();
+        cb.cmp(&ca).then_with(|| match eff.sort {
+            Sort::Newest => b.movie.year.cmp(&a.movie.year),
+            Sort::Oldest => a.movie.year.cmp(&b.movie.year),
+            Sort::Rating => b
+                .movie
+                .rating
+                .partial_cmp(&a.movie.rating)
+                .unwrap_or(std::cmp::Ordering::Equal),
+            Sort::Votes => b.movie.votes.cmp(&a.movie.votes),
+            Sort::Popularity => {
+                let sa = a.movie.rating as f64 * (1.0 + a.movie.votes as f64).ln();
+                let sb = b.movie.rating as f64 * (1.0 + b.movie.votes as f64).ln();
+                sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
+            }
+        })
+    });
+
+    let mut reasons = HashMap::new();
+    let mut relevance = HashMap::new();
+    for c in &ranked {
+        let covered = concepts
+            .iter()
+            .zip(c.matched.iter())
+            .filter(|(_, hit)| **hit)
+            .map(|(c, _)| c.label.as_str())
+            .collect::<Vec<_>>();
+        let missing = concepts
+            .iter()
+            .zip(c.matched.iter())
+            .filter(|(_, hit)| !**hit)
+            .map(|(c, _)| c.label.as_str())
+            .collect::<Vec<_>>();
+        let reason = if missing.is_empty() {
+            format!("Copre tutti i concetti: {}.", covered.join(", "))
+        } else if covered.is_empty() {
+            format!("Non copre i concetti: {}.", missing.join(", "))
+        } else {
+            format!(
+                "Copre {}; manca {}.",
+                covered.join(", "),
+                missing.join(", ")
+            )
+        };
+        reasons.insert(c.movie.id, reason);
+        relevance.insert(c.movie.id, covered.len() as f32 / n as f32);
+    }
+
+    let count = ranked.len();
+    let exact_count = ranked
+        .iter()
+        .filter(|c| c.matched.iter().filter(|m| **m).count() == n)
+        .count();
+    let movies = ranked.into_iter().map(|c| c.movie).take(20).collect::<Vec<_>>();
+    let limit = if movies.is_empty() {
+        Some(format!(
+            "Nessun film copre almeno {} dei {} concetti: non lo sostituisco con titoli a caso.",
+            need, n
+        ))
+    } else if exact_count == 0 {
+        Some(format!(
+            "Nessun film copre tutti i {n} concetti: questi sono i più vicini."
+        ))
+    } else if exact_count < 5 && count > exact_count {
+        Some(format!(
+            "Solo {exact_count} film {} tutti i criteri; gli altri sono i più vicini.",
+            if exact_count == 1 { "copre" } else { "coprono" }
+        ))
+    } else if exact_count < 5 {
+        Some(format!(
+            "Solo {exact_count} film {} davvero tutti i criteri; non aggiungo titoli a caso.",
+            if exact_count == 1 { "copre" } else { "coprono" }
+        ))
+    } else {
+        None
+    };
+    let total = total.max(movies.len() as u32);
+    Ok(ChatPoolResult {
+        movies,
+        total,
+        facets: eff.clone(),
+        keyword_pairs: hard_pairs,
+        limit,
+        grid_ready: false,
+        reasons,
+        relevance,
+    })
+}
+
+/// Candidati reali per titolo, simili, tendenze o facce dure. Il rilassamento
+/// e dichiarato: non si sostituiscono i criteri stretti con titoli estranei.
 fn chat_candidates(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -3395,7 +3741,7 @@ fn chat_candidates(
     title: Option<&str>,
     similar: Option<&str>,
     notes: &mut Vec<String>,
-) -> Result<(Vec<Movie>, u32, String), String> {
+) -> Result<(Vec<Movie>, u32, String, bool), String> {
     if let Some(name) = similar {
         let p = tmdb.search(name, 1)?;
         let Some(first) = p.results.first() else {
@@ -3407,7 +3753,7 @@ fn chat_candidates(
         if movies.is_empty() {
             return Err(format!("Nessun film simile a «{seed}»."));
         }
-        return Ok((movies, rec.total_results, format!("Simili a «{seed}»")));
+        return Ok((movies, rec.total_results, format!("Simili a «{seed}»"), true));
     }
     if let Some(t) = title {
         let p1 = tmdb.search(t, 1)?;
@@ -3424,8 +3770,8 @@ fn chat_candidates(
             filter_movies(dedupe(movies), tax, eff)
         };
         if movies.is_empty() && eff.is_empty() && looks_like_question(t) {
-            // Il parser a regole non distingue una domanda da un titolo: se
-            // TMDB non trova nulla, meglio i film del momento di un vicolo cieco.
+            // Solo per una frase che sembra una domanda: una vera ricerca per
+            // titolo non viene sostituita dai film del momento.
             notes.push(
                 "La frase sembra una domanda, non un titolo: propongo i film del momento.".into(),
             );
@@ -3434,32 +3780,34 @@ fn chat_candidates(
                 dedupe(p.results.into_iter().map(Movie::from).collect()),
                 p.total_results,
                 "Tendenze della settimana".into(),
+                false,
             ));
         }
-        return Ok((movies, total, format!("Risultati per «{t}»")));
+        return Ok((movies, total, format!("Risultati per «{t}»"), true));
     }
-    if eff.is_empty() {
+    if eff.is_empty() && eff.sort == Sort::default() {
         let p = tmdb.trending(1)?;
         return Ok((
             dedupe(p.results.into_iter().map(Movie::from).collect()),
             p.total_results,
             "Tendenze della settimana".into(),
+            true,
         ));
     }
-    let (m1, total, pages, headline) = discover_with_relaxation(tmdb, tax, eff, kw, 1, notes)?;
+    let mut relaxed = Vec::new();
+    let (m1, total, pages, headline) =
+        discover_with_relaxation(tmdb, tax, eff, kw, 1, &mut relaxed)?;
     let mut movies = m1;
-    // La prima pagina basta gia' a riempire il curatore: la seconda costa
-    // una richiesta TMDB e serve solo quando i risultati sono pochi.
     if pages > 1 && movies.len() < 20 {
-        if let Ok((m2, _, _, _)) = discover_with_relaxation(tmdb, tax, eff, kw, 2, notes) {
+        if let Ok((m2, _, _, _)) =
+            discover_with_relaxation(tmdb, tax, eff, kw, 2, &mut relaxed)
+        {
             movies.extend(m2);
         }
     }
-    let movies = dedupe(movies);
-    if movies.is_empty() {
-        return Err("Nessun film trovato: prova ad allargare i criteri.".into());
-    }
-    Ok((movies, total, headline))
+    let exact = relaxed.is_empty();
+    notes.extend(relaxed);
+    Ok((dedupe(movies), total, headline, exact))
 }
 
 fn dedupe(movies: Vec<Movie>) -> Vec<Movie> {
@@ -3481,7 +3829,12 @@ fn looks_like_question(text: &str) -> bool {
 }
 
 /// Il film come lo vede il curatore: pochi campi, trama troncata.
-fn candidate_of(tax: &Taxonomy, m: &Movie) -> curator::Candidate {
+fn candidate_of(
+    tax: &Taxonomy,
+    m: &Movie,
+    reason: Option<String>,
+    relevance: f32,
+) -> curator::Candidate {
     curator::Candidate {
         id: m.id,
         title: m.title.clone(),
@@ -3495,6 +3848,8 @@ fn candidate_of(tax: &Taxonomy, m: &Movie) -> curator::Candidate {
             .collect::<Vec<_>>()
             .join(", "),
         overview: theme::truncate(&m.overview, 240),
+        reason,
+        relevance,
     }
 }
 
@@ -3633,6 +3988,23 @@ fn describe(tax: &Taxonomy, f: &Facets, year: Option<(u16, u16)>) -> String {
         "Ricerca libera".to_string()
     } else {
         parts.join(" · ")
+    }
+}
+
+fn describe_chat(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
+    let base = describe(tax, f, None);
+    if themes.is_empty() {
+        return base;
+    }
+    let labels = themes
+        .iter()
+        .map(|t| t.label.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if base == "Ricerca libera" {
+        format!("temi: {labels}")
+    } else {
+        format!("{base} · temi: {labels}")
     }
 }
 
@@ -3849,8 +4221,17 @@ fn open_url(url: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_url, looks_like_question, resize_edge, side_panel_widths};
+    use super::{
+        allowed_url, has_word, looks_like_question, resize_edge, side_panel_widths,
+    };
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn il_tema_cerca_parole_intere() {
+        assert!(has_word("un film sul mare", "mare"));
+        assert!(!has_word("vorrei amare il cinema", "mare"));
+        assert!(has_word("space travel verso l'ignoto", "space travel"));
+    }
 
     #[test]
     fn i_bordi_ridimensionano_la_finestra() {

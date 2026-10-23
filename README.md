@@ -5,8 +5,8 @@ combinata a vincoli**: non tutte le combinazioni di tassonomia sono ammesse, e i
 programma spiega sempre il perche.
 
 L'interfaccia ha due viste, commutabili da un'unica barra di comando: la **Chat**
-per chiedere in liberta e ricevere cinque film, la **Griglia** per esplorare con
-la Tavolozza dei filtri.
+per chiedere in liberta e ricevere fino a cinque film pertinenti, la **Griglia**
+per esplorare con la Tavolozza dei filtri.
 
 Esempio: `anni '80` + `Neorealismo` + `Horror` e impossibile — il Neorealismo copre
 il 1943–1954 in Italia, quindi non puo coesistere con gli anni '80. Se scegli prima
@@ -78,10 +78,13 @@ sulla tua macchina).
 ## Chat dei consigli (la casa)
 
 CineMatch si apre sulla **Chat**: scrivi in liberta, anche a modo tuo, e la
-risposta e una conversazione con **cinque film reali** presi da TMDB. Ogni film
-ha una card con poster, voto TMDB e IMDb, regia, durata, dove si vede, il
-**perche** quel film risponde alla richiesta e un **consiglio** pratico (come
-guardarlo, a cosa fare attenzione).
+risposta e una conversazione con **fino a cinque film reali** presi da TMDB.
+Ogni film ha una card con poster, voto TMDB e IMDb, regia, durata, dove si vede,
+il **perche** quel film risponde alla richiesta e un **consiglio** pratico (come
+guardarlo, a cosa fare attenzione). Se la richiesta e molto specifica e nessun
+film copre tutti i criteri, la chat lo dice e mostra soltanto i titoli piu vicini,
+con il criterio mancante indicato nella card: non riempie mai la lista con film
+generici.
 
 La casa e una colonna centrata: titolo, **quattro spunti vivi** e campo di
 scrittura fino a 820 px. Invio invia, Shift+Invio va a capo; gli spunti e
@@ -105,13 +108,14 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   Chat/Griglia e, in Griglia, ricerca e comandi. La chat conserva la bozza, la
   griglia conserva ricerca, filtri e larghezza del pannello; i filtri compaiono
   solo in Griglia. Filtri e scheda film non stanno mai aperti insieme.
-- **La memoria e breve ma vera**: l'app ricorda gli ultimi scambi, quindi «no,
-  senza commedia», «e uno piu recente?», «cambia paese» funzionano come in una
-  chat normale. «Nuova chat» riparte da zero (niente file: tutto in memoria).
+- **La memoria segue i seguiti**: l'app conserva il contesto per i seguiti
+  espliciti («no, senza commedia», «e uno piu recente?», «e se fossero italiani?»).
+  Una richiesta nuova riparte da criteri puliti: non si porta dietro i temi del
+  messaggio precedente. «Nuova chat» azzera tutto (niente file: tutto in memoria).
 - **Anche le domande fuori tema**: se chiedi qualcosa che non riguarda il cinema
-  («qual e la capitale della Francia?»), l'intro risponde in una riga e i cinque
-  film sono il ponte verso la sala: il paese, il tema o, se non c'e un legame,
-  i film del momento. La domanda non viene mai scambiata per un titolo.
+  («qual e la capitale della Francia?»), l'intro risponde in una riga e i film
+  sono il ponte verso la sala: il paese, il tema o, se non c'e un legame, i film
+  del momento. La domanda non viene mai scambiata per un titolo.
 - **I film non si inventano**: l'interprete produce i filtri, il motore di
   vincoli li valida, la ricerca interroga TMDB e il **curatore** puo solo
   scegliere e commentare i candidati reali. Gli id fuori elenco vengono scartati;
@@ -121,14 +125,21 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   compaiono le card in sequenza. Se il servizio ignora lo streaming la risposta
   unica viene letta lo stesso; se la curatela non arriva in tempo, la scelta e
   deterministica e la chat non si blocca.
-- **Onesta**: se i criteri lasciano meno di cinque titoli, l'app allarga solo i
-  temi/mood troppo stretti e lo dice; se non basta, mostra quelli che ci sono e
-  spiega perche. Con zero risultati vale la scala di rilassamento della griglia.
-- **Da chat a griglia**: «Vedi tutti i N in griglia» porta gli stessi filtri nella
-  griglia (l'intento e in cache: nessuna chiamata AI nuova); «Rigenera i 5»
-  riusa lo stesso intento, esclude i film appena visti e ne propone altri cinque.
-  Toccare un filtro a mano riporta alla griglia. La scheda film resta quella di
-  sempre (clic sul poster).
+- **Temi liberi e tassonomia**: la chat distingue le facce della tassonomia
+  («neorealismo comico romantico») dai temi semantici («cani e gatti amici»,
+  «viaggio nello spazio»). I temi vivono solo nella chat: non cambiano i filtri
+  della griglia e non diventano keyword TMDB fuzzy. La ricerca usa concetti,
+  keyword esatte e titoli di riferimento, poi verifica la trama dei candidati.
+- **Onesta**: se un film non copre tutti i concetti, la card dice cosa manca e la
+  risposta lo dichiara. Se i criteri esatti non bastano, l'app allarga solo
+  quanto necessario e lo dice; se non trova nulla di pertinente, non inventa e
+  non ripiega sui film del momento. Con zero risultati la chat spiega il limite.
+- **Da chat a griglia**: «Vedi tutti i N in griglia» compare solo quando i criteri
+  sono davvero rappresentabili come filtri (niente temi liberi) e porta gli stessi
+  filtri nella griglia, con l'intento in cache: nessuna chiamata AI nuova.
+  «Rigenera» riusa lo stesso contesto, esclude i film appena visti e propone
+  altri titoli pertinenti, non necessariamente cinque. Toccare un filtro a mano
+  riporta alla griglia. La scheda film resta quella di sempre (clic sul poster).
 
 ## Aspetto e interazioni
 
@@ -354,7 +365,7 @@ src/
 │  └─ suggestions.rs  catalogo locale e rotazione degli spunti della casa
 ├─ tmdb/              client HTTP (throttle 75 ms, retry, cache in memoria)
 ├─ ai/                trait IntentProvider + parser a regole + LLM pluggable
-│                     (chat, curatela dei 5 film, rilevamento modelli, verifica)
+│                     (chat, curatela dei film, rilevamento modelli, verifica)
 ├─ ui/                tema, facce, chat, griglia virtualizzata, scheda, immagini
 └─ infra/             config, voti IMDb
 installer/         Inno Setup per-utente
@@ -389,10 +400,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.1.1 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.1.2 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.1.1.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.1.2.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 

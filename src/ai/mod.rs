@@ -12,10 +12,67 @@ use crate::infra::config::AiCfg;
 
 pub mod curator;
 
+/// Un concetto di un tema libero: «cane», «gatto», «amicizia». I termini
+/// servono a riconoscerlo nella trama; le keyword a cercarlo su TMDB.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ThemeConcept {
+    pub label: String,
+    pub terms: Vec<String>,
+    pub keywords: Vec<String>,
+}
+
+/// Un tema libero della chat: non e un filtro di griglia, e un criterio
+/// semantico. Piu concetti distinguono «cani e gatti amici» da «film con cani».
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Theme {
+    pub label: String,
+    pub concepts: Vec<ThemeConcept>,
+    pub seed_titles: Vec<String>,
+}
+
+impl Theme {
+    pub fn is_empty(&self) -> bool {
+        self.label.trim().is_empty() && self.concepts.is_empty() && self.seed_titles.is_empty()
+    }
+}
+
+impl Intent {
+    pub fn is_empty(&self) -> bool {
+        self.facets.is_empty()
+            && self.themes.iter().all(Theme::is_empty)
+            && self.free_text.is_none()
+            && self.similar_to.is_none()
+    }
+}
+
+/// Un seguito esplicito («e uno piu recente?», «senza commedia», «e se fossero
+/// italiani?») conserva il contesto. Una richiesta nuova riparte pulita.
+pub fn is_follow_up(text: &str) -> bool {
+    let t = text.trim().to_lowercase();
+    if t.is_empty() {
+        return false;
+    }
+    const STARTS: [&str; 24] = [
+        "e uno", "e una", "e se", "e piu", "e più", "e meno", "e senza", "e con", "e film",
+        "ma ", "pero", "però", "invece", "allora", "senza ", "piu ", "più ", "meno ", "cambi",
+        "togli", "quello", "quella", "quelli", "quelle",
+    ];
+    if STARTS.iter().any(|p| t.starts_with(p)) {
+        return true;
+    }
+    const CONTAINS: [&str; 16] = [
+        "invece", "piu recente", "più recente", "meno conosciut", "piu cort", "più cort",
+        "voto piu", "voto più", "senza ", "cambia ", "togli ", "aggiungi ", "rendili",
+        "rendile", "stesso", "stessa",
+    ];
+    CONTAINS.iter().any(|p| t.contains(p))
+}
+
 /// Interpretazione di una richiesta in linguaggio naturale.
 #[derive(Clone, Debug, Default)]
 pub struct Intent {
     pub facets: Facets,
+    pub themes: Vec<Theme>,
     pub free_text: Option<String>,
     pub similar_to: Option<String>,
     /// Modalita dichiarata dall'interprete: «faceted», «title», «similar»,
@@ -35,14 +92,14 @@ pub trait IntentProvider: Send + Sync {
         Err("Sintesi AI non disponibile con il parser a regole.".into())
     }
     /// Interpreta un messaggio di chat: come `parse`, ma con la memoria dei
-    /// messaggi recenti e i filtri attivi, per capire i seguiti («no, senza
+    /// messaggi recenti e il contesto attivo, per capire i seguiti («no, senza
     /// commedia», «piu recenti»). Il default ignora la memoria.
     fn parse_chat(
         &self,
         text: &str,
         tax: &Taxonomy,
         _history: &[(String, String)],
-        _active: &Facets,
+        _active: &Intent,
     ) -> Result<Intent, String> {
         self.parse(text, tax)
     }
@@ -202,6 +259,172 @@ const COUNTRY_WORDS: &[(&str, &str)] = &[
     ("thai", "TH"),
 ];
 
+struct ThemeWord {
+    terms: &'static [&'static str],
+    label: &'static str,
+    keywords: &'static [&'static str],
+}
+
+/// Dizionario dei temi comuni che il parser offline sa tradurre in keyword
+/// TMDB. Non e un elenco di film: sono concetti, e la pertinenza va verificata
+/// sulla trama. L'AI copre il resto.
+const THEME_WORDS: &[ThemeWord] = &[
+    ThemeWord { terms: &["cane", "cani", "cagna", "cagne"], label: "cane", keywords: &["dog"] },
+    ThemeWord { terms: &["gatto", "gatti", "gatta", "gatte"], label: "gatto", keywords: &["cat"] },
+    ThemeWord { terms: &["amico", "amici", "amica", "amiche", "amicizia", "amicizie"], label: "amicizia", keywords: &["friendship"] },
+    ThemeWord { terms: &["spazio", "spaziale", "spaziali"], label: "spazio", keywords: &["space", "space travel"] },
+    ThemeWord { terms: &["viaggio", "viaggi", "viaggiare"], label: "viaggio", keywords: &["journey", "space travel"] },
+    ThemeWord { terms: &["astronauta", "astronauti"], label: "astronauta", keywords: &["astronaut"] },
+    ThemeWord { terms: &["alieno", "alieni", "aliena", "aliene"], label: "alieni", keywords: &["alien"] },
+    ThemeWord { terms: &["dinosauro", "dinosauri"], label: "dinosauri", keywords: &["dinosaur"] },
+    ThemeWord { terms: &["mare", "oceano", "oceani"], label: "mare", keywords: &["sea", "ocean"] },
+    ThemeWord { terms: &["montagna", "montagne"], label: "montagna", keywords: &["mountain"] },
+    ThemeWord { terms: &["musica", "musicale"], label: "musica", keywords: &["music"] },
+    ThemeWord { terms: &["calcio"], label: "calcio", keywords: &["football"] },
+    ThemeWord { terms: &["sport"], label: "sport", keywords: &["sport"] },
+    ThemeWord { terms: &["cibo", "cucina", "culinario"], label: "cibo", keywords: &["food", "cooking"] },
+    ThemeWord { terms: &["scuola", "scuole", "insegnante", "insegnanti"], label: "scuola", keywords: &["school"] },
+    ThemeWord { terms: &["natale"], label: "Natale", keywords: &["christmas"] },
+    ThemeWord { terms: &["halloween"], label: "Halloween", keywords: &["halloween"] },
+    ThemeWord { terms: &["zombie", "zombi"], label: "zombie", keywords: &["zombie"] },
+    ThemeWord { terms: &["vampiro", "vampiri"], label: "vampiri", keywords: &["vampire"] },
+    ThemeWord { terms: &["robot", "robotica"], label: "robot", keywords: &["robot"] },
+    ThemeWord { terms: &["computer", "internet", "hacker"], label: "tecnologia", keywords: &["computer", "internet", "hacker"] },
+    ThemeWord { terms: &["giornalismo", "giornalista", "giornalisti"], label: "giornalismo", keywords: &["journalism", "journalist"] },
+    ThemeWord { terms: &["polizia", "poliziotto", "poliziotti"], label: "polizia", keywords: &["police"] },
+    ThemeWord { terms: &["rapina", "rapine", "rapinatore", "rapinatori"], label: "rapina", keywords: &["heist"] },
+    ThemeWord { terms: &["prigione", "carcere"], label: "prigione", keywords: &["prison"] },
+    ThemeWord { terms: &["resistenza", "partigiano", "partigiani", "partigiana", "partigiane"], label: "resistenza", keywords: &["resistance", "partisan"] },
+    ThemeWord { terms: &["mafia", "mafioso", "mafiosi"], label: "mafia", keywords: &["mafia"] },
+    ThemeWord { terms: &["famiglia", "famiglie"], label: "famiglia", keywords: &["family"] },
+    ThemeWord { terms: &["vendetta", "vendicarsi"], label: "vendetta", keywords: &["revenge"] },
+    ThemeWord { terms: &["viaggio nel tempo", "time travel"], label: "viaggio nel tempo", keywords: &["time travel"] },
+];
+
+const THEME_STOPWORDS: &[&str] = &[
+    "voglio", "vorrei", "vedere", "film", "cinema", "consigliami", "consiglio", "cerco",
+    "qualcosa", "genere", "dove", "ci", "sono", "che", "chi", "cosa", "come", "quando",
+    "perche", "perché", "se", "anche", "molto", "piu", "più", "meno", "tra", "fra", "di",
+    "da", "in", "con", "su", "per", "del", "dello", "della", "dei", "degli", "delle",
+    "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "e", "ed", "o", "oppure",
+    "al", "allo", "alla", "ai", "agli", "alle", "nel", "nello", "nella", "nei", "negli",
+    "nelle", "sul", "sullo", "sulla", "sui", "sugli", "sulle", "loro", "suo", "sua",
+    "questo", "questa", "quello", "quella", "storia", "parla", "parlano", "racconta",
+    "tratta", "trattano", "riguardo", "tema", "soggetto", "tipo", "ambientato",
+    "ambientata", "ambientati", "ambientate",
+];
+
+fn content_terms(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for word in text.to_lowercase().split(|c: char| !c.is_alphanumeric()) {
+        let w = word.trim();
+        if w.chars().count() < 3 || THEME_STOPWORDS.contains(&w) {
+            continue;
+        }
+        if !out.iter().any(|x| x == w) {
+            out.push(w.to_string());
+        }
+        if out.len() == 4 {
+            break;
+        }
+    }
+    out
+}
+
+fn theme_from_terms(terms: &[String]) -> Option<Theme> {
+    if terms.is_empty() {
+        return None;
+    }
+    let mut concepts: Vec<ThemeConcept> = Vec::new();
+    let mut leftovers: Vec<String> = Vec::new();
+    for term in terms {
+        let Some(word) = THEME_WORDS
+            .iter()
+            .find(|w| w.terms.iter().any(|t| t == term))
+        else {
+            leftovers.push(term.clone());
+            continue;
+        };
+        if concepts.iter().any(|c| c.label == word.label) {
+            continue;
+        }
+        concepts.push(ThemeConcept {
+            label: word.label.to_string(),
+            terms: word.terms.iter().map(|t| t.to_string()).collect(),
+            keywords: word.keywords.iter().map(|k| k.to_string()).collect(),
+        });
+    }
+    if !leftovers.is_empty() {
+        if let Some(last) = concepts.last_mut() {
+            // Un dettaglio non codificato («partigiana») resta nello stesso
+            // concetto: non deve diventare un requisito separato.
+            last.terms.extend(leftovers);
+        } else {
+            let label = leftovers.join(" ");
+            concepts.push(ThemeConcept {
+                label: label.clone(),
+                terms: leftovers,
+                keywords: Vec::new(),
+            });
+        }
+    }
+    if concepts.is_empty() {
+        return None;
+    }
+    let label = concepts
+        .iter()
+        .map(|c| c.label.as_str())
+        .collect::<Vec<_>>()
+        .join(" + ");
+    Some(Theme {
+        label,
+        concepts,
+        seed_titles: Vec::new(),
+    })
+}
+
+fn has_request_cue(lower: &str) -> bool {
+    const CUES: [&str; 12] = [
+        "film", "voglio vedere", "vorrei vedere", "consigliami", "che parla", "parla di",
+        "storia di", "racconta", "ambientat", "dove ci sono", "in cui", "sul tema",
+    ];
+    CUES.iter().any(|c| lower.contains(c))
+}
+
+fn theme_from_request(lower: &str, quoted_title: bool, matched_any: bool) -> Option<Theme> {
+    if quoted_title {
+        return None;
+    }
+    const PREFIXES: [&str; 8] = [
+        "parlano di ", "parla di ", "trattano di ", "tratta di ", "sul tema ", "a tema ",
+        "riguardo a ", "si occupa di ",
+    ];
+    let explicit = PREFIXES.iter().find_map(|p| lower.find(p).map(|at| &lower[at + p.len()..]));
+    if let Some(rest) = explicit {
+        let terms = content_terms(rest);
+        return theme_from_terms(&terms);
+    }
+    let terms = content_terms(lower);
+    let known = terms
+        .iter()
+        .filter(|t| THEME_WORDS.iter().any(|w| w.terms.iter().any(|x| x == *t)))
+        .count();
+    if has_request_cue(lower) {
+        // «film comico con cani» unisce una faccia e un tema; «neorealismo
+        // comico» invece e solo tassonomia e non deve creare un tema.
+        if matched_any && known == 0 {
+            return None;
+        }
+        return theme_from_terms(&terms);
+    }
+    // Senza «film», due concetti noti («cani e gatti») sono una richiesta di
+    // tema, non un titolo; una parola sola resta un titolo.
+    if terms.len() < 2 || known < 2 {
+        return None;
+    }
+    theme_from_terms(&terms)
+}
+
 pub struct RuleParser;
 
 fn decade_from_year(year: u16) -> Option<String> {
@@ -300,6 +523,14 @@ fn rating_range(lower: &str) -> Option<(f32, f32)> {
 
 impl RuleParser {
     fn parse_rules(&self, text: &str, tax: &Taxonomy) -> Intent {
+        self.parse_rules_mode(text, tax, false)
+    }
+
+    fn parse_chat_rules(&self, text: &str, tax: &Taxonomy) -> Intent {
+        self.parse_rules_mode(text, tax, true)
+    }
+
+    fn parse_rules_mode(&self, text: &str, tax: &Taxonomy, chat: bool) -> Intent {
         let mut it = Intent {
             source: "regole".into(),
             ..Default::default()
@@ -461,56 +692,6 @@ impl RuleParser {
             }
         }
 
-        // --- temi liberi: «che parla di resistenza», «sul tema motociclismo» ---
-        const THEME_STOP: [&str; 8] = [
-            " che ", " e ", " ed ", " ma ", " con ", " per ", " dove ", " in cui ",
-        ];
-        const THEME_PREFIXES: [&str; 8] = [
-            "parlano di ",
-            "parla di ",
-            "trattano di ",
-            "tratta di ",
-            "sul tema ",
-            "a tema ",
-            "riguardo a ",
-            "si occupa di ",
-        ];
-        for prefix in THEME_PREFIXES {
-            let Some(pos) = lower.find(prefix) else { continue };
-            let mut rest = lower[pos + prefix.len()..].trim().to_string();
-            for art in [
-                "il ", "lo ", "la ", "i ", "gli ", "le ", "un ", "uno ", "una ", "dei ", "del ",
-                "della ", "delle ", "dello ", "degli ", "l'",
-            ] {
-                if let Some(stripped) = rest.strip_prefix(art) {
-                    rest = stripped.to_string();
-                    break;
-                }
-            }
-            let cut = THEME_STOP
-                .iter()
-                .filter_map(|s| rest.find(s))
-                .min()
-                .unwrap_or(rest.len());
-            let theme = rest[..cut]
-                .trim()
-                .trim_matches(['.', ',', '"', '\'', '?', '!'])
-                .to_string();
-            if (3..=40).contains(&theme.chars().count()) {
-                // se e gia un mood della tassonomia non lo ripeto come tema libero
-                let is_mood = it.facets.moods.iter().any(|id| {
-                    tax.mood(id)
-                        .map(|m| m.keyword.eq_ignore_ascii_case(&theme))
-                        .unwrap_or(false)
-                });
-                if !is_mood && !it.facets.keywords.contains(&theme) {
-                    it.facets.keywords.push(theme);
-                }
-                matched_any = true;
-            }
-            break;
-        }
-
         // --- durata ---
         if lower.contains("cortometragg") {
             it.facets.runtime = Some((0, 40));
@@ -528,10 +709,13 @@ impl RuleParser {
         // --- ordinamento ---
         if lower.contains("recent") || lower.contains("nuovissim") {
             it.facets.sort = Sort::Newest;
+            matched_any = true;
         } else if lower.contains("vecch") || lower.contains("classic") {
             it.facets.sort = Sort::Oldest;
+            matched_any = true;
         } else if lower.contains("votat") || lower.contains("migliori") {
             it.facets.sort = Sort::Rating;
+            matched_any = true;
         }
 
         // --- "tipo X" / "simile a X" ---
@@ -558,9 +742,87 @@ impl RuleParser {
             }
         }
 
+        // --- temi liberi ---
+        // Dopo ordinamento, durata, «simile a» e titolo: cosi «film recenti»
+        // o «film simili a X» non diventano per errore un tema.
+        if chat {
+            // La chat tiene i temi separati dai filtri di griglia: sono criteri
+            // semantici, non facce da applicare alla griglia.
+            if it.similar_to.is_none() {
+                if let Some(theme) = theme_from_request(&lower, text.contains('"'), matched_any) {
+                    it.themes.push(theme);
+                    matched_any = true;
+                }
+            }
+        } else {
+            // La griglia continua a usare keyword italiane risolte su TMDB.
+            const THEME_STOP: [&str; 8] = [
+                " che ", " e ", " ed ", " ma ", " con ", " per ", " dove ", " in cui ",
+            ];
+            const THEME_PREFIXES: [&str; 8] = [
+                "parlano di ",
+                "parla di ",
+                "trattano di ",
+                "tratta di ",
+                "sul tema ",
+                "a tema ",
+                "riguardo a ",
+                "si occupa di ",
+            ];
+            for prefix in THEME_PREFIXES {
+                let Some(pos) = lower.find(prefix) else { continue };
+                let mut rest = lower[pos + prefix.len()..].trim().to_string();
+                for art in [
+                    "il ", "lo ", "la ", "i ", "gli ", "le ", "un ", "uno ", "una ", "dei ",
+                    "del ", "della ", "delle ", "dello ", "degli ", "l'",
+                ] {
+                    if let Some(stripped) = rest.strip_prefix(art) {
+                        rest = stripped.to_string();
+                        break;
+                    }
+                }
+                let cut = THEME_STOP
+                    .iter()
+                    .filter_map(|s| rest.find(s))
+                    .min()
+                    .unwrap_or(rest.len());
+                let theme = rest[..cut]
+                    .trim()
+                    .trim_matches(['.', ',', '"', '\'', '?', '!'])
+                    .to_string();
+                if (3..=40).contains(&theme.chars().count()) {
+                    let is_mood = it.facets.moods.iter().any(|id| {
+                        tax.mood(id)
+                            .map(|m| m.keyword.eq_ignore_ascii_case(&theme))
+                            .unwrap_or(false)
+                    });
+                    if !is_mood && !it.facets.keywords.contains(&theme) {
+                        it.facets.keywords.push(theme);
+                    }
+                    matched_any = true;
+                }
+                break;
+            }
+        }
+
         if !matched_any {
             let trimmed = text.trim();
-            if !trimmed.is_empty() {
+            if chat
+                && (has_request_cue(&lower)
+                    || lower.contains("sorprend")
+                    || lower.contains("qualcosa"))
+            {
+                // Una richiesta vaga non e un titolo: niente ricerca per
+                // titolo, il chiamante propone una selezione del momento.
+                it.mode = "off_topic".into();
+                it.notes
+                    .push("Richiesta vaga: propongo una selezione del momento.".into());
+            } else if chat && is_follow_up(text) {
+                // «e uno piu recente?» e un'istruzione, non un titolo: il
+                // contesto resta quello attivo e il testo non va cercato.
+                it.notes
+                    .push("Seguito: mantengo il contesto attivo.".into());
+            } else if !trimmed.is_empty() {
                 it.free_text = Some(trimmed.to_string());
                 it.notes
                     .push("Nessuna faccia riconosciuta: cerco il testo come titolo.".into());
@@ -601,6 +863,16 @@ impl IntentProvider for RuleParser {
 
     fn parse(&self, text: &str, tax: &Taxonomy) -> Result<Intent, String> {
         Ok(self.parse_rules(text, tax))
+    }
+
+    fn parse_chat(
+        &self,
+        text: &str,
+        tax: &Taxonomy,
+        _history: &[(String, String)],
+        _active: &Intent,
+    ) -> Result<Intent, String> {
+        Ok(self.parse_chat_rules(text, tax))
     }
 }
 
@@ -815,13 +1087,14 @@ pub fn cheapest_models(models: &[ModelInfo]) -> Option<ModelInfo> {
 /// Aggiunto al prompt d'interpretazione quando si conversa in chat: il
 /// messaggio puo essere un seguito, quindi lo stato dei filtri va restituito
 /// completo (non solo le differenze).
-const CHAT_ADDENDUM: &str = "Stai conversando con l'utente in una chat: il messaggio puo essere un seguito («no, senza commedia», «piu recenti», «e se fossero italiani?»).\n\
-Ricevi i filtri attivi e i messaggi recenti.\n\
-Restituisci lo stato COMPLETO dei filtri aggiornato: conserva i filtri attivi che il messaggio non tocca, aggiungi i nuovi vincoli e ometti quelli che l'utente toglie o contraddice. Non limitarti alle differenze.\n\
+const CHAT_ADDENDUM: &str = "Stai conversando con l'utente in una chat. Ricevi il contesto attivo (facce e temi liberi) e i messaggi recenti.\n\
+Se il messaggio e un seguito esplicito («e uno piu recente?», «senza commedia», «e se fossero italiani?»), restituisci lo stato COMPLETO aggiornato: conserva facce e temi che il messaggio non tocca, aggiungi i nuovi criteri e ometti quelli che l'utente toglie o contraddice.\n\
+Se il messaggio e una NUOVA richiesta, ignora il contesto precedente che non viene menzionato: non trascinare temi o filtri vecchi. In caso di dubbio, trattalo come nuovo.\n\
+I temi liberi vanno in `themes`, non in `facets.keywords`: la griglia non deve cambiare da sola.\n\
 Se il messaggio e una domanda su un film (regista, anno, curiosita) oppure nomina un film senza chiederne la ricerca, metti il titolo in `similar_to`: i film proposti saranno legati a quello e la risposta alla domanda la dara il curatore.\n\
-Se il messaggio non riguarda il cinema (una domanda generale, un saluto, una curiosita), usa \"intent\":\"off_topic\" e NON mettere la frase in `title` o `similar_to`: il curatore rispondera in una riga e proporra cinque film. Se la domanda ha un legame naturale con il cinema, aggiungi il filtro piu adatto (per «qual e la capitale della Francia?» -> countries [\"FR\"]; per «chi ha vinto i mondiali?» -> keywords [\"calcio\"]); altrimenti lascia i filtri come sono.\n\
+Se il messaggio non riguarda il cinema (una domanda generale, un saluto, una curiosita), usa \"intent\":\"off_topic\" e NON mettere la frase in `title` o `similar_to`: il curatore rispondera in una riga e proporra film del momento. Se la domanda ha un legame naturale con il cinema, aggiungi il filtro piu adatto (per «qual e la capitale della Francia?» -> countries [\"FR\"]; per «chi ha vinto i mondiali?» -> themes con concetto calcio); altrimenti lascia le facce come sono.\n\
 Se la richiesta e vaga («sorprendimi», «qualcosa di bello») non inventare un titolo: usa \"intent\":\"faceted\" con pochi vincoli o nessuno.\n\
-Se l'utente chiede esplicitamente di ricominciare da zero, usa \"intent\":\"reset\" e restituisci i filtri vuoti.";
+Se l'utente chiede esplicitamente di ricominciare da zero, usa \"intent\":\"reset\" e restituisci facce e temi vuoti.";
 
 /// Prompt del curatore: sceglie fra candidati reali e scrive i commenti.
 const CURATOR_SYSTEM: &str = "Sei il curatore di CineMatch, un'app che consiglia film. Ricevi la richiesta dell'utente, i filtri interpretati e un elenco di film reali candidati (con id TMDB).\n\
@@ -830,9 +1103,10 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON di questa forma:\n\
 {\"intro\":\"...\",\"picks\":[{\"id\":123,\"perche\":\"...\",\"consiglio\":\"...\"}]}\n\
 Tassativo:\n\
 - usa solo gli id dell'elenco candidati: mai inventare film o id;\n\
-- scegli esattamente 5 film (o tutti, se i candidati sono meno di 5), in ordine dal piu adatto al meno adatto;\n\
+- scegli fino a 5 film, solo quelli davvero pertinenti, in ordine dal piu adatto al meno adatto; non riempire la lista per arrivare a cinque;\n\
+- se `limite` non e null, tienine conto con onesta: sono i titoli piu vicini, non corrispondenze perfette; il limite e gia mostrato a parte, non ripeterlo nell'intro;\n\
 - «intro»: 1-2 frasi in italiano, massimo 240 caratteri: se l'utente ha fatto una domanda (anche fuori tema) rispondi in una riga e collega ai film; altrimenti presenta la scelta citando i criteri;\n\
-- «perche»: 1-2 frasi, massimo 220 caratteri: spiega perche il film risponde ai criteri della richiesta; non ripetere anno, paese, voto o numero di voti gia presenti nella scheda; se un criterio non e rispettato dillo con onesta;\n\
+- «perche»: 1-2 frasi, massimo 220 caratteri: spiega perche il film risponde ai criteri della richiesta; non ripetere anno, paese, voto o numero di voti gia presenti nella scheda; se il campo `match` dice che manca un concetto, dichiaralo;\n\
 - «consiglio»: 1 frase pratica e personale, massimo 150 caratteri, specifica per questo film e diversa da quella degli altri film scelti (come guardarlo, a cosa fare attenzione, sottotitoli o doppiaggio); evita consigli generici e imperativi assoluti: preferisci «se puoi», «prova a»;\n\
 - testo semplice, niente markdown, niente spoiler.";
 
@@ -918,6 +1192,42 @@ fn facets_digest(tax: &Taxonomy, f: &Facets) -> String {
     }
 }
 
+fn context_digest(tax: &Taxonomy, it: &Intent) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let base = facets_digest(tax, &it.facets);
+    if base != "nessuno" {
+        parts.push(base);
+    }
+    if !it.themes.is_empty() {
+        let themes = it
+            .themes
+            .iter()
+            .map(|t| {
+                let concepts = t
+                    .concepts
+                    .iter()
+                    .map(|c| c.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                format!("{} [{}]", t.label, concepts)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        parts.push(format!("temi liberi: {themes}"));
+    }
+    if let Some(t) = &it.free_text {
+        parts.push(format!("titolo: {t}"));
+    }
+    if let Some(t) = &it.similar_to {
+        parts.push(format!("simile a: {t}"));
+    }
+    if parts.is_empty() {
+        "nessuno".to_string()
+    } else {
+        parts.join(" · ")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LlmConfig {
     pub kind: LlmKind,
@@ -956,17 +1266,136 @@ struct LlmFacets {
 }
 
 #[derive(Deserialize, Default)]
+struct LlmConcept {
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    terms: Vec<String>,
+    #[serde(default)]
+    keywords: Vec<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct LlmTheme {
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    concepts: Vec<LlmConcept>,
+    #[serde(default)]
+    seed_titles: Vec<String>,
+}
+
+#[derive(Deserialize, Default)]
 struct LlmAnswer {
     #[serde(default)]
     intent: String,
     #[serde(default)]
     facets: LlmFacets,
     #[serde(default)]
+    themes: Vec<LlmTheme>,
+    #[serde(default)]
     title: Option<String>,
     #[serde(default)]
     similar_to: Option<String>,
     #[serde(default)]
     reason: Option<String>,
+}
+
+fn clean_word(s: &str, max: usize) -> String {
+    s.trim()
+        .to_lowercase()
+        .chars()
+        .take(max)
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+fn parse_themes(raw: Vec<LlmTheme>) -> Vec<Theme> {
+    let mut out: Vec<Theme> = Vec::new();
+    for item in raw.into_iter().take(2) {
+        let mut concepts: Vec<ThemeConcept> = Vec::new();
+        for c in item.concepts.into_iter().take(4) {
+            let label = clean_word(&c.label, 40);
+            let mut terms: Vec<String> = c
+                .terms
+                .into_iter()
+                .map(|t| clean_word(&t, 40))
+                .filter(|t| !t.is_empty())
+                .collect();
+            terms.dedup();
+            terms.truncate(6);
+            if label.is_empty() && terms.is_empty() {
+                continue;
+            }
+            if terms.is_empty() {
+                terms.push(label.clone());
+            }
+            let mut keywords: Vec<String> = c
+                .keywords
+                .into_iter()
+                .map(|k| clean_word(&k, 50))
+                .filter(|k| !k.is_empty())
+                .collect();
+            keywords.dedup();
+            keywords.truncate(4);
+            concepts.push(ThemeConcept {
+                label: if label.is_empty() {
+                    terms[0].clone()
+                } else {
+                    label
+                },
+                terms,
+                keywords,
+            });
+        }
+        let mut seeds: Vec<String> = item
+            .seed_titles
+            .into_iter()
+            .map(|s| s.trim().chars().take(120).collect::<String>())
+            .filter(|s| !s.trim().is_empty())
+            .collect();
+        seeds.dedup();
+        seeds.truncate(3);
+        if concepts.is_empty() && seeds.is_empty() {
+            continue;
+        }
+        let label = if item.label.trim().is_empty() {
+            concepts
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" + ")
+        } else {
+            item.label.trim().chars().take(80).collect::<String>()
+        };
+        out.push(Theme {
+            label,
+            concepts,
+            seed_titles: seeds,
+        });
+    }
+    out
+}
+
+/// In chat i temi non sono filtri di griglia: se il modello usa ancora
+/// `facets.keywords`, li sposta in `themes` e lascia le facce pulite.
+fn detach_chat_keywords(it: &mut Intent) {
+    if !it.themes.is_empty() {
+        it.facets.keywords.clear();
+        return;
+    }
+    for keyword in it.facets.keywords.drain(..) {
+        it.themes.push(Theme {
+            label: keyword.clone(),
+            concepts: vec![ThemeConcept {
+                label: keyword.clone(),
+                terms: vec![keyword.clone()],
+                keywords: vec![keyword],
+            }],
+            seed_titles: Vec::new(),
+        });
+    }
 }
 
 pub struct LlmProvider {
@@ -1026,6 +1455,17 @@ impl LlmProvider {
         if !intent.facets.keywords.is_empty() {
             bits.push(format!("temi: {}", intent.facets.keywords.join(", ")));
         }
+        if !intent.themes.is_empty() {
+            bits.push(format!(
+                "temi liberi: {}",
+                intent
+                    .themes
+                    .iter()
+                    .map(|t| t.label.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
         let detail = if bits.is_empty() {
             "nessuna faccia riconosciuta".to_string()
         } else {
@@ -1038,16 +1478,18 @@ impl LlmProvider {
         format!(
             "Sei il motore di interpretazione di un'app di ricerca film. Traduci la richiesta dell'utente in JSON.\n\
              L'utente puo scrivere in modo libero e colloquiale: estrai tutti i vincoli che riconosci e ignora il resto.\n\
-             Usa SOLO gli identificatori elencati qui sotto; per gli argomenti che non sono in elenco usa `keywords`.\n\n{}\n\n\
+             Usa SOLO gli identificatori elencati qui sotto per le facce; per gli argomenti liberi usa `themes`.\n\n{}\n\n\
              Rispondi esclusivamente con un oggetto JSON con questa forma:\n\
-             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"title\":null,\"similar_to\":null,\"reason\":\"\"}}\n\
+             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"themes\":[{{\"label\":\"...\",\"concepts\":[{{\"label\":\"...\",\"terms\":[\"...\"],\"keywords\":[\"...\"]}}],\"seed_titles\":[\"...\"]}}],\"title\":null,\"similar_to\":null,\"reason\":\"\"}}\n\
              Come riempire i campi:\n\
              - `decades`: id dei decenni («anni 80» -> \"1980s\"). Se scegli un movimento, NON aggiungere decenni incompatibili col suo periodo.\n\
              - `movements`: la corrente cinematografica quando la richiesta la nomina o la descrive.\n\
              - `genres`: id numerici TMDB. «giallo» o «mistero» -> 9648; «horror» -> 27; «commedia» -> 35; «guerra» -> 10752.\n\
              - `without_genres`: generi da ESCLUDERE («senza commedia» -> 35).\n\
              - `moods`: temi della tassonomia, solo se la richiesta li nomina (id dell'elenco).\n\
-             - `keywords`: al massimo 3 argomenti liberi che non sono generi ne mood («che parla di resistenza» -> [\"resistenza\"]; «film sulle moto» -> [\"motociclismo\"]). Sostantivi brevi in italiano, minuscoli; mai identificatori inventati.\n\
+             - `keywords`: campo legacy per la griglia; in chat lascialo vuoto e usa `themes`.\n\
+             - `themes`: 0-2 temi liberi. Ogni tema ha 1-4 concetti distinti (non sinonimi): per «cani e gatti amici» -> cane, gatto, amicizia; per «viaggio nello spazio» -> spazio, viaggio; per «neorealismo comico» NON creare un tema, usa le facce. Non aggiungere concetti non chiesti: per «cani e gatti» usa cane, gatto (non amicizia); per «cani e gatti amici» aggiungi amicizia. Per ogni concetto scrivi `terms` (parole italiane che apparirebbero nella trama, anche sinonimi e plurali) e `keywords` (1-3 keyword TMDB in inglese, nomi reali come dog, cat, friendship, space travel, astronaut; mai frasi inventate).\n\
+             - `seed_titles`: 0-3 titoli reali che corrispondono davvero al tema, in italiano o titolo originale. Verranno verificati su TMDB: non inventare.\n\
              - `min_rating` / `max_rating`: giudizio 0-10. «voto alto»/«ben giudicati» -> 7; «capolavori» -> 8; «tra 6 e 8» -> 6 e 8; «sotto il 6» -> max 6.\n\
              - `min_votes`: numero minimo di voti («ben votati» -> 1000; «almeno 5000 voti» -> 5000).\n\
              - `runtime`: intervallo in minuti [minimo, massimo]. «corti»/«cortometraggi» -> [0,40]; «sotto i 90 minuti» -> [0,90]; «lunghi» -> [150,400].\n\
@@ -1055,7 +1497,7 @@ impl LlmProvider {
              - `intent`: la modalita della ricerca; «reset» solo in chat, quando l'utente chiede esplicitamente di ricominciare da zero.\n\
              - `title`: solo se l'utente cerca un film preciso. `similar_to`: solo se chiede film simili a un titolo.\n\
              - `reason`: una frase in italiano che spiega l'interpretazione mostrata all'utente.\n\
-             Genera solo combinazioni storicamente sensate; non inventare identificatori; usa null quando un campo non serve.",
+             Se un tema non ha keyword TMDB affidabili, lascia `keywords` vuoto: e meglio un tema non risolto che una keyword sbagliata. Genera solo combinazioni storicamente sensate; non inventare identificatori; usa null quando un campo non serve.",
             tax.prompt_summary()
         )
     }
@@ -1320,6 +1762,7 @@ impl LlmProvider {
                     "voti": c.votes,
                     "generi": c.genres,
                     "trama": c.overview,
+                    "match": c.reason,
                 })
             })
             .collect();
@@ -1331,6 +1774,7 @@ impl LlmProvider {
         serde_json::json!({
             "richiesta": req.user_text,
             "filtri_interpretati": req.understood,
+            "limite": req.limit,
             "conversazione_recente": history,
             "candidati": candidates,
         })
@@ -1417,6 +1861,7 @@ impl LlmProvider {
         };
         Ok(Intent {
             facets,
+            themes: parse_themes(ans.themes),
             free_text,
             similar_to: ans.similar_to.filter(|s| !s.trim().is_empty()),
             mode: ans.intent.trim().to_lowercase(),
@@ -1455,7 +1900,7 @@ impl IntentProvider for LlmProvider {
         };
         match Self::parse_json(&raw, tax) {
             Ok(mut it) => {
-                if it.facets.is_empty() && it.free_text.is_none() && it.similar_to.is_none() {
+                if it.is_empty() {
                     let mut fb = RuleParser.parse_rules(text, tax);
                     fb.notes.push("L'AI non ha prodotto facce utili: interpreto con le regole.".into());
                     return Ok(fb);
@@ -1485,11 +1930,11 @@ impl IntentProvider for LlmProvider {
         text: &str,
         tax: &Taxonomy,
         history: &[(String, String)],
-        active: &Facets,
+        active: &Intent,
     ) -> Result<Intent, String> {
         let system = format!("{}\n\n{}", Self::system_prompt(tax), CHAT_ADDENDUM);
         let mut user = String::new();
-        user.push_str(&format!("Filtri attivi: {}\n", facets_digest(tax, active)));
+        user.push_str(&format!("Contesto attivo: {}\n", context_digest(tax, active)));
         if history.is_empty() {
             user.push_str("Conversazione recente: nessun messaggio precedente.\n");
         } else {
@@ -1499,10 +1944,11 @@ impl IntentProvider for LlmProvider {
             }
         }
         user.push_str(&format!("\nMessaggio: {text}"));
-        let raw = match self.chat(&system, &user, 600) {
+        let follow_up = is_follow_up(text);
+        let raw = match self.chat(&system, &user, 700) {
             Ok(r) => r,
             Err(e) => {
-                let mut it = RuleParser.parse_rules(text, tax);
+                let mut it = RuleParser.parse_chat_rules(text, tax);
                 it.notes
                     .push(format!("AI non disponibile ({e}): uso il parser a regole."));
                 return Ok(it);
@@ -1510,22 +1956,23 @@ impl IntentProvider for LlmProvider {
         };
         match Self::parse_json(&raw, tax) {
             Ok(mut it) => {
-                // Un seguito senza vincoli non deve azzerare i filtri attivi:
-                // li conserva (a meno che l'utente voglia ricominciare).
-                if it.mode != "reset"
-                    && it.facets.is_empty()
-                    && it.free_text.is_none()
-                    && it.similar_to.is_none()
-                    && !active.is_empty()
-                {
-                    it.facets = active.clone();
-                    it.notes.push("Ho mantenuto i filtri gia attivi.".into());
+                detach_chat_keywords(&mut it);
+                // Solo un seguito esplicito conserva il contesto. Una nuova
+                // richiesta senza criteri non trascina i temi precedenti.
+                if it.mode != "reset" && follow_up && it.is_empty() && !active.is_empty() {
+                    let sort = it.facets.sort;
+                    it.facets = active.facets.clone();
+                    if sort != Sort::default() {
+                        it.facets.sort = sort;
+                    }
+                    it.themes = active.themes.clone();
+                    it.notes.push("Ho mantenuto il contesto gia attivo.".into());
                 }
                 it.notes.insert(0, "Interpretato dal modello AI.".into());
                 Ok(it)
             }
             Err(e) => {
-                let mut it = RuleParser.parse_rules(text, tax);
+                let mut it = RuleParser.parse_chat_rules(text, tax);
                 it.notes
                     .push(format!("Output AI non valido ({e}): uso il parser a regole."));
                 Ok(it)
@@ -1679,6 +2126,124 @@ mod tests {
         assert_eq!(it.mode, "off_topic");
         assert!(it.free_text.is_none(), "la domanda non diventa un titolo");
         assert!(it.facets.countries.contains(&"FR".to_string()));
+    }
+
+    #[test]
+    fn chat_estrae_cani_gatti_amicizia_come_concetti() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_chat_rules(
+            "voglio vedere un film dove ci sono cani e gatti che sono amici tra di loro",
+            &tax,
+        );
+        assert!(it.free_text.is_none(), "la frase non diventa un titolo");
+        assert!(
+            it.facets.keywords.is_empty(),
+            "i temi della chat non sono filtri di griglia: {:?}",
+            it.facets.keywords
+        );
+        let theme = it.themes.first().expect("un tema libero");
+        let labels: Vec<&str> = theme.concepts.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["cane", "gatto", "amicizia"]);
+        let keywords: Vec<&str> = theme
+            .concepts
+            .iter()
+            .flat_map(|c| c.keywords.iter().map(|k| k.as_str()))
+            .collect();
+        assert!(keywords.contains(&"dog"));
+        assert!(keywords.contains(&"cat"));
+        assert!(keywords.contains(&"friendship"));
+    }
+
+    #[test]
+    fn chat_unisce_una_faccia_e_un_tema() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_chat_rules("un film comico con cani", &tax);
+        assert!(it.facets.genres.contains(&35), "la commedia resta una faccia");
+        let theme = it.themes.first().expect("il cane e un tema");
+        assert_eq!(theme.concepts[0].label, "cane");
+    }
+
+    #[test]
+    fn chat_estrae_viaggio_nello_spazio() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_chat_rules("un film che parla di un viaggio nello spazio", &tax);
+        let theme = it.themes.first().expect("un tema libero");
+        let labels: Vec<&str> = theme.concepts.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.contains(&"spazio"), "{labels:?}");
+        assert!(labels.contains(&"viaggio"), "{labels:?}");
+        let keywords: Vec<&str> = theme
+            .concepts
+            .iter()
+            .flat_map(|c| c.keywords.iter().map(|k| k.as_str()))
+            .collect();
+        assert!(keywords.contains(&"space travel"), "{keywords:?}");
+    }
+
+    #[test]
+    fn le_combinazioni_della_tassonomia_restano_facce() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_chat_rules("neorealismo comico romantico", &tax);
+        assert!(it.facets.movements.contains(&"neorealismo".to_string()));
+        assert!(it.facets.genres.contains(&35));
+        assert!(it.facets.genres.contains(&10749));
+        assert!(it.themes.is_empty(), "non e un tema libero: {:?}", it.themes);
+        assert!(it.free_text.is_none());
+    }
+
+    #[test]
+    fn solo_i_seguiti_espliciti_conservano_il_contesto() {
+        for text in [
+            "e uno più recente?",
+            "senza commedia",
+            "e se fossero italiani?",
+            "togli il voto minimo",
+        ] {
+            assert!(is_follow_up(text), "«{text}» e un seguito");
+        }
+        for text in [
+            "film con cani e gatti",
+            "un viaggio nello spazio",
+            "neorealismo comico romantico",
+        ] {
+            assert!(!is_follow_up(text), "«{text}» e una richiesta nuova");
+        }
+    }
+
+    #[test]
+    fn ordinamento_e_simili_non_diventano_temi() {
+        let tax = Taxonomy::load();
+
+        let it = RuleParser.parse_chat_rules("film più recenti", &tax);
+        assert_eq!(it.facets.sort, Sort::Newest);
+        assert!(it.themes.is_empty());
+        assert!(it.free_text.is_none());
+
+        let it = RuleParser.parse_chat_rules("un film simile a Parasite", &tax);
+        assert_eq!(it.similar_to.as_deref(), Some("parasite"));
+        assert!(it.themes.is_empty());
+
+        let it = RuleParser.parse_chat_rules("un film che parla di un pianista", &tax);
+        assert_eq!(it.themes.len(), 1);
+        assert!(it.free_text.is_none());
+    }
+
+    #[test]
+    fn un_seguito_a_regole_non_diventa_un_titolo() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_chat_rules("e uno più recente?", &tax);
+        assert!(it.free_text.is_none(), "{:?}", it.free_text);
+        assert_eq!(it.facets.sort, Sort::Newest);
+    }
+
+    #[test]
+    fn l_ai_puo_dichiarare_temi_con_seed() {
+        let tax = Taxonomy::load();
+        let raw = r#"{"intent":"faceted","facets":{},"themes":[{"label":"cani e gatti","concepts":[{"label":"cane","terms":["cane","cani"],"keywords":["dog"]},{"label":"gatto","terms":["gatto","gatti"],"keywords":["cats"]}],"seed_titles":["Come cani e gatti"]}],"title":null,"similar_to":null,"reason":"tema"}"#;
+        let it = LlmProvider::parse_json(raw, &tax).expect("JSON valido");
+        assert_eq!(it.themes.len(), 1);
+        assert_eq!(it.themes[0].concepts.len(), 2);
+        assert_eq!(it.themes[0].concepts[1].keywords, ["cats"]);
+        assert_eq!(it.themes[0].seed_titles, ["Come cani e gatti"]);
     }
 
     #[test]

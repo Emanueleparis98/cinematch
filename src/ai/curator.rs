@@ -19,6 +19,10 @@ pub struct Candidate {
     pub votes: u32,
     pub genres: String,
     pub overview: String,
+    /// Cosa copre e cosa manca rispetto ai concetti della richiesta.
+    pub reason: Option<String>,
+    /// 1.0 = copre tutti i concetti; 0.5 = uno su due; ecc.
+    pub relevance: f32,
 }
 
 /// Il materiale che il curatore riceve: richiesta, filtri capiti, memoria
@@ -27,6 +31,7 @@ pub struct Candidate {
 pub struct Request {
     pub user_text: String,
     pub understood: String,
+    pub limit: Option<String>,
     pub history: Vec<(String, String)>,
     pub candidates: Vec<Candidate>,
 }
@@ -69,9 +74,14 @@ pub fn pick_texts(c: &Candidate, understood: &str) -> (String, String) {
     } else {
         format!(" Generi: {}.", c.genres)
     };
+    let match_note = c
+        .reason
+        .as_ref()
+        .map(|r| format!(" {}.", r.trim_end_matches('.')))
+        .unwrap_or_default();
     let perche = format!(
-        "«{}» rientra nei criteri della ricerca: {}.{}",
-        c.title, understood, genres
+        "«{}» rientra nei criteri della ricerca: {}.{}{}",
+        c.title, understood, genres, match_note
     );
     let consiglio = if c.rating >= 7.5 {
         "Tra i titoli piu solidi del gruppo: buon punto di partenza. Apri la scheda per cast e disponibilita."
@@ -106,9 +116,11 @@ pub fn deterministic(req: &Request) -> Curation {
     let understood = understood_of(req);
     let n = req.candidates.len().min(5);
     let mut ranked: Vec<&Candidate> = req.candidates.iter().collect();
+    // L'ordine dei candidati e gia quello scelto dal motore (rilevanza,
+    // ordinamento richiesto, qualita): qui si preserva, non si riscrive.
     ranked.sort_by(|a, b| {
-        score(b)
-            .partial_cmp(&score(a))
+        b.relevance
+            .partial_cmp(&a.relevance)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let picks = ranked
@@ -123,10 +135,9 @@ pub fn deterministic(req: &Request) -> Curation {
             }
         })
         .collect();
-    Curation {
-        intro: intro_text(n, &understood),
-        picks,
-    }
+    // Il limite lo mostra la UI in una riga a parte: qui non si ripete.
+    let intro = intro_text(n, &understood);
+    Curation { intro, picks }
 }
 
 // ------------------------------------------------------------- parsing AI ----
@@ -298,6 +309,8 @@ mod tests {
             votes,
             genres: "Horror".into(),
             overview: "Una trama.".into(),
+            reason: None,
+            relevance: 1.0,
         }
     }
 
@@ -305,13 +318,14 @@ mod tests {
         Request {
             user_text: "slasher anni 80".into(),
             understood: "Anni '80 · Stati Uniti".into(),
+            limit: None,
             history: Vec::new(),
             candidates,
         }
     }
 
     #[test]
-    fn deterministico_ordina_per_punteggio_e_scrive_testi() {
+    fn deterministico_preserva_l_ordine_e_scrive_testi() {
         let r = req(vec![
             cand(1, "Basso", 5.0, 10),
             cand(2, "Alto", 7.9, 20_000),
@@ -322,13 +336,13 @@ mod tests {
         ]);
         let c = deterministic(&r);
         assert_eq!(c.picks.len(), 5);
-        assert_eq!(c.picks[0].id, 2);
+        assert_eq!(c.picks[0].id, 1);
         assert!(c.intro.contains("5 titoli"));
         assert!(!c.picks[0].perche.is_empty());
         assert!(!c.picks[0].perche.contains("Voto"));
         assert!(!c.picks[0].perche.contains("1990"));
         assert!(!c.picks[0].consiglio.is_empty());
-        assert!(c.picks.iter().all(|p| p.id != 1));
+        assert_eq!(c.picks.iter().map(|p| p.id).collect::<Vec<_>>(), [1, 2, 3, 4, 5]);
     }
 
     #[test]

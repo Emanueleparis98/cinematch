@@ -49,6 +49,13 @@ pub struct Answer {
     pub state: State,
     pub intro: String,
     pub understood: String,
+    /// Limite dichiarato: nessun film copre tutti i criteri, oppure i criteri
+    /// esatti sono stati allargati.
+    pub limit: Option<String>,
+    /// Contesto effettivo della risposta: i seguiti ripartono da qui.
+    pub context: Option<crate::ai::Intent>,
+    /// La griglia rappresenta davvero questi criteri (niente temi liberi).
+    pub grid_ready: bool,
     pub notes: Vec<String>,
     pub cards: Vec<Card>,
     pub total: u32,
@@ -165,9 +172,9 @@ pub fn home(
             ui.add_space(10.0);
             ui.label(
                 RichText::new(if ai {
-                    "Scrivi libero, anche a modo tuo: interpreto la richiesta, cerco su TMDB e ti propongo 5 film con il perché e un consiglio."
+                    "Scrivi libero, anche a modo tuo: interpreto la richiesta, cerco su TMDB e ti propongo fino a 5 film con il perché e un consiglio."
                 } else {
-                    "Scrivi libero: le regole interpretano la richiesta, cerco su TMDB e ti propongo 5 film con una spiegazione."
+                    "Scrivi libero: le regole interpretano la richiesta, cerco su TMDB e ti propongo fino a 5 film con una spiegazione."
                 })
                 .size(12.5)
                 .color(theme::DIM),
@@ -752,6 +759,10 @@ fn answer_view(
                 .color(theme::DIM),
         );
     }
+    if let Some(limit) = &a.limit {
+        ui.add_space(2.0);
+        ui.label(RichText::new(limit).size(11.5).color(theme::ACCENT_3));
+    }
     if a.cards.is_empty() {
         if a.intro.is_empty() && a.error.is_none() {
             ui.label(
@@ -779,13 +790,15 @@ fn answer_view(
 
     ui.add_space(2.0);
     ui.horizontal_wrapped(|ui| {
-        if a.total > 0
+        if a.grid_ready
+            && a.total > 0
+            && !a.facets.is_empty()
             && theme::chip(
                 ui,
                 &format!("Vedi tutti i {} in griglia", theme::thousands(a.total)),
                 false,
                 true,
-                Some("Apre la griglia con gli stessi filtri"),
+                Some("Apre la griglia con gli stessi criteri"),
             )
             .clicked()
         {
@@ -793,10 +806,10 @@ fn answer_view(
         }
         if theme::chip(
             ui,
-            "↻  Rigenera i 5",
+            "↻  Rigenera",
             false,
             true,
-            Some("Esclude questi film e ne propone altri cinque"),
+            Some("Esclude questi film e propone altri titoli pertinenti"),
         )
         .clicked()
         {
@@ -826,7 +839,7 @@ fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64) {
     const TAPPE: [&str; 3] = [
         "Interpreto la richiesta",
         "Cerco su TMDB",
-        "Scelgo e scrivo i 5 film",
+        "Scelgo e scrivo i film",
     ];
     let stage = a.stage.min(3);
     ui.horizontal_wrapped(|ui| {

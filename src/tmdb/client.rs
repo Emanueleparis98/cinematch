@@ -423,18 +423,60 @@ impl Tmdb {
     }
 
     pub fn keyword_id(&self, keyword: &str) -> Result<Option<u64>, String> {
-        let key = keyword.to_lowercase();
+        let key = keyword.trim().to_lowercase();
         if let Ok(c) = self.keyword_cache.lock() {
             if let Some(hit) = c.get(&key) {
                 return Ok(*hit);
             }
         }
-        let p = vec![("query".to_string(), keyword.to_string())];
-        let res: KeywordResults = self.get("/search/keyword", &p)?;
-        let id = res.best(keyword);
-        if let Ok(mut c) = self.keyword_cache.lock() {
-            c.insert(key, id);
+        let mut found = None;
+        for variant in keyword_variants(&key) {
+            let p = vec![("query".to_string(), variant.clone())];
+            let res: KeywordResults = self.get("/search/keyword", &p)?;
+            if let Some(id) = res.exact(&variant) {
+                found = Some(id);
+                break;
+            }
         }
-        Ok(id)
+        if let Ok(mut c) = self.keyword_cache.lock() {
+            c.insert(key, found);
+        }
+        Ok(found)
+    }
+}
+
+/// Varianti morfologiche minime per le keyword inglesi dell'AI. Non sono un
+/// traduttore: servono solo a non perdere «dogs» quando TMDB indicizza «dog».
+fn keyword_variants(keyword: &str) -> Vec<String> {
+    let mut out = vec![keyword.to_string()];
+    let mut add = |s: String| {
+        if !s.is_empty() && !out.contains(&s) {
+            out.push(s);
+        }
+    };
+    if let Some(stem) = keyword.strip_suffix("ies") {
+        add(format!("{stem}y"));
+    }
+    if let Some(stem) = keyword.strip_suffix("es") {
+        add(stem.to_string());
+    }
+    if let Some(stem) = keyword.strip_suffix('s') {
+        if !stem.ends_with('s') {
+            add(stem.to_string());
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::keyword_variants;
+
+    #[test]
+    fn le_varianti_coprono_i_plurali_inglesi() {
+        assert!(keyword_variants("dogs").contains(&"dog".to_string()));
+        assert!(keyword_variants("stories").contains(&"story".to_string()));
+        assert_eq!(keyword_variants("space travel"), ["space travel"]);
+        assert_eq!(keyword_variants("friendship"), ["friendship"]);
     }
 }

@@ -1,12 +1,16 @@
 //! Prova end-to-end della chat senza aprire la finestra:
-//! messaggio -> interprete (memoria breve) -> candidati reali TMDB ->
-//! curatela (streaming) -> 5 film con «perche» e consiglio.
+//! messaggio -> interprete (contesto della chat) -> candidati reali TMDB ->
+//! curatela (streaming) -> film pertinenti con «perche» e consiglio.
 //!
 //! Uso: cargo run --release --example chat_probe -- "5 slasher anni 80" "e uno piu recente?"
 //! Legge la configurazione vera da %APPDATA%\CineMatch\config.json.
 
-use cinematch::ai::{build_provider, curator, IntentProvider};
-use cinematch::app::discover_with_relaxation;
+use std::collections::HashMap;
+
+use cinematch::ai::{
+    build_provider, curator, is_follow_up, Intent, IntentProvider, Theme,
+};
+use cinematch::app::chat_pool;
 use cinematch::domain::constraints;
 use cinematch::domain::model::{Facets, Movie, Sort};
 use cinematch::domain::taxonomy::Taxonomy;
@@ -66,7 +70,34 @@ fn merge(base: &mut Facets, extra: &Facets) {
     }
 }
 
-fn understood(tax: &Taxonomy, f: &Facets) -> String {
+fn merge_themes(base: &mut Vec<Theme>, extra: &[Theme]) {
+    for theme in extra {
+        if let Some(existing) = base
+            .iter_mut()
+            .find(|t| t.label.eq_ignore_ascii_case(&theme.label))
+        {
+            for concept in &theme.concepts {
+                if !existing
+                    .concepts
+                    .iter()
+                    .any(|c| c.label.eq_ignore_ascii_case(&concept.label))
+                {
+                    existing.concepts.push(concept.clone());
+                }
+            }
+            for title in &theme.seed_titles {
+                if !existing.seed_titles.contains(title) {
+                    existing.seed_titles.push(title.clone());
+                }
+            }
+        } else {
+            base.push(theme.clone());
+        }
+    }
+    base.truncate(2);
+}
+
+fn understood(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
     let mut parts: Vec<String> = Vec::new();
     for m in &f.movements {
         if let Some(mv) = tax.movement(m) {
@@ -116,8 +147,15 @@ fn understood(tax: &Taxonomy, f: &Facets) -> String {
     if let Some(r) = f.min_rating {
         parts.push(format!("voto >= {r}"));
     }
-    if !f.keywords.is_empty() {
-        parts.push(format!("temi: {}", f.keywords.join(", ")));
+    if !themes.is_empty() {
+        parts.push(format!(
+            "temi: {}",
+            themes
+                .iter()
+                .map(|t| t.label.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     if parts.is_empty() {
         "ricerca libera".into()
@@ -126,7 +164,12 @@ fn understood(tax: &Taxonomy, f: &Facets) -> String {
     }
 }
 
-fn candidate_of(tax: &Taxonomy, m: &Movie) -> curator::Candidate {
+fn candidate_of(
+    tax: &Taxonomy,
+    m: &Movie,
+    reasons: &HashMap<u64, String>,
+    relevance: &HashMap<u64, f32>,
+) -> curator::Candidate {
     curator::Candidate {
         id: m.id,
         title: m.title.clone(),
@@ -140,36 +183,27 @@ fn candidate_of(tax: &Taxonomy, m: &Movie) -> curator::Candidate {
             .collect::<Vec<_>>()
             .join(", "),
         overview: m.overview.chars().take(240).collect(),
+        reason: reasons.get(&m.id).cloned(),
+        relevance: relevance.get(&m.id).copied().unwrap_or(1.0),
     }
 }
 
-fn dedupe(movies: Vec<Movie>) -> Vec<Movie> {
-    let mut seen: Vec<u64> = Vec::new();
-    movies
-        .into_iter()
-        .filter(|m| {
-            if seen.contains(&m.id) {
-                false
-            } else {
-                seen.push(m.id);
-                true
-            }
-        })
-        .collect()
-}
-
-/// Un turno di chat: interpreta, cerca, cura. Ritorna i filtri capiti e i
+/// Un turno di chat: interpreta, cerca, cura. Ritorna il contesto effettivo e i
 /// titoli proposti (per la memoria del turno successivo).
 fn turn(
     tmdb: &Tmdb,
     tax: &Taxonomy,
     provider: &std::sync::Arc<dyn IntentProvider>,
     text: &str,
-    active: &Facets,
+    active: &Intent,
     history: &[(String, String)],
-) -> Option<(Facets, Vec<String>)> {
+) -> Option<(Intent, Vec<String>)> {
     println!("\n=== messaggio: «{text}» ===");
-    let intent = match provider.parse_chat(text, tax, history, active) {
+    let follow = is_follow_up(text);
+    let empty = Intent::default();
+    let parse_active = if follow { active } else { &empty };
+    let parse_history: &[(String, String)] = if follow { history } else { &[] };
+    let intent = match provider.parse_chat(text, tax, parse_history, parse_active) {
         Ok(i) => i,
         Err(e) => {
             println!("interprete non disponibile: {e}");
@@ -180,136 +214,126 @@ fn turn(
         println!("  nota: {n}");
     }
     println!(
-        "  facce: decenni={:?} movimenti={:?} generi={:?} esclusi={:?} paesi={:?} mood={:?} temi={:?} voto={:?} voti={:?} modalita={:?}",
+        "  facce: decenni={:?} movimenti={:?} generi={:?} esclusi={:?} paesi={:?} mood={:?} voto={:?} voti={:?} modalita={:?}",
         intent.facets.decades,
         intent.facets.movements,
         intent.facets.genres,
         intent.facets.without_genres,
         intent.facets.countries,
         intent.facets.moods,
-        intent.facets.keywords,
         intent.facets.min_rating,
         intent.facets.min_votes,
         intent.mode
     );
+    for theme in &intent.themes {
+        println!(
+            "  tema: {} [{}] seed={:?}",
+            theme.label,
+            theme
+                .concepts
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" + "),
+            theme.seed_titles
+        );
+    }
 
-    let mut eff = active.clone();
-    if provider.is_llm() {
-        // Stato completo: il modello parte dai filtri attivi che riceve.
-        eff = intent.facets.clone();
+    let mut eff = if follow {
+        active.facets.clone()
     } else {
+        Facets::default()
+    };
+    let mut themes = if follow {
+        active.themes.clone()
+    } else {
+        Vec::new()
+    };
+    if intent.source == "AI" {
+        eff = intent.facets.clone();
+        themes = intent.themes.clone();
+    } else if follow {
         merge(&mut eff, &intent.facets);
+        merge_themes(&mut themes, &intent.themes);
+    } else {
+        eff = intent.facets.clone();
+        themes = intent.themes.clone();
+    }
+    if intent.mode.eq_ignore_ascii_case("reset") {
+        eff = Facets::default();
+        themes.clear();
     }
     let (eff, removed) = constraints::sanitize(tax, &eff);
     for r in &removed {
         println!("  vincolo: {r}");
     }
-    let off_topic = intent.mode.eq_ignore_ascii_case("off_topic");
-    let descr = if off_topic && eff.is_empty() {
-        "film del momento".to_string()
-    } else {
-        understood(tax, &eff)
-    };
-    println!("  capito: {descr}");
-
-    // Parole chiave (mood, temi, correnti).
-    let mut kw: Vec<(String, u64)> = Vec::new();
-    for (id, word) in constraints::unresolved_keywords(tax, &eff, &kw) {
-        if let Ok(Some(v)) = tmdb.keyword_id(&word) {
-            kw.push((id, v));
-        }
-    }
-    for name in constraints::unresolved_themes(&eff, &kw) {
-        if let Ok(Some(v)) = tmdb.keyword_id(&name) {
-            kw.push((name, v));
-        }
-    }
-    for (id, word) in constraints::unresolved_movement_keywords(tax, &eff, &kw) {
-        if let Ok(Some(v)) = tmdb.keyword_id(&word) {
-            kw.push((id, v));
-        }
-    }
-    if !kw.is_empty() {
-        println!("  keywords TMDB: {kw:?}");
-    }
-
     let title = intent.free_text.clone();
     let similar = intent.similar_to.clone();
-    // Se l'interprete non ha riconosciuto un titolo, non cerco l'intera frase:
-    // una domanda o un «sorprendimi» non sono titoli (stessa regola dell'app).
+    let context = Intent {
+        facets: eff.clone(),
+        themes: themes.clone(),
+        free_text: title.clone(),
+        similar_to: similar.clone(),
+        ..Default::default()
+    };
+    let off_topic = intent.mode.eq_ignore_ascii_case("off_topic");
+    let mut descr = understood(tax, &eff, &themes);
+    if themes.is_empty() {
+        if let Some(s) = similar.as_deref() {
+            descr = format!("simili a «{s}»");
+        } else if let Some(t) = title.as_deref() {
+            descr = if descr.eq_ignore_ascii_case("ricerca libera") {
+                format!("titolo «{t}»")
+            } else {
+                format!("titolo «{t}» · {descr}")
+            };
+        }
+    }
+    if off_topic && eff.is_empty() && themes.is_empty() {
+        descr = "film del momento".to_string();
+    }
+    println!("  capito: {descr}");
 
-    let mut relaxed: Vec<String> = Vec::new();
-    let movies: Vec<Movie> = if let Some(name) = &similar {
-        match tmdb.search(name, 1) {
-            Ok(p) => match p.results.first() {
-                Some(first) => {
-                    println!("  simili a «{}»", first.title);
-                    match tmdb.similar(first.id, 1) {
-                        Ok(rec) => dedupe(rec.results.into_iter().map(Movie::from).collect()),
-                        Err(e) => {
-                            println!("errore: {e}");
-                            return None;
-                        }
-                    }
-                }
-                None => {
-                    println!("nessun film per «{name}»");
-                    return None;
-                }
-            },
-            Err(e) => {
-                println!("errore: {e}");
-                return None;
-            }
-        }
-    } else if let Some(t) = &title {
-        println!("  ricerca per titolo: «{t}»");
-        match tmdb.search(t, 1) {
-            Ok(p) => dedupe(p.results.into_iter().map(Movie::from).collect()),
-            Err(e) => {
-                println!("errore: {e}");
-                return None;
-            }
-        }
-    } else if eff.is_empty() {
-        match tmdb.trending(1) {
-            Ok(p) => dedupe(p.results.into_iter().map(Movie::from).collect()),
-            Err(e) => {
-                println!("errore: {e}");
-                return None;
-            }
-        }
-    } else {
-        match discover_with_relaxation(tmdb, tax, &eff, &kw, 1, &mut relaxed) {
-            Ok((m1, total, pages, headline)) => {
-                println!("  {headline} ({total} risultati, {pages} pagine)");
-                let mut movies = m1;
-                if pages > 1 && movies.len() < 20 {
-                    if let Ok((m2, _, _, _)) =
-                        discover_with_relaxation(tmdb, tax, &eff, &kw, 2, &mut relaxed)
-                    {
-                        movies.extend(m2);
-                    }
-                }
-                dedupe(movies)
-            }
-            Err(e) => {
-                println!("errore: {e}");
-                return None;
-            }
+    let mut pool = match chat_pool(
+        tmdb,
+        tax,
+        &eff,
+        &themes,
+        &[],
+        title.as_deref(),
+        similar.as_deref(),
+        &mut Vec::new(),
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("errore ricerca: {e}");
+            return None;
         }
     };
-    for r in &relaxed {
-        println!("  rilassato: {r}");
+    println!(
+        "  candidati reali: {} · totale TMDB: {} · griglia: {}",
+        pool.movies.len(),
+        pool.total,
+        pool.grid_ready
+    );
+    if let Some(limit) = &pool.limit {
+        println!("  limite: {limit}");
     }
-    let movies: Vec<Movie> = movies.into_iter().take(20).collect();
-    println!("  candidati reali: {}", movies.len());
+    for (id, reason) in &pool.reasons {
+        println!("  match {id}: {reason}");
+    }
+    pool.movies.truncate(20);
+    let movies = pool.movies;
 
     let req = curator::Request {
         user_text: text.to_string(),
         understood: descr,
-        history: history.to_vec(),
-        candidates: movies.iter().map(|m| candidate_of(tax, m)).collect(),
+        limit: pool.limit,
+        history: if follow { history.to_vec() } else { Vec::new() },
+        candidates: movies
+            .iter()
+            .map(|m| candidate_of(tax, m, &pool.reasons, &pool.relevance))
+            .collect(),
     };
     let mut chunks = 0usize;
     let cur = match provider.curate(&req, &mut |_chunk| {
@@ -351,7 +375,7 @@ fn turn(
     }
 
     println!("\nscelte: {}", titles.len());
-    Some((eff, titles))
+    Some((context, titles))
 }
 
 fn main() {
@@ -375,15 +399,18 @@ fn main() {
         }
     };
 
-    let mut active = Facets::default();
+    let mut active = Intent::default();
     let mut history: Vec<(String, String)> = Vec::new();
     for phrase in &phrases {
         match turn(&tmdb, &tax, &provider, phrase, &active, &history) {
-            Some((eff, titles)) => {
-                active = eff;
+            Some((context, titles)) => {
+                active = context;
                 history.push(("utente".into(), phrase.clone()));
                 if !titles.is_empty() {
-                    history.push(("assistente".into(), format!("Ho proposto: {}", titles.join(", "))));
+                    history.push((
+                        "assistente".into(),
+                        format!("Ho proposto: {}", titles.join(", ")),
+                    ));
                 }
             }
             None => break,

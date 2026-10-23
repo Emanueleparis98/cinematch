@@ -153,12 +153,13 @@ pub struct KeywordResults {
 }
 
 impl KeywordResults {
-    pub fn best(&self, query: &str) -> Option<u64> {
-        let q = query.to_lowercase();
+    /// Corrispondenza esatta soltanto: il primo risultato fuzzy di TMDB
+    /// («cani» -> «cali») produrrebbe film senza alcun rapporto col tema.
+    pub fn exact(&self, query: &str) -> Option<u64> {
+        let q = query.trim().to_lowercase();
         self.results
             .iter()
-            .find(|k| k.name.to_lowercase() == q)
-            .or_else(|| self.results.first())
+            .find(|k| k.name.trim().to_lowercase() == q)
             .map(|k| k.id)
     }
 }
@@ -284,7 +285,19 @@ impl ApiDetails {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_year;
+    use super::{parse_year, KeywordItem, KeywordResults};
+
+    #[test]
+    fn la_keyword_deve_corrispondere_esattamente() {
+        let res = KeywordResults {
+            results: vec![KeywordItem {
+                id: 7,
+                name: "cali".into(),
+            }],
+        };
+        assert_eq!(res.exact("cani"), None, "niente primo risultato fuzzy");
+        assert_eq!(res.exact("Cali"), Some(7));
+    }
 
     #[test]
     fn l_anno_si_legge_solo_da_quattro_cifre_ascii() {
