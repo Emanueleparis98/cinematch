@@ -1,6 +1,6 @@
 [package]
 name = "cinematch"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 description = "CineMatch - esplorazione cinematografica a vincoli con supporto AI"
 
