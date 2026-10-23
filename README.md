@@ -108,7 +108,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   Chat/Griglia e, in Griglia, ricerca e comandi. La chat conserva la bozza, la
   griglia conserva ricerca, filtri e larghezza del pannello; i filtri compaiono
   solo in Griglia. Filtri e scheda film non stanno mai aperti insieme.
-- **La memoria segue i seguiti**: l'app conserva il contesto per i seguiti
+- **Il contesto segue i seguiti**: l'app conserva il contesto per i seguiti
   espliciti («no, senza commedia», «e uno piu recente?», «e se fossero italiani?»).
   Una richiesta nuova riparte da criteri puliti: non si porta dietro i temi del
   messaggio precedente. «Nuova chat» azzera tutto (niente file: tutto in memoria).
@@ -116,6 +116,9 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   («qual e la capitale della Francia?»), l'intro risponde in una riga e i film
   sono il ponte verso la sala: il paese, il tema o, se non c'e un legame, i film
   del momento. La domanda non viene mai scambiata per un titolo.
+- **Registi e attori**: «film di Vittorio De Sica», «regia di...», «film con...»
+  risolvono la persona su TMDB e usano la filmografia. Gli omonimi vengono
+  disambiguati per ruolo e popolarita; il film appena visto resta fuori.
 - **I film non si inventano**: l'interprete produce i filtri, il motore di
   vincoli li valida, la ricerca interroga TMDB e il **curatore** puo solo
   scegliere e commentare i candidati reali. Gli id fuori elenco vengono scartati;
@@ -137,9 +140,10 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 - **Da chat a griglia**: «Vedi tutti i N in griglia» compare solo quando i criteri
   sono davvero rappresentabili come filtri (niente temi liberi) e porta gli stessi
   filtri nella griglia, con l'intento in cache: nessuna chiamata AI nuova.
-  «Rigenera» riusa lo stesso contesto, esclude i film appena visti e propone
-  altri titoli pertinenti, non necessariamente cinque. Toccare un filtro a mano
-  riporta alla griglia. La scheda film resta quella di sempre (clic sul poster).
+  La richiesta naturale «altri» riusa lo stesso contesto, esclude i film appena
+  visti e propone altri titoli pertinenti, non necessariamente cinque. Toccare un
+  filtro a mano riporta alla griglia. La scheda film resta quella di sempre (clic
+  sul poster).
 
 ## Aspetto e interazioni
 
@@ -211,9 +215,9 @@ il resto. Gli argomenti che non stanno in tassonomia diventano **temi liberi**
 toglierli con un clic.
 
 L'interprete predefinito e **a regole, offline e istantaneo**. Nelle impostazioni puoi
-attivare un modello AI (Ollama locale oppure un endpoint compatibile OpenAI): l'AI
-propone solo le facce, **la validazione resta al motore di vincoli** — nessuna
-allucinazione puo finire nei risultati.
+attivare **DeepSeek** (V4.1 Flash, sforzo massimo), **OpenRouter** oppure **Ollama**
+locale: l'AI propone solo le facce, **la validazione resta al motore di vincoli** -
+nessuna allucinazione puo finire nei risultati.
 
 ## Pannello dei filtri
 
@@ -257,25 +261,26 @@ chiude la scheda film e viceversa.
 
 ## Collegamento AI e rilevamento dei modelli
 
-In *Impostazioni → Interprete delle richieste* scegli **API compatibile OpenAI** e
-incolli:
+In *Impostazioni → Interprete delle richieste* scegli il provider:
 
-- il **collegamento**: va bene la base `https://host/v1` oppure l'URL completo
-  `https://host/v1/chat/completions` — viene accorciato da solo (`normalize_base()`);
-- la **chiave API** del servizio (resta su questo PC, in `config.json`).
-
-Poi premi:
+- **DeepSeek**: incolli la chiave API, il modello predefinito è `deepseek-flash`
+  (V4.1 Flash) e lo sforzo di ragionamento è **Massimo**. L'ID
+  `deepseek-v4.1-flash` non è valido sull'API diretta: l'alias corretto è
+  `deepseek-flash`.
+- **OpenRouter**: incolli la chiave e premi **Rileva modelli**; l'elenco mostra
+  tutti i modelli pubblicati, con nome e contesto.
+- **Ollama**: indichi il collegamento locale e il modello.
 
 | Pulsante | Cosa fa |
 |---|---|
-| **Rileva modelli** | interroga `GET {base}/models` (o `/api/tags` per Ollama) e riempie il menu con tutti i modelli usabili con quella credenziale: provider, contesto e costo relativo (`x0.1`) |
+| **Rileva modelli** | interroga `GET /models` (DeepSeek/OpenRouter) o `/api/tags` (Ollama) e riempie il menu con i modelli usabili: provider, contesto e costo relativo quando disponibile |
 | **Verifica risposta AI** | manda al modello scelto una frase di prova e controlla che risponda in **JSON conforme**, mostrando le facce estratte |
 
-All'avvio, se il collegamento e gia configurato, l'elenco dei modelli viene caricato
-da solo. Se il modello scritto non esiste nel servizio viene proposto il piu
-economico. La chiamata AI parte **solo con Invio o «Cerca»** (non mentre digiti) e
+All'avvio, se il provider è configurato, l'elenco dei modelli viene caricato da solo.
+La chiamata AI parte **solo con Invio o «Cerca»** (non mentre digiti) e
 l'interpretazione viene messa in cache: cambiare pagina o filtri non costa altre
-chiamate.
+chiamate. Le risposte AI e i dati TMDB (titoli, trame, note) sono trattati come
+**dati non fidati** nei prompt: non possono dettare istruzioni al modello.
 
 Per provare tutto da riga di comando:
 
