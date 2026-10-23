@@ -5,7 +5,7 @@
 
 use egui::{Align2, Color32, FontId, Rect, RichText, Rounding, Sense, Stroke};
 
-use crate::domain::model::{Facets, ImdbRating, Movie};
+use crate::domain::model::{Facets, ImdbRating, Movie, Sort};
 use crate::domain::suggestions::Suggestion;
 use crate::domain::taxonomy::Taxonomy;
 use crate::tmdb::poster_url;
@@ -92,6 +92,8 @@ pub struct Actions {
     pub open_detail: Option<u64>,
     pub similar_to: Option<String>,
     pub regenerate: Option<usize>,
+    pub retry: Option<usize>,
+    pub stop: bool,
     pub show_all: Option<usize>,
     pub new_chat: bool,
     pub suggestion: Option<String>,
@@ -735,18 +737,35 @@ fn answer_view(
     let a = &entry.answer;
     match a.state {
         State::Busy => {
-            busy_view(ui, a, index, now);
+            busy_view(ui, a, index, now, actions);
             return;
         }
         State::Done => {}
     }
 
     if let Some(err) = &a.error {
+        let interrupted = err == "Risposta interrotta.";
         ui.label(
-            RichText::new(format!("Qualcosa non ha funzionato: {err}"))
-                .size(12.5)
-                .color(theme::DANGER),
+            RichText::new(if interrupted {
+                err.clone()
+            } else {
+                format!("Qualcosa non ha funzionato: {err}")
+            })
+            .size(12.5)
+            .color(if interrupted { theme::DIM } else { theme::DANGER }),
         );
+        ui.add_space(4.0);
+        if theme::chip(
+            ui,
+            "↻  Riprova",
+            false,
+            true,
+            Some("Ripete questa richiesta"),
+        )
+        .clicked()
+        {
+            actions.retry = Some(index);
+        }
     }
     if !a.intro.is_empty() {
         ui.label(RichText::new(&a.intro).size(13.5));
@@ -821,21 +840,58 @@ fn answer_view(
                 .color(theme::FAINT),
         );
     });
-    // Proseguimenti pronti: un clic e la conversazione continua.
-    ui.add_space(7.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("Continua:").size(11.0).color(theme::FAINT));
-        for idea in ["e uno più recente?", "meno conosciuti", "più corti", "voto più alto"] {
-            if theme::chip(ui, idea, false, true, None).clicked() {
-                actions.suggestion = Some(idea.to_string());
+    // Proseguimenti contestuali: niente chip che ripetono un vincolo gia
+    // attivo o che non cambierebbero la ricerca.
+    let ideas = follow_up_ideas(a);
+    if !ideas.is_empty() {
+        ui.add_space(7.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Continua:").size(11.0).color(theme::FAINT));
+            for idea in ideas {
+                if theme::chip(ui, idea, false, true, None).clicked() {
+                    actions.suggestion = Some(idea.to_string());
+                }
             }
-        }
-    });
+        });
+    }
+}
+
+/// Idee di seguito pertinenti ai criteri gia attivi. Al massimo quattro, in
+/// ordine di utilita: recente, italiano, corto, voto, piu leggero.
+fn follow_up_ideas(a: &Answer) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    let recent = a.facets.sort == Sort::Newest
+        || a.facets
+            .decades
+            .iter()
+            .any(|d| d.starts_with("202") || d == "2010s");
+    if !recent {
+        out.push("e uno più recente?");
+    }
+    if a.facets.countries.len() != 1 || a.facets.countries[0] != "IT" {
+        out.push("solo italiani");
+    }
+    if a.facets.runtime.is_none() {
+        out.push("più corti");
+    }
+    if a.facets.min_rating.unwrap_or(0.0) < 7.0 {
+        out.push("voto più alto");
+    }
+    let dark = a
+        .facets
+        .genres
+        .iter()
+        .any(|g| matches!(g, 18 | 27 | 53 | 10752));
+    if (dark || !a.facets.genres.contains(&35)) && out.len() < 4 {
+        out.push("più leggero");
+    }
+    out.truncate(4);
+    out
 }
 
 /// Avanzamento della pipeline: tre tappe, quella attiva pulsa; sotto, la
 /// barra che avanza. Durante lo streaming il testo cresce col cursore.
-fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64) {
+fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64, actions: &mut Actions) {
     const TAPPE: [&str; 3] = [
         "Interpreto la richiesta",
         "Cerco su TMDB",
@@ -884,6 +940,12 @@ fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64) {
             ui.label(RichText::new(&a.intro).size(13.5));
             ui.label(RichText::new(caret).size(13.5).color(theme::ACCENT));
         });
+    }
+    ui.add_space(7.0);
+    if theme::chip(ui, "■  Interrompi", false, true, Some("Ferma la risposta in corso"))
+        .clicked()
+    {
+        actions.stop = true;
     }
 }
 
@@ -1130,6 +1192,31 @@ fn film_card(
             card_hover,
         );
     });
+}
+
+#[cfg(test)]
+mod follow_up_tests {
+    use super::{follow_up_ideas, Answer};
+    use crate::domain::model::Sort;
+
+    #[test]
+    fn le_chip_rispettano_i_vincoli_gia_attivi() {
+        let ideas = follow_up_ideas(&Answer::default());
+        assert_eq!(ideas.len(), 4);
+        assert!(ideas.contains(&"solo italiani"));
+        assert!(ideas.contains(&"più corti"));
+
+        let mut a = Answer::default();
+        a.facets.countries = vec!["IT".into()];
+        a.facets.sort = Sort::Newest;
+        a.facets.runtime = Some((0, 100));
+        a.facets.min_rating = Some(7.5);
+        a.facets.genres = vec![35];
+        assert!(follow_up_ideas(&a).is_empty());
+
+        a.facets.genres = vec![18];
+        assert_eq!(follow_up_ideas(&a), ["più leggero"]);
+    }
 }
 
 #[cfg(test)]

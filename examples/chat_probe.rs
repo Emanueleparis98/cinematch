@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use cinematch::ai::{
-    build_provider, curator, is_follow_up, Intent, IntentProvider, Theme,
+    build_provider, classify_chat_action, curator, ChatAction, Intent, IntentProvider, Theme,
 };
 use cinematch::app::chat_pool;
 use cinematch::domain::constraints;
@@ -38,10 +38,8 @@ fn merge(base: &mut Facets, extra: &Facets) {
             base.without_genres.push(*g);
         }
     }
-    for c in &extra.countries {
-        if !base.countries.contains(c) {
-            base.countries.push(c.clone());
-        }
+    if !extra.countries.is_empty() {
+        base.countries = extra.countries.clone();
     }
     for m in &extra.moods {
         if !base.moods.contains(m) {
@@ -147,6 +145,13 @@ fn understood(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
     if let Some(r) = f.min_rating {
         parts.push(format!("voto >= {r}"));
     }
+    if let Some((min, max)) = f.runtime {
+        parts.push(if min == 0 {
+            format!("fino a {max} min")
+        } else {
+            format!("{min}-{max} min")
+        });
+    }
     if !themes.is_empty() {
         parts.push(format!(
             "temi: {}",
@@ -197,12 +202,19 @@ fn turn(
     text: &str,
     active: &Intent,
     history: &[(String, String)],
-) -> Option<(Intent, Vec<String>)> {
+    exclude: &[u64],
+) -> Option<(Intent, Vec<String>, Vec<u64>)> {
     println!("\n=== messaggio: «{text}» ===");
-    let follow = is_follow_up(text);
+    let pre_action = classify_chat_action(text, active);
+    let pre_follow = pre_action.is_contextual();
     let empty = Intent::default();
-    let parse_active = if follow { active } else { &empty };
-    let parse_history: &[(String, String)] = if follow { history } else { &[] };
+    let parse_active = if provider.is_llm() || pre_follow {
+        active
+    } else {
+        &empty
+    };
+    let parse_history: &[(String, String)] =
+        if provider.is_llm() || pre_follow { history } else { &[] };
     let intent = match provider.parse_chat(text, tax, parse_history, parse_active) {
         Ok(i) => i,
         Err(e) => {
@@ -210,11 +222,22 @@ fn turn(
             return None;
         }
     };
+    let mut action = intent.action;
+    if action == ChatAction::New
+        && pre_follow
+        && intent.is_empty()
+        && intent.mode != "reset"
+        && intent.mode != "off_topic"
+    {
+        action = pre_action;
+    }
+    let follow = action.is_contextual();
     for n in &intent.notes {
         println!("  nota: {n}");
     }
     println!(
-        "  facce: decenni={:?} movimenti={:?} generi={:?} esclusi={:?} paesi={:?} mood={:?} voto={:?} voti={:?} modalita={:?}",
+        "  azione: {:?} · facce: decenni={:?} movimenti={:?} generi={:?} esclusi={:?} paesi={:?} mood={:?} voto={:?} voti={:?} durata={:?} ordine={:?} modalita={:?}",
+        action,
         intent.facets.decades,
         intent.facets.movements,
         intent.facets.genres,
@@ -223,6 +246,8 @@ fn turn(
         intent.facets.moods,
         intent.facets.min_rating,
         intent.facets.min_votes,
+        intent.facets.runtime,
+        intent.facets.sort,
         intent.mode
     );
     for theme in &intent.themes {
@@ -249,34 +274,48 @@ fn turn(
     } else {
         Vec::new()
     };
-    if intent.source == "AI" {
-        eff = intent.facets.clone();
-        themes = intent.themes.clone();
-    } else if follow {
+    if action == ChatAction::Reset || intent.mode.eq_ignore_ascii_case("reset") {
+        eff = Facets::default();
+        themes.clear();
+    } else if intent.source == "AI" {
+        if action.is_contextual() && intent.is_empty() && !active.is_empty() {
+            eff = active.facets.clone();
+            themes = active.themes.clone();
+        } else {
+            eff = intent.facets.clone();
+            themes = intent.themes.clone();
+        }
+    } else if action.is_contextual() {
         merge(&mut eff, &intent.facets);
         merge_themes(&mut themes, &intent.themes);
     } else {
         eff = intent.facets.clone();
         themes = intent.themes.clone();
     }
-    if intent.mode.eq_ignore_ascii_case("reset") {
-        eff = Facets::default();
-        themes.clear();
-    }
     let (eff, removed) = constraints::sanitize(tax, &eff);
     for r in &removed {
         println!("  vincolo: {r}");
     }
     let title = intent.free_text.clone();
-    let similar = intent.similar_to.clone();
+    let similar = intent
+        .similar_to
+        .clone()
+        .or_else(|| {
+            if action.is_contextual() {
+                active.similar_to.clone()
+            } else {
+                None
+            }
+        });
     let context = Intent {
         facets: eff.clone(),
         themes: themes.clone(),
         free_text: title.clone(),
         similar_to: similar.clone(),
+        action,
         ..Default::default()
     };
-    let off_topic = intent.mode.eq_ignore_ascii_case("off_topic");
+    let off_topic = action == ChatAction::OffTopic || intent.mode.eq_ignore_ascii_case("off_topic");
     let mut descr = understood(tax, &eff, &themes);
     if themes.is_empty() {
         if let Some(s) = similar.as_deref() {
@@ -322,6 +361,7 @@ fn turn(
     for (id, reason) in &pool.reasons {
         println!("  match {id}: {reason}");
     }
+    pool.movies.retain(|m| !exclude.contains(&m.id));
     pool.movies.truncate(20);
     let movies = pool.movies;
 
@@ -348,11 +388,13 @@ fn turn(
     println!("  streaming: {chunks} frammenti");
     println!("\nintro: {}", cur.intro);
     let mut titles: Vec<String> = Vec::new();
+    let mut ids: Vec<u64> = Vec::new();
     for (i, p) in cur.picks.iter().enumerate() {
         let Some(m) = movies.iter().find(|m| m.id == p.id) else {
             continue;
         };
         titles.push(m.title.clone());
+        ids.push(m.id);
         let year = m.year.map(|y| y.to_string()).unwrap_or_else(|| "?".into());
         println!("\n{}. {} ({year})  id={}", i + 1, m.title, m.id);
         println!("   perche: {}", p.perche);
@@ -375,7 +417,7 @@ fn turn(
     }
 
     println!("\nscelte: {}", titles.len());
-    Some((context, titles))
+    Some((context, titles, ids))
 }
 
 fn main() {
@@ -401,10 +443,17 @@ fn main() {
 
     let mut active = Intent::default();
     let mut history: Vec<(String, String)> = Vec::new();
+    let mut seen: Vec<u64> = Vec::new();
     for phrase in &phrases {
-        match turn(&tmdb, &tax, &provider, phrase, &active, &history) {
-            Some((context, titles)) => {
+        let exclude = if classify_chat_action(phrase, &active) == ChatAction::Replace {
+            seen.clone()
+        } else {
+            Vec::new()
+        };
+        match turn(&tmdb, &tax, &provider, phrase, &active, &history, &exclude) {
+            Some((context, titles, ids)) => {
                 active = context;
+                seen.extend(ids);
                 history.push(("utente".into(), phrase.clone()));
                 if !titles.is_empty() {
                     history.push((

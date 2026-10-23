@@ -1,7 +1,52 @@
 use std::collections::HashSet;
-use std::io::BufRead;
+use std::io::{BufRead, Read};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+
+const CANCELLED: &str = "Richiesta interrotta.";
+
+fn cancelled(cancel: Option<&AtomicBool>) -> bool {
+    cancel.is_some_and(|c| c.load(Ordering::Relaxed))
+}
+
+struct CancelReader<'a> {
+    inner: reqwest::blocking::Response,
+    cancel: &'a AtomicBool,
+}
+
+impl Read for CancelReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "richiesta interrotta",
+            ));
+        }
+        self.inner.read(buf)
+    }
+}
+
+fn read_text(
+    resp: reqwest::blocking::Response,
+    cancel: Option<&AtomicBool>,
+) -> Result<String, String> {
+    let Some(cancel) = cancel else {
+        return resp
+            .text()
+            .map_err(|e| format!("Risposta LLM non leggibile: {e}"));
+    };
+    let mut reader = CancelReader {
+        inner: resp,
+        cancel,
+    };
+    let mut text = String::new();
+    match reader.read_to_string(&mut text) {
+        Ok(_) => Ok(text),
+        Err(_) if cancel.load(Ordering::Relaxed) => Err(CANCELLED.into()),
+        Err(e) => Err(format!("Risposta LLM non leggibile: {e}")),
+    }
+}
 
 use reqwest::blocking::Client;
 use serde::Deserialize;
@@ -45,6 +90,35 @@ impl Intent {
     }
 }
 
+/// Cosa fa il messaggio rispetto alla conversazione. La chat non e un
+/// assistente generico: ogni messaggio resta una ricerca di film.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ChatAction {
+    #[default]
+    New,
+    Refine,
+    Replace,
+    Reset,
+    OffTopic,
+}
+
+impl ChatAction {
+    pub fn is_contextual(self) -> bool {
+        matches!(self, ChatAction::Refine | ChatAction::Replace)
+    }
+
+    fn from_label(label: &str) -> Option<Self> {
+        match label.trim().to_lowercase().as_str() {
+            "new" | "nuovo" | "new_request" => Some(ChatAction::New),
+            "refine" | "follow_up" | "seguito" => Some(ChatAction::Refine),
+            "replace" | "altri" => Some(ChatAction::Replace),
+            "reset" | "restart" => Some(ChatAction::Reset),
+            "off_topic" | "offtopic" => Some(ChatAction::OffTopic),
+            _ => None,
+        }
+    }
+}
+
 /// Un seguito esplicito («e uno piu recente?», «senza commedia», «e se fossero
 /// italiani?») conserva il contesto. Una richiesta nuova riparte pulita.
 pub fn is_follow_up(text: &str) -> bool {
@@ -52,20 +126,87 @@ pub fn is_follow_up(text: &str) -> bool {
     if t.is_empty() {
         return false;
     }
-    const STARTS: [&str; 24] = [
+    const STARTS: [&str; 25] = [
         "e uno", "e una", "e se", "e piu", "e più", "e meno", "e senza", "e con", "e film",
         "ma ", "pero", "però", "invece", "allora", "senza ", "piu ", "più ", "meno ", "cambi",
-        "togli", "quello", "quella", "quelli", "quelle",
+        "togli", "quello", "quella", "quelli", "quelle", "troppo",
     ];
+    if t == "no" || t.starts_with("no ") || t.starts_with("no,") {
+        return true;
+    }
+    if t.starts_with("fammi ") || t.starts_with("voglio qualcosa") || t.starts_with("vorrei qualcosa") {
+        let adjustment = ["più", "piu", "meno", "altro", "altra"]
+            .iter()
+            .any(|p| t.contains(p));
+        if adjustment {
+            return true;
+        }
+    }
+    if t.starts_with("non ")
+        && (t.contains("mi piace") || t.contains("va bene"))
+    {
+        return true;
+    }
     if STARTS.iter().any(|p| t.starts_with(p)) {
         return true;
     }
-    const CONTAINS: [&str; 16] = [
+    const CONTAINS: [&str; 22] = [
         "invece", "piu recente", "più recente", "meno conosciut", "piu cort", "più cort",
         "voto piu", "voto più", "senza ", "cambia ", "togli ", "aggiungi ", "rendili",
-        "rendile", "stesso", "stessa",
+        "rendile", "stesso", "stessa", "piu leggero", "più leggero", "troppo triste",
+        "meno triste", "solo italiani", "solo italiane",
     ];
     CONTAINS.iter().any(|p| t.contains(p))
+}
+
+/// Classifica il messaggio rispetto al contesto attivo. Le regole restano
+/// prudenti: senza criteri precedenti non c'e niente da raffinare.
+pub fn classify_chat_action(text: &str, active: &Intent) -> ChatAction {
+    let t = text.trim().to_lowercase();
+    if t.is_empty() {
+        return ChatAction::New;
+    }
+    const RESET: [&str; 8] = [
+        "nuova chat",
+        "ricomincia",
+        "riparti",
+        "da zero",
+        "da capo",
+        "azzera",
+        "cambia discorso",
+        "lascia perdere",
+    ];
+    if RESET.iter().any(|p| t.contains(p)) {
+        return ChatAction::Reset;
+    }
+    if active.is_empty() {
+        return ChatAction::New;
+    }
+    const REPLACE: [&str; 15] = [
+        "altri film",
+        "altro film",
+        "altri titoli",
+        "altre opzioni",
+        "altre proposte",
+        "film diversi",
+        "qualcos'altro",
+        "qualcosa altro",
+        "non questi",
+        "non questo",
+        "non mi convincono",
+        "non mi piacciono",
+        "mostrami altro",
+        "rigenera",
+        "sostituisci",
+    ];
+    if REPLACE.iter().any(|p| t.contains(p)) || t == "altri" || t == "altro" {
+        return ChatAction::Replace;
+    }
+    if is_follow_up(&t) {
+        ChatAction::Refine
+    } else {
+        ChatAction::New
+    }
 }
 
 /// Interpretazione di una richiesta in linguaggio naturale.
@@ -78,6 +219,9 @@ pub struct Intent {
     /// Modalita dichiarata dall'interprete: «faceted», «title», «similar»,
     /// «mixed» oppure «reset» (in chat: ricominciare da zero).
     pub mode: String,
+    /// Cosa fa il messaggio nella conversazione: nuova richiesta, seguito,
+    /// sostituzione dei film, reset o fuori tema.
+    pub action: ChatAction,
     pub notes: Vec<String>,
     pub source: String,
 }
@@ -103,6 +247,29 @@ pub trait IntentProvider: Send + Sync {
     ) -> Result<Intent, String> {
         self.parse(text, tax)
     }
+    /// Variante della chat che si ferma quando l'utente interrompe. Il default
+    /// resta sincrono e istantaneo (parser a regole).
+    fn parse_chat_cancellable(
+        &self,
+        text: &str,
+        tax: &Taxonomy,
+        history: &[(String, String)],
+        active: &Intent,
+        cancel: &AtomicBool,
+    ) -> Result<Intent, String> {
+        self.parse_chat_with_cancel(text, tax, history, active, Some(cancel))
+    }
+    #[doc(hidden)]
+    fn parse_chat_with_cancel(
+        &self,
+        text: &str,
+        tax: &Taxonomy,
+        history: &[(String, String)],
+        active: &Intent,
+        _cancel: Option<&AtomicBool>,
+    ) -> Result<Intent, String> {
+        self.parse_chat(text, tax, history, active)
+    }
     /// Curatela della risposta: sceglie fino a 5 film fra i candidati reali e
     /// scrive intro e commenti; `on_delta` riceve il testo dell'intro man mano
     /// che arriva (effetto macchina da scrivere). Il default e deterministico:
@@ -116,39 +283,72 @@ pub trait IntentProvider: Send + Sync {
         on_delta(&c.intro);
         Ok(c)
     }
+    fn curate_cancellable(
+        &self,
+        req: &curator::Request,
+        cancel: &AtomicBool,
+        on_delta: &mut dyn FnMut(&str),
+    ) -> Result<curator::Curation, String> {
+        self.curate_with_cancel(req, Some(cancel), on_delta)
+    }
+    #[doc(hidden)]
+    fn curate_with_cancel(
+        &self,
+        req: &curator::Request,
+        _cancel: Option<&AtomicBool>,
+        on_delta: &mut dyn FnMut(&str),
+    ) -> Result<curator::Curation, String> {
+        self.curate(req, on_delta)
+    }
+}
+
+pub const DEEPSEEK_BASE: &str = "https://api.deepseek.com";
+pub const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
+pub const DEEPSEEK_MODEL: &str = "deepseek-flash";
+pub const OPENROUTER_MODEL: &str = "deepseek/deepseek-v4.1-flash-1017";
+
+pub fn llm_config(cfg: &AiCfg) -> Option<LlmConfig> {
+    let model = |raw: &str, fallback: &str| {
+        if raw.trim().is_empty() {
+            fallback.to_string()
+        } else {
+            raw.trim().to_string()
+        }
+    };
+    match cfg.provider.as_str() {
+        "deepseek" => Some(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: DEEPSEEK_BASE.to_string(),
+            model: model(&cfg.model, DEEPSEEK_MODEL),
+            api_key: cfg.api_key.clone(),
+            effort: if cfg.effort.trim().is_empty() {
+                "max".to_string()
+            } else {
+                cfg.effort.trim().to_string()
+            },
+        }),
+        "openrouter" => Some(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: OPENROUTER_BASE.to_string(),
+            model: model(&cfg.openrouter_model, OPENROUTER_MODEL),
+            api_key: cfg.openrouter_api_key.clone(),
+            effort: String::new(),
+        }),
+        "ollama" => Some(LlmConfig {
+            kind: LlmKind::Ollama,
+            base_url: model(&cfg.base_url, "http://localhost:11434"),
+            model: model(&cfg.ollama_model, "qwen2.5:3b"),
+            api_key: String::new(),
+            effort: String::new(),
+        }),
+        _ => None,
+    }
 }
 
 pub fn build_provider(cfg: &AiCfg) -> Arc<dyn IntentProvider> {
-    match cfg.provider.as_str() {
-        "openai" => Arc::new(LlmProvider::new(LlmConfig {
-            kind: LlmKind::OpenAi,
-            base_url: if cfg.base_url.trim().is_empty() {
-                "https://api.openai.com/v1".to_string()
-            } else {
-                cfg.base_url.trim().to_string()
-            },
-            model: if cfg.model.trim().is_empty() {
-                "gpt-4o-mini".to_string()
-            } else {
-                cfg.model.trim().to_string()
-            },
-            api_key: cfg.api_key.clone(),
-        })),
-        "ollama" => Arc::new(LlmProvider::new(LlmConfig {
-            kind: LlmKind::Ollama,
-            base_url: if cfg.base_url.trim().is_empty() {
-                "http://localhost:11434".to_string()
-            } else {
-                cfg.base_url.trim().to_string()
-            },
-            model: if cfg.model.trim().is_empty() {
-                "qwen2.5:3b".to_string()
-            } else {
-                cfg.model.trim().to_string()
-            },
-            api_key: String::new(),
-        })),
-        _ => Arc::new(RuleParser),
+    match llm_config(cfg) {
+        Some(config) => Arc::new(LlmProvider::new(config)),
+        None => Arc::new(RuleParser),
     }
 }
 
@@ -523,20 +723,39 @@ fn rating_range(lower: &str) -> Option<(f32, f32)> {
 
 impl RuleParser {
     fn parse_rules(&self, text: &str, tax: &Taxonomy) -> Intent {
-        self.parse_rules_mode(text, tax, false)
+        self.parse_rules_mode(text, tax, false, &Intent::default())
     }
 
+    /// Senza contesto il parser resta utile per i test; la chat vera passa
+    /// da `parse_chat_rules_ctx`.
+    #[cfg(test)]
     fn parse_chat_rules(&self, text: &str, tax: &Taxonomy) -> Intent {
-        self.parse_rules_mode(text, tax, true)
+        self.parse_chat_rules_ctx(text, tax, &Intent::default())
     }
 
-    fn parse_rules_mode(&self, text: &str, tax: &Taxonomy, chat: bool) -> Intent {
+    fn parse_chat_rules_ctx(&self, text: &str, tax: &Taxonomy, active: &Intent) -> Intent {
+        self.parse_rules_mode(text, tax, true, active)
+    }
+
+    fn parse_rules_mode(&self, text: &str, tax: &Taxonomy, chat: bool, active: &Intent) -> Intent {
+        let action = if chat {
+            classify_chat_action(text, active)
+        } else {
+            ChatAction::New
+        };
         let mut it = Intent {
             source: "regole".into(),
+            action,
             ..Default::default()
         };
         let lower = text.to_lowercase();
         let mut matched_any = false;
+
+        if chat && action == ChatAction::Reset {
+            it.mode = "reset".into();
+            it.notes.push("Ricomincia da zero.".into());
+            return it;
+        }
 
         // --- decenni: forme in cifre (anni 80, 80s, 1980s, 1985) ---
         let mut cursor = 0usize;
@@ -636,7 +855,12 @@ impl RuleParser {
             it.facets.min_rating = Some(8.0);
             matched_any = true;
         }
-        if lower.contains("voto alto")
+        if lower.contains("voto più alto") || lower.contains("voto piu alto") {
+            // È un seguito: alza il minimo già attivo invece di ripartire da 7.
+            let current = active.facets.min_rating.unwrap_or(6.5);
+            it.facets.min_rating = Some((current + 0.5).clamp(7.0, 9.0));
+            matched_any = true;
+        } else if lower.contains("voto alto")
             || lower.contains("voto buon")
             || lower.contains("voto minimo")
             || lower.contains("acclamat")
@@ -704,6 +928,42 @@ impl RuleParser {
                     matched_any = true;
                 }
             }
+        } else if lower.contains("più cort")
+            || lower.contains("piu cort")
+            || lower.contains("corti")
+            || lower.contains("corto")
+        {
+            // Follow-up naturale delle chip e di «fammi qualcosa di più corto»:
+            // abbassa il limite gia attivo, non riparte sempre da 100 minuti.
+            let cap = active
+                .facets
+                .runtime
+                .map(|(_, max)| max.saturating_sub(20).max(40))
+                .unwrap_or(100);
+            it.facets.runtime = Some((0, cap));
+            matched_any = true;
+        }
+
+        // --- feedback qualitativo ---
+        // «troppo triste» e «più leggero» non sono titoli ne generi espliciti:
+        // li traduciamo in una richiesta piu leggera e verificabile.
+        let lighter = lower.contains("più leggero")
+            || lower.contains("piu leggero")
+            || lower.contains("più leggera")
+            || lower.contains("piu leggera")
+            || lower.contains("troppo triste")
+            || lower.contains("meno triste");
+        if lighter {
+            if !it.facets.genres.contains(&35) {
+                it.facets.genres.push(35);
+            }
+            for genre in [18, 27, 53, 10752] {
+                if !it.facets.without_genres.contains(&genre) {
+                    it.facets.without_genres.push(genre);
+                }
+            }
+            it.facets.genres.retain(|g| !it.facets.without_genres.contains(g));
+            matched_any = true;
         }
 
         // --- ordinamento ---
@@ -815,9 +1075,10 @@ impl RuleParser {
                 // Una richiesta vaga non e un titolo: niente ricerca per
                 // titolo, il chiamante propone una selezione del momento.
                 it.mode = "off_topic".into();
+                it.action = ChatAction::OffTopic;
                 it.notes
                     .push("Richiesta vaga: propongo una selezione del momento.".into());
-            } else if chat && is_follow_up(text) {
+            } else if chat && (action.is_contextual() || is_follow_up(text)) {
                 // «e uno piu recente?» e un'istruzione, non un titolo: il
                 // contesto resta quello attivo e il testo non va cercato.
                 it.notes
@@ -870,9 +1131,9 @@ impl IntentProvider for RuleParser {
         text: &str,
         tax: &Taxonomy,
         _history: &[(String, String)],
-        _active: &Intent,
+        active: &Intent,
     ) -> Result<Intent, String> {
-        Ok(self.parse_chat_rules(text, tax))
+        Ok(self.parse_chat_rules_ctx(text, tax, active))
     }
 }
 
@@ -898,7 +1159,12 @@ impl ModelInfo {
     /// Voce del menu a tendina: "OpenAI · GPT 6 Astra · 1.050k · x10".
     pub fn menu_label(&self) -> String {
         let mut s = String::new();
-        if !self.company.is_empty() {
+        if !self.company.is_empty()
+            && !self
+                .label
+                .to_lowercase()
+                .starts_with(&self.company.to_lowercase())
+        {
             s.push_str(&self.company);
             s.push_str(" · ");
         }
@@ -1024,19 +1290,34 @@ pub fn list_models(kind: LlmKind, base_url: &str, api_key: &str) -> Result<Vec<M
             .or_else(|| item.get("name").and_then(|v| v.as_str()))
             .or_else(|| item.as_str());
         let Some(id) = id else { continue };
+        let known = match id.to_lowercase().as_str() {
+            "deepseek-flash" => Some(("V4.1 Flash", "DeepSeek")),
+            "deepseek-v4-pro" => Some(("V4 Pro", "DeepSeek")),
+            _ => None,
+        };
         let label = item
             .get("display_name")
             .or_else(|| item.get("label"))
+            .or_else(|| item.get("name"))
             .and_then(|v| v.as_str())
-            .unwrap_or(id)
-            .to_string();
+            .map(|s| s.to_string())
+            .or_else(|| known.map(|(label, _)| label.to_string()))
+            .unwrap_or_else(|| id.to_string());
         let company = item
             .get("company")
             .or_else(|| item.get("owned_by"))
             .or_else(|| item.get("publisher"))
             .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string())
+            .or_else(|| known.map(|(_, company)| company.to_string()))
+            .or_else(|| {
+                id.split('/')
+                    .next()
+                    .filter(|prefix| !prefix.is_empty() && *prefix != id)
+                    .map(|prefix| prefix.to_string())
+            })
+            .unwrap_or_default();
         let context = item
             .get("context_window")
             .or_else(|| item.get("context_length"))
@@ -1088,13 +1369,16 @@ pub fn cheapest_models(models: &[ModelInfo]) -> Option<ModelInfo> {
 /// messaggio puo essere un seguito, quindi lo stato dei filtri va restituito
 /// completo (non solo le differenze).
 const CHAT_ADDENDUM: &str = "Stai conversando con l'utente in una chat. Ricevi il contesto attivo (facce e temi liberi) e i messaggi recenti.\n\
-Se il messaggio e un seguito esplicito («e uno piu recente?», «senza commedia», «e se fossero italiani?»), restituisci lo stato COMPLETO aggiornato: conserva facce e temi che il messaggio non tocca, aggiungi i nuovi criteri e ometti quelli che l'utente toglie o contraddice.\n\
-Se il messaggio e una NUOVA richiesta, ignora il contesto precedente che non viene menzionato: non trascinare temi o filtri vecchi. In caso di dubbio, trattalo come nuovo.\n\
+Classifica il messaggio con `action`:\n\
+- \"refine\": un seguito o una correzione («e uno piu recente?», «no, italiano», «troppo triste», «piu corti», «voto piu alto», «piu leggero»). Restituisci lo stato COMPLETO aggiornato: conserva facce e temi che il messaggio non tocca, aggiungi i nuovi criteri e ometti quelli che l'utente toglie o contraddice. Per «solo italiani», «invece italiani», «no, italiano» sostituisci il paese, non aggiungerlo agli altri.\n\
+- \"replace\": l'utente vuole altri film con gli stessi criteri («altri», «non questi», «qualcos'altro»). Restituisci lo stato completo invariato.\n\
+- \"new\": una nuova richiesta di film. Ignora il contesto precedente che non viene menzionato: non trascinare temi o filtri vecchi.\n\
+- \"reset\": ricominciare da zero. Usa anche \"intent\":\"reset\" e restituisci facce e temi vuoti.\n\
+- \"off_topic\": una domanda generale, un saluto o una curiosita non cinematografica. Usa anche \"intent\":\"off_topic\" e NON mettere la frase in `title` o `similar_to`: il curatore rispondera in una riga e proporra film del momento. Se la domanda ha un legame naturale con il cinema, aggiungi il filtro piu adatto (per «qual e la capitale della Francia?» -> countries [\"FR\"]; per «chi ha vinto i mondiali?» -> themes con concetto calcio); altrimenti lascia le facce come sono.\n\
+In caso di dubbio tra seguito e nuova richiesta, scegli \"new\".\n\
 I temi liberi vanno in `themes`, non in `facets.keywords`: la griglia non deve cambiare da sola.\n\
-Se il messaggio e una domanda su un film (regista, anno, curiosita) oppure nomina un film senza chiederne la ricerca, metti il titolo in `similar_to`: i film proposti saranno legati a quello e la risposta alla domanda la dara il curatore.\n\
-Se il messaggio non riguarda il cinema (una domanda generale, un saluto, una curiosita), usa \"intent\":\"off_topic\" e NON mettere la frase in `title` o `similar_to`: il curatore rispondera in una riga e proporra film del momento. Se la domanda ha un legame naturale con il cinema, aggiungi il filtro piu adatto (per «qual e la capitale della Francia?» -> countries [\"FR\"]; per «chi ha vinto i mondiali?» -> themes con concetto calcio); altrimenti lascia le facce come sono.\n\
-Se la richiesta e vaga («sorprendimi», «qualcosa di bello») non inventare un titolo: usa \"intent\":\"faceted\" con pochi vincoli o nessuno.\n\
-Se l'utente chiede esplicitamente di ricominciare da zero, usa \"intent\":\"reset\" e restituisci facce e temi vuoti.";
+Se il messaggio e una domanda su un film (regista, anno, curiosita) oppure nomina un film senza chiederne la ricerca, metti il titolo in `similar_to`: i film proposti saranno legati a quello e la risposta alla domanda la dara il curatore. Se la domanda ha un legame naturale con il cinema, aggiungi il filtro piu adatto (per «qual e la capitale della Francia?» -> countries [\"FR\"]; per «chi ha vinto i mondiali?» -> themes con concetto calcio); altrimenti lascia le facce come sono.\n\
+Se la richiesta e vaga («sorprendimi», «qualcosa di bello») non inventare un titolo: usa \"intent\":\"faceted\" con pochi vincoli o nessuno.";
 
 /// Prompt del curatore: sceglie fra candidati reali e scrive i commenti.
 const CURATOR_SYSTEM: &str = "Sei il curatore di CineMatch, un'app che consiglia film. Ricevi la richiesta dell'utente, i filtri interpretati e un elenco di film reali candidati (con id TMDB).\n\
@@ -1234,6 +1518,8 @@ pub struct LlmConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: String,
+    /// "max" per DeepSeek; vuoto per gli altri servizi.
+    pub effort: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -1289,6 +1575,8 @@ struct LlmTheme {
 struct LlmAnswer {
     #[serde(default)]
     intent: String,
+    #[serde(default)]
+    action: String,
     #[serde(default)]
     facets: LlmFacets,
     #[serde(default)]
@@ -1421,6 +1709,7 @@ impl LlmProvider {
             &Self::system_prompt(tax),
             "Richiesta utente: giallo italiano anni 80, voto alto e almeno 2000 voti, che parla di vendetta",
             600,
+            None,
         )?;
         let intent = Self::parse_json(&raw, tax)?;
         let mut bits: Vec<String> = Vec::new();
@@ -1480,7 +1769,7 @@ impl LlmProvider {
              L'utente puo scrivere in modo libero e colloquiale: estrai tutti i vincoli che riconosci e ignora il resto.\n\
              Usa SOLO gli identificatori elencati qui sotto per le facce; per gli argomenti liberi usa `themes`.\n\n{}\n\n\
              Rispondi esclusivamente con un oggetto JSON con questa forma:\n\
-             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"themes\":[{{\"label\":\"...\",\"concepts\":[{{\"label\":\"...\",\"terms\":[\"...\"],\"keywords\":[\"...\"]}}],\"seed_titles\":[\"...\"]}}],\"title\":null,\"similar_to\":null,\"reason\":\"\"}}\n\
+             {{\"intent\":\"faceted|title|similar|mixed|reset|off_topic\",\"action\":\"new|refine|replace|reset|off_topic\",\"facets\":{{\"decades\":[],\"movements\":[],\"genres\":[],\"without_genres\":[],\"countries\":[],\"moods\":[],\"keywords\":[],\"min_rating\":null,\"max_rating\":null,\"min_votes\":null,\"runtime\":null,\"sort\":null}},\"themes\":[{{\"label\":\"...\",\"concepts\":[{{\"label\":\"...\",\"terms\":[\"...\"],\"keywords\":[\"...\"]}}],\"seed_titles\":[\"...\"]}}],\"title\":null,\"similar_to\":null,\"reason\":\"\"}}\n\
              Come riempire i campi:\n\
              - `decades`: id dei decenni («anni 80» -> \"1980s\"). Se scegli un movimento, NON aggiungere decenni incompatibili col suo periodo.\n\
              - `movements`: la corrente cinematografica quando la richiesta la nomina o la descrive.\n\
@@ -1512,21 +1801,30 @@ impl LlmProvider {
         stream: bool,
         max_tokens: u32,
     ) -> serde_json::Value {
+        // Con DeepSeek al massimo sforzo il ragionamento consuma token:
+        // alzo il tetto, altrimenti la risposta utile resta vuota.
+        let max_tokens = if self.cfg.effort.eq_ignore_ascii_case("max") {
+            max_tokens.saturating_mul(3).max(2400)
+        } else {
+            max_tokens
+        };
         let mut body = serde_json::json!({
             "model": self.cfg.model,
             "temperature": if stream { 0.4 } else { 0.1 },
-            // Due dialetti per lo stesso interruttore: il primo e' standard
-            // OpenAI, il secondo lo usano i proxy che servono modelli con
-            // «thinking». Se il servizio non li conosce, `openai_send`
-            // riprova senza.
-            "reasoning_effort": "none",
-            "chat_template_kwargs": { "enable_thinking": false },
             "max_tokens": max_tokens,
             "messages": [
                 { "role": "system", "content": system },
                 { "role": "user", "content": user }
             ]
         });
+        if self.cfg.effort.trim().is_empty() {
+            // Dialetti per i servizi che non vogliono ragionamento: se non li
+            // conoscono, `openai_send` riprova senza.
+            body["reasoning_effort"] = serde_json::json!("none");
+            body["chat_template_kwargs"] = serde_json::json!({ "enable_thinking": false });
+        } else {
+            body["reasoning_effort"] = serde_json::json!(self.cfg.effort.trim());
+        }
         if stream {
             body["stream"] = serde_json::json!(true);
         } else {
@@ -1545,15 +1843,23 @@ impl LlmProvider {
         user: &str,
         stream: bool,
         max_tokens: u32,
+        cancel: Option<&AtomicBool>,
     ) -> Result<reqwest::blocking::Response, String> {
         let url = format!(
             "{}/chat/completions",
             self.cfg.base_url.trim_end_matches('/')
         );
-        let timeout = Duration::from_secs(if stream { 40 } else { 20 });
+        let timeout = if self.cfg.effort.eq_ignore_ascii_case("max") {
+            Duration::from_secs(if stream { 120 } else { 90 })
+        } else {
+            Duration::from_secs(if stream { 40 } else { 20 })
+        };
         let mut body = self.openai_body(system, user, stream, max_tokens);
         let mut retried = false;
         loop {
+            if cancelled(cancel) {
+                return Err(CANCELLED.into());
+            }
             let mut req = self.http.post(&url).json(&body).timeout(timeout);
             if !self.cfg.api_key.trim().is_empty() {
                 req = req.bearer_auth(self.cfg.api_key.trim());
@@ -1561,6 +1867,9 @@ impl LlmProvider {
             let resp = req
                 .send()
                 .map_err(|e| format!("LLM non raggiungibile: {e}"))?;
+            if cancelled(cancel) {
+                return Err(CANCELLED.into());
+            }
             if resp.status().as_u16() != 400 || retried {
                 return Ok(resp);
             }
@@ -1576,12 +1885,25 @@ impl LlmProvider {
         }
     }
 
-    fn chat(&self, system: &str, user: &str, max_tokens: u32) -> Result<String, String> {
+    fn chat(
+        &self,
+        system: &str,
+        user: &str,
+        max_tokens: u32,
+        cancel: Option<&AtomicBool>,
+    ) -> Result<String, String> {
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         match self.cfg.kind {
             LlmKind::OpenAi => {
-                let resp = self.openai_send(system, user, false, max_tokens)?;
+                let resp = self.openai_send(system, user, false, max_tokens, cancel)?;
                 let status = resp.status();
-                let text = resp.text().unwrap_or_default();
+                let text = match read_text(resp, cancel) {
+                    Ok(t) => t,
+                    Err(e) if cancelled(cancel) => return Err(e),
+                    Err(_) => String::new(),
+                };
                 if !status.is_success() {
                     return Err(format!(
                         "LLM ha risposto {}: {}",
@@ -1614,8 +1936,15 @@ impl LlmProvider {
                     .json(&body)
                     .send()
                     .map_err(|e| format!("Ollama non raggiungibile: {e}"))?;
+                if cancelled(cancel) {
+                    return Err(CANCELLED.into());
+                }
                 let status = resp.status();
-                let text = resp.text().unwrap_or_default();
+                let text = match read_text(resp, cancel) {
+                    Ok(t) => t,
+                    Err(e) if cancelled(cancel) => return Err(e),
+                    Err(_) => String::new(),
+                };
                 if !status.is_success() {
                     return Err(format!(
                         "Ollama ha risposto {}: {}",
@@ -1642,14 +1971,18 @@ impl LlmProvider {
         system: &str,
         user: &str,
         max_tokens: u32,
+        cancel: Option<&AtomicBool>,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String, String> {
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         match self.cfg.kind {
             LlmKind::OpenAi => {
-                let resp = self.openai_send(system, user, true, max_tokens)?;
+                let resp = self.openai_send(system, user, true, max_tokens, cancel)?;
                 let status = resp.status();
                 if !status.is_success() {
-                    let text = resp.text().unwrap_or_default();
+                    let text = read_text(resp, cancel).unwrap_or_default();
                     return Err(format!(
                         "LLM ha risposto {}: {}",
                         status.as_u16(),
@@ -1660,6 +1993,9 @@ impl LlmProvider {
                 let mut plain = String::new();
                 let mut saw_sse = false;
                 for line in std::io::BufReader::new(resp).lines() {
+                    if cancelled(cancel) {
+                        return Err(CANCELLED.into());
+                    }
                     let line = line.map_err(|e| format!("Lettura streaming fallita: {e}"))?;
                     if let Some(data) = line.strip_prefix("data:") {
                         saw_sse = true;
@@ -1670,6 +2006,9 @@ impl LlmProvider {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(data) {
                             if let Some(chunk) = v["choices"][0]["delta"]["content"].as_str() {
                                 if !chunk.is_empty() {
+                                    if cancelled(cancel) {
+                                        return Err(CANCELLED.into());
+                                    }
                                     full.push_str(chunk);
                                     on_delta(chunk);
                                 }
@@ -1710,9 +2049,12 @@ impl LlmProvider {
                     .timeout(Duration::from_secs(150))
                     .send()
                     .map_err(|e| format!("Ollama non raggiungibile: {e}"))?;
+                if cancelled(cancel) {
+                    return Err(CANCELLED.into());
+                }
                 let status = resp.status();
                 if !status.is_success() {
-                    let text = resp.text().unwrap_or_default();
+                    let text = read_text(resp, cancel).unwrap_or_default();
                     return Err(format!(
                         "Ollama ha risposto {}: {}",
                         status.as_u16(),
@@ -1721,6 +2063,9 @@ impl LlmProvider {
                 }
                 let mut full = String::new();
                 for line in std::io::BufReader::new(resp).lines() {
+                    if cancelled(cancel) {
+                        return Err(CANCELLED.into());
+                    }
                     let line = line.map_err(|e| format!("Lettura streaming fallita: {e}"))?;
                     let trimmed = line.trim();
                     if trimmed.is_empty() {
@@ -1731,6 +2076,9 @@ impl LlmProvider {
                     };
                     if let Some(chunk) = v["message"]["content"].as_str() {
                         if !chunk.is_empty() {
+                            if cancelled(cancel) {
+                                return Err(CANCELLED.into());
+                            }
                             full.push_str(chunk);
                             on_delta(chunk);
                         }
@@ -1854,6 +2202,14 @@ impl LlmProvider {
                 notes.push(r);
             }
         }
+        let mode = ans.intent.trim().to_lowercase();
+        let action = ChatAction::from_label(&ans.action)
+            .or(match mode.as_str() {
+                "off_topic" => Some(ChatAction::OffTopic),
+                "reset" => Some(ChatAction::Reset),
+                _ => None,
+            })
+            .unwrap_or(ChatAction::New);
         let free_text = if ans.title.as_deref().map(|t| !t.trim().is_empty()).unwrap_or(false) {
             ans.title
         } else {
@@ -1864,7 +2220,8 @@ impl LlmProvider {
             themes: parse_themes(ans.themes),
             free_text,
             similar_to: ans.similar_to.filter(|s| !s.trim().is_empty()),
-            mode: ans.intent.trim().to_lowercase(),
+            mode,
+            action,
             notes,
             source: "AI".into(),
         })
@@ -1890,7 +2247,7 @@ impl IntentProvider for LlmProvider {
     fn parse(&self, text: &str, tax: &Taxonomy) -> Result<Intent, String> {
         let system = Self::system_prompt(tax);
         let user = format!("Richiesta utente: {text}");
-        let raw = match self.chat(&system, &user, 600) {
+        let raw = match self.chat(&system, &user, 600, None) {
             Ok(r) => r,
             Err(e) => {
                 let mut it = RuleParser.parse_rules(text, tax);
@@ -1921,7 +2278,7 @@ impl IntentProvider for LlmProvider {
             return Err("Nessuna descrizione da riassumere.".into());
         }
         let system = "Riassumi in italiano, in massimo due frasi, senza spoiler e senza ripetere il titolo.";
-        self.chat(system, text, 300)
+        self.chat(system, text, 300, None)
             .map(|s| s.trim().trim_matches('"').to_string())
     }
 
@@ -1931,6 +2288,28 @@ impl IntentProvider for LlmProvider {
         tax: &Taxonomy,
         history: &[(String, String)],
         active: &Intent,
+    ) -> Result<Intent, String> {
+        self.parse_chat_with_cancel(text, tax, history, active, None)
+    }
+
+    fn parse_chat_cancellable(
+        &self,
+        text: &str,
+        tax: &Taxonomy,
+        history: &[(String, String)],
+        active: &Intent,
+        cancel: &AtomicBool,
+    ) -> Result<Intent, String> {
+        self.parse_chat_with_cancel(text, tax, history, active, Some(cancel))
+    }
+
+    fn parse_chat_with_cancel(
+        &self,
+        text: &str,
+        tax: &Taxonomy,
+        history: &[(String, String)],
+        active: &Intent,
+        cancel: Option<&AtomicBool>,
     ) -> Result<Intent, String> {
         let system = format!("{}\n\n{}", Self::system_prompt(tax), CHAT_ADDENDUM);
         let mut user = String::new();
@@ -1944,22 +2323,35 @@ impl IntentProvider for LlmProvider {
             }
         }
         user.push_str(&format!("\nMessaggio: {text}"));
-        let follow_up = is_follow_up(text);
-        let raw = match self.chat(&system, &user, 700) {
+        let follow_up = classify_chat_action(text, active);
+        let raw = match self.chat(&system, &user, 700, cancel) {
             Ok(r) => r,
+            Err(e) if cancelled(cancel) => return Err(e),
             Err(e) => {
-                let mut it = RuleParser.parse_chat_rules(text, tax);
+                let mut it = RuleParser.parse_chat_rules_ctx(text, tax, active);
                 it.notes
                     .push(format!("AI non disponibile ({e}): uso il parser a regole."));
                 return Ok(it);
             }
         };
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         match Self::parse_json(&raw, tax) {
             Ok(mut it) => {
                 detach_chat_keywords(&mut it);
+                // Retrocompatibilita: un modello puo omettere `action`.
+                if it.action == ChatAction::New
+                    && follow_up.is_contextual()
+                    && it.is_empty()
+                    && it.mode != "reset"
+                    && it.mode != "off_topic"
+                {
+                    it.action = follow_up;
+                }
                 // Solo un seguito esplicito conserva il contesto. Una nuova
                 // richiesta senza criteri non trascina i temi precedenti.
-                if it.mode != "reset" && follow_up && it.is_empty() && !active.is_empty() {
+                if it.action.is_contextual() && it.is_empty() && !active.is_empty() {
                     let sort = it.facets.sort;
                     it.facets = active.facets.clone();
                     if sort != Sort::default() {
@@ -1972,7 +2364,7 @@ impl IntentProvider for LlmProvider {
                 Ok(it)
             }
             Err(e) => {
-                let mut it = RuleParser.parse_chat_rules(text, tax);
+                let mut it = RuleParser.parse_chat_rules_ctx(text, tax, active);
                 it.notes
                     .push(format!("Output AI non valido ({e}): uso il parser a regole."));
                 Ok(it)
@@ -1985,6 +2377,27 @@ impl IntentProvider for LlmProvider {
         req: &curator::Request,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<curator::Curation, String> {
+        self.curate_with_cancel(req, None, on_delta)
+    }
+
+    fn curate_cancellable(
+        &self,
+        req: &curator::Request,
+        cancel: &AtomicBool,
+        on_delta: &mut dyn FnMut(&str),
+    ) -> Result<curator::Curation, String> {
+        self.curate_with_cancel(req, Some(cancel), on_delta)
+    }
+
+    fn curate_with_cancel(
+        &self,
+        req: &curator::Request,
+        cancel: Option<&AtomicBool>,
+        on_delta: &mut dyn FnMut(&str),
+    ) -> Result<curator::Curation, String> {
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         if req.candidates.is_empty() {
             return Err("nessun candidato da valutare".into());
         }
@@ -1992,15 +2405,24 @@ impl IntentProvider for LlmProvider {
         let mut full = String::new();
         let mut intro = curator::IntroStream::default();
         let mut emitted = false;
-        let streamed = self.chat_stream(CURATOR_SYSTEM, &user, 1600, &mut |chunk: &str| {
-            full.push_str(chunk);
-            let delta = intro.feed(&full);
-            if !delta.is_empty() {
-                emitted = true;
-                on_delta(&delta);
-            }
-        });
+        let streamed = self.chat_stream(
+            CURATOR_SYSTEM,
+            &user,
+            1600,
+            cancel,
+            &mut |chunk: &str| {
+                full.push_str(chunk);
+                let delta = intro.feed(&full);
+                if !delta.is_empty() {
+                    emitted = true;
+                    on_delta(&delta);
+                }
+            },
+        );
         let raw = streamed?;
+        if cancelled(cancel) {
+            return Err(CANCELLED.into());
+        }
         if raw.trim().is_empty() {
             return Err("Streaming LLM vuoto".into());
         }
@@ -2019,6 +2441,34 @@ impl IntentProvider for LlmProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn una_chat_annullata_non_chiama_il_modello() {
+        let provider = LlmProvider::new(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: "http://127.0.0.1:9".into(),
+            model: "nessuno".into(),
+            api_key: String::new(),
+            effort: String::new(),
+        });
+        let cancel = AtomicBool::new(true);
+        let tax = Taxonomy::load();
+        let err = provider
+            .parse_chat_cancellable("film", &tax, &[], &Intent::default(), &cancel)
+            .unwrap_err();
+        assert_eq!(err, CANCELLED);
+        let req = curator::Request {
+            user_text: "film".into(),
+            understood: String::new(),
+            limit: None,
+            history: Vec::new(),
+            candidates: Vec::new(),
+        };
+        let err = provider
+            .curate_cancellable(&req, &cancel, &mut |_| {})
+            .unwrap_err();
+        assert_eq!(err, CANCELLED);
+    }
 
     #[test]
     fn richiesta_libera_neorealismo_guerra_voto() {
@@ -2055,6 +2505,7 @@ mod tests {
             base_url: "http://localhost".into(),
             model: "test".into(),
             api_key: String::new(),
+            effort: String::new(),
         });
         let body = provider.openai_body("system", "user", false, 600);
         assert_eq!(body["reasoning_effort"].as_str(), Some("none"));
@@ -2069,6 +2520,37 @@ mod tests {
         let stream = provider.openai_body("system", "user", true, 1600);
         assert_eq!(stream["stream"].as_bool(), Some(true));
         assert!(stream.get("response_format").is_none());
+    }
+
+    #[test]
+    fn deepseek_e_openrouter_sono_interpreti_ai() {
+        let deepseek = crate::infra::config::AiCfg {
+            provider: "deepseek".into(),
+            api_key: "k".into(),
+            ..Default::default()
+        };
+        assert!(build_provider(&deepseek).is_llm());
+        let openrouter = crate::infra::config::AiCfg {
+            provider: "openrouter".into(),
+            openrouter_api_key: "sk-or-k".into(),
+            ..Default::default()
+        };
+        assert!(build_provider(&openrouter).is_llm());
+    }
+
+    #[test]
+    fn deepseek_max_accende_il_ragionamento() {
+        let provider = LlmProvider::new(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: "http://localhost".into(),
+            model: "deepseek-flash".into(),
+            api_key: String::new(),
+            effort: "max".into(),
+        });
+        let body = provider.openai_body("system", "user", false, 600);
+        assert_eq!(body["reasoning_effort"].as_str(), Some("max"));
+        assert!(body.get("chat_template_kwargs").is_none());
+        assert_eq!(body["max_tokens"].as_u64(), Some(2400));
     }
 
     #[test]
@@ -2197,6 +2679,11 @@ mod tests {
             "senza commedia",
             "e se fossero italiani?",
             "togli il voto minimo",
+            "no, italiano",
+            "troppo triste",
+            "fammi vedere qualcosa di più leggero",
+            "più corti",
+            "voto più alto",
         ] {
             assert!(is_follow_up(text), "«{text}» e un seguito");
         }
@@ -2204,9 +2691,98 @@ mod tests {
             "film con cani e gatti",
             "un viaggio nello spazio",
             "neorealismo comico romantico",
+            "noir francese",
+            "fammi vedere un film italiano",
+            "non ho visto nulla, consigliami un thriller",
         ] {
             assert!(!is_follow_up(text), "«{text}» e una richiesta nuova");
         }
+    }
+
+    #[test]
+    fn il_classificatore_distingue_seguito_e_richiesta_nuova() {
+        let active = Intent {
+            facets: Facets {
+                countries: vec!["FR".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        for text in [
+            "no, italiano",
+            "troppo triste",
+            "fammi vedere qualcosa di più leggero",
+            "più corti",
+            "voto più alto",
+            "solo italiani",
+            "altri film",
+            "non questi",
+        ] {
+            assert!(
+                classify_chat_action(text, &active).is_contextual(),
+                "«{text}» deve restare nella conversazione"
+            );
+        }
+        assert_eq!(
+            classify_chat_action("voglio un film italiano", &active),
+            ChatAction::New
+        );
+        assert_eq!(
+            classify_chat_action("ricominciamo da zero", &active),
+            ChatAction::Reset
+        );
+        assert_eq!(
+            classify_chat_action("no, italiano", &Intent::default()),
+            ChatAction::New
+        );
+    }
+
+    #[test]
+    fn i_seguiti_a_regole_traducono_le_chip_in_criteri() {
+        let tax = Taxonomy::load();
+        let active = Intent {
+            facets: Facets {
+                countries: vec!["FR".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let it = RuleParser.parse_chat_rules_ctx("no, italiano", &tax, &active);
+        assert_eq!(it.action, ChatAction::Refine);
+        assert!(it.facets.countries.contains(&"IT".to_string()));
+
+        let it = RuleParser.parse_chat_rules_ctx("più corti", &tax, &active);
+        assert_eq!(it.facets.runtime, Some((0, 100)));
+
+        let it = RuleParser.parse_chat_rules_ctx("voto più alto", &tax, &active);
+        assert_eq!(it.facets.min_rating, Some(7.0));
+
+        let it = RuleParser.parse_chat_rules_ctx("troppo triste", &tax, &active);
+        assert!(it.facets.genres.contains(&35));
+        assert!(it.facets.without_genres.contains(&18));
+        assert_eq!(it.action, ChatAction::Refine);
+
+        let active = Intent {
+            facets: Facets {
+                min_rating: Some(7.5),
+                runtime: Some((0, 120)),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let it = RuleParser.parse_chat_rules_ctx("voto più alto", &tax, &active);
+        assert_eq!(it.facets.min_rating, Some(8.0));
+        let it = RuleParser.parse_chat_rules_ctx("più corti", &tax, &active);
+        assert_eq!(it.facets.runtime, Some((0, 100)));
+    }
+
+    #[test]
+    fn l_ai_puo_classificare_un_seguito() {
+        let tax = Taxonomy::load();
+        let raw = r#"{"intent":"faceted","action":"refine","facets":{"countries":["IT"]},"themes":[],"title":null,"similar_to":null,"reason":"seguito"}"#;
+        let it = LlmProvider::parse_json(raw, &tax).expect("JSON valido");
+        assert_eq!(it.action, ChatAction::Refine);
     }
 
     #[test]

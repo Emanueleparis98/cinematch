@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
@@ -12,6 +14,24 @@ use crate::tmdb::models::{ApiDetails, KeywordResults, PagedMovies};
 
 pub const API_BASE: &str = "https://api.themoviedb.org/3";
 pub const IMG_BASE: &str = "https://image.tmdb.org/t/p/";
+const CANCELLED: &str = "Richiesta interrotta.";
+
+struct CancelReader<'a> {
+    inner: reqwest::blocking::Response,
+    cancel: &'a AtomicBool,
+}
+
+impl Read for CancelReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "richiesta interrotta",
+            ));
+        }
+        self.inner.read(buf)
+    }
+}
 
 pub fn poster_url(path: &str, size: &str) -> String {
     format!("{IMG_BASE}{size}{path}")
@@ -106,10 +126,13 @@ pub struct Tmdb {
     cred: Credential,
     lang: String,
     region: String,
-    throttle: Mutex<Instant>,
-    list_cache: Mutex<HashMap<String, PagedMovies>>,
-    details_cache: Mutex<HashMap<u64, Details>>,
-    keyword_cache: Mutex<HashMap<String, Option<u64>>>,
+    throttle: Arc<Mutex<Instant>>,
+    list_cache: Arc<Mutex<HashMap<String, PagedMovies>>>,
+    details_cache: Arc<Mutex<HashMap<u64, Details>>>,
+    keyword_cache: Arc<Mutex<HashMap<String, Option<u64>>>>,
+    /// Solo il client della chat lo imposta: stop interrompe richieste e
+    /// letture del corpo senza toccare la griglia.
+    cancel: Option<Arc<AtomicBool>>,
 }
 
 impl Tmdb {
@@ -132,11 +155,36 @@ impl Tmdb {
             cred: Credential::detect(&credential),
             lang,
             region,
-            throttle: Mutex::new(start),
-            list_cache: Mutex::new(HashMap::new()),
-            details_cache: Mutex::new(HashMap::new()),
-            keyword_cache: Mutex::new(HashMap::new()),
+            throttle: Arc::new(Mutex::new(start)),
+            list_cache: Arc::new(Mutex::new(HashMap::new())),
+            details_cache: Arc::new(Mutex::new(HashMap::new())),
+            keyword_cache: Arc::new(Mutex::new(HashMap::new())),
+            cancel: None,
         }
+    }
+
+    /// Client della chat: stessa rete e stesse cache, ma con un token di
+    /// annullamento tutto suo. La griglia continua a usare l'originale.
+    pub fn cancellable(&self) -> (Self, Arc<AtomicBool>) {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let copy = Self {
+            http: self.http.clone(),
+            cred: self.cred.clone(),
+            lang: self.lang.clone(),
+            region: self.region.clone(),
+            throttle: self.throttle.clone(),
+            list_cache: self.list_cache.clone(),
+            details_cache: self.details_cache.clone(),
+            keyword_cache: self.keyword_cache.clone(),
+            cancel: Some(cancel.clone()),
+        };
+        (copy, cancel)
+    }
+
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .as_ref()
+            .is_some_and(|c| c.load(Ordering::Relaxed))
     }
 
     /// Codice regione usato per le date di uscita e i titoli locali.
@@ -172,13 +220,22 @@ impl Tmdb {
         let mut auth = self.cred.clone();
         let mut switched = false;
         for attempt in 0..3u32 {
+            if self.cancelled() {
+                return Err(CANCELLED.into());
+            }
             self.wait();
+            if self.cancelled() {
+                return Err(CANCELLED.into());
+            }
             let request = self.http.get(&url).query(&[("language", self.lang.as_str())]);
             let request = match &auth {
                 Credential::Query(key) => request.query(&[("api_key", key.as_str())]),
                 Credential::Bearer { token, .. } => request.bearer_auth(token),
             };
             let sent = request.query(params).send();
+            if self.cancelled() {
+                return Err(CANCELLED.into());
+            }
             let resp = match sent {
                 Ok(r) => r,
                 Err(e) => {
@@ -193,6 +250,9 @@ impl Tmdb {
             let status = resp.status();
             if status.as_u16() == 429 || status.is_server_error() {
                 last_err = format!("TMDB ha risposto {}", status.as_u16());
+                if self.cancelled() {
+                    return Err(CANCELLED.into());
+                }
                 std::thread::sleep(Duration::from_millis(900 * (attempt as u64 + 1)));
                 continue;
             }
@@ -210,7 +270,10 @@ impl Tmdb {
                         continue;
                     }
                 }
-                let body = resp.text().unwrap_or_default();
+                let body = self.read_text(resp).unwrap_or_default();
+                if self.cancelled() {
+                    return Err(CANCELLED.into());
+                }
                 let snippet: String = body.chars().take(180).collect();
                 return Err(match status.as_u16() {
                     401 => format!(
@@ -223,11 +286,31 @@ impl Tmdb {
                     code => format!("Errore TMDB {code}: {snippet}"),
                 });
             }
-            return resp
-                .json::<T>()
+            let text = self.read_text(resp)?;
+            return serde_json::from_str(&text)
                 .map_err(|e| format!("Risposta TMDB non leggibile: {e}"));
         }
         Err(last_err)
+    }
+
+    /// Legge il corpo a blocchi: se stop arriva durante il download, il
+    /// reader restituisce subito un errore e la connessione viene chiusa.
+    fn read_text(&self, resp: reqwest::blocking::Response) -> Result<String, String> {
+        let Some(cancel) = &self.cancel else {
+            return resp
+                .text()
+                .map_err(|e| format!("Risposta TMDB non leggibile: {e}"));
+        };
+        let mut reader = CancelReader {
+            inner: resp,
+            cancel,
+        };
+        let mut text = String::new();
+        match reader.read_to_string(&mut text) {
+            Ok(_) => Ok(text),
+            Err(_) if self.cancelled() => Err(CANCELLED.into()),
+            Err(e) => Err(format!("Risposta TMDB non leggibile: {e}")),
+        }
     }
 
     fn cache_key(path: &str, params: &[(String, String)]) -> String {
@@ -470,7 +553,15 @@ fn keyword_variants(keyword: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::keyword_variants;
+    use super::{keyword_variants, Tmdb, CANCELLED};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn annullare_la_chat_ferma_la_richiesta() {
+        let (tmdb, cancel) = Tmdb::new("x".into(), "it-IT".into()).cancellable();
+        cancel.store(true, Ordering::Relaxed);
+        assert_eq!(tmdb.ping().unwrap_err(), CANCELLED);
+    }
 
     #[test]
     fn le_varianti_coprono_i_plurali_inglesi() {

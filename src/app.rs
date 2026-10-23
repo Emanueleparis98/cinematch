@@ -1,12 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::ai::{
-    build_provider, cheapest_models, curator, is_follow_up, list_models, model_details, Intent,
-    IntentProvider, LlmConfig, LlmKind, LlmProvider, ModelInfo, Theme, ThemeConcept,
+    build_provider, classify_chat_action, curator, list_models, llm_config, model_details,
+    ChatAction, Intent, IntentProvider, LlmKind, LlmProvider, ModelInfo, Theme, ThemeConcept,
+    DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
 };
 use crate::domain::constraints::{self, Prune};
 use crate::domain::model::{toggle, Details, Facets, Movie, Sort};
@@ -43,7 +45,7 @@ enum Msg {
     Details { gen: u64, res: Result<Details, String> },
     Summary { gen: u64, res: Result<String, String> },
     Check { res: Result<String, String> },
-    Models { res: Result<Vec<ModelInfo>, String> },
+    Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
     AiCheck { res: Result<String, String> },
     /// Esito del download dei voti IMDb.
     Imdb { res: Result<String, String> },
@@ -120,9 +122,13 @@ pub struct ChatPoolResult {
 struct SettingsDraft {
     tmdb_key: String,
     provider: String,
-    base_url: String,
-    model: String,
-    api_key: String,
+    deepseek_key: String,
+    deepseek_model: String,
+    effort: String,
+    openrouter_key: String,
+    openrouter_model: String,
+    ollama_url: String,
+    ollama_model: String,
     language: String,
 }
 
@@ -131,12 +137,110 @@ impl SettingsDraft {
         Self {
             tmdb_key: cfg.tmdb_api_key.clone(),
             provider: cfg.ai.provider.clone(),
-            base_url: cfg.ai.base_url.clone(),
-            model: cfg.ai.model.clone(),
-            api_key: cfg.ai.api_key.clone(),
+            deepseek_key: cfg.ai.api_key.clone(),
+            deepseek_model: cfg.ai.model.clone(),
+            effort: cfg.ai.effort.clone(),
+            openrouter_key: cfg.ai.openrouter_api_key.clone(),
+            openrouter_model: cfg.ai.openrouter_model.clone(),
+            ollama_url: cfg.ai.base_url.clone(),
+            ollama_model: cfg.ai.ollama_model.clone(),
             language: cfg.language.clone(),
         }
     }
+
+    fn ai_cfg(&self) -> crate::infra::config::AiCfg {
+        crate::infra::config::AiCfg {
+            provider: self.provider.clone(),
+            base_url: self.ollama_url.trim().to_string(),
+            model: self.deepseek_model.trim().to_string(),
+            api_key: self.deepseek_key.trim().to_string(),
+            effort: self.effort.trim().to_string(),
+            openrouter_api_key: self.openrouter_key.trim().to_string(),
+            openrouter_model: self.openrouter_model.trim().to_string(),
+            ollama_model: self.ollama_model.trim().to_string(),
+        }
+    }
+
+    fn can_detect(&self) -> bool {
+        match self.provider.as_str() {
+            "deepseek" => !self.deepseek_key.trim().is_empty(),
+            "openrouter" => true,
+            "ollama" => true,
+            _ => false,
+        }
+    }
+}
+
+/// Se il modello scritto non esiste più, sceglie il predefinito del provider.
+fn preferred_model(provider: &str, current: &str, models: &[ModelInfo]) -> Option<String> {
+    if models.iter().any(|m| m.id == current.trim()) {
+        return None;
+    }
+    let preferred = match provider {
+        "deepseek" => DEEPSEEK_MODEL,
+        "openrouter" => OPENROUTER_MODEL,
+        _ => "",
+    };
+    models
+        .iter()
+        .find(|m| m.id == preferred)
+        .or_else(|| models.first())
+        .map(|m| m.id.clone())
+}
+
+fn model_picker(ui: &mut egui::Ui, field: &mut String, models: &[ModelInfo], hint: &str) {
+    if models.is_empty() {
+        ui.add(
+            egui::TextEdit::singleline(field)
+                .hint_text(hint)
+                .desired_width(f32::INFINITY),
+        );
+        ui.label(
+            egui::RichText::new(
+                "Premi «Rileva modelli» per vedere l'elenco completo di quelli usabili con questa chiave.",
+            )
+            .size(10.0)
+            .color(theme::DIM),
+        );
+        return;
+    }
+    let selected = models
+        .iter()
+        .find(|m| m.id == field.trim())
+        .map(|m| m.menu_label())
+        .unwrap_or_else(|| field.clone());
+    egui::ComboBox::from_id_salt("model_pick")
+        .selected_text(egui::RichText::new(selected).size(11.5))
+        .width(ui.available_width())
+        .height(380.0)
+        .show_ui(ui, |ui| {
+            for m in models {
+                if ui
+                    .selectable_label(
+                        field.trim() == m.id,
+                        egui::RichText::new(m.menu_label()).size(11.5),
+                    )
+                    .clicked()
+                {
+                    *field = m.id.clone();
+                }
+            }
+        });
+    if let Some(m) = models.iter().find(|m| m.id == field.trim()) {
+        ui.label(
+            egui::RichText::new(model_details(m))
+                .size(10.0)
+                .color(theme::DIM),
+        );
+    }
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("oppure id a mano:")
+                .size(10.0)
+                .color(theme::DIM),
+        );
+        ui.add(egui::TextEdit::singleline(field).desired_width(230.0));
+    });
 }
 
 pub struct App {
@@ -158,6 +262,8 @@ pub struct App {
     chat: Vec<chat::Entry>,
     chat_gen: u64,
     chat_busy: bool,
+    /// Token della risposta in corso: stop e «Nuova chat» lo alzano.
+    chat_cancel: Option<Arc<AtomicBool>>,
     /// Contesto dei seguiti della chat: separato dai filtri della griglia.
     chat_context: Intent,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
@@ -223,6 +329,7 @@ pub struct App {
     settings_check: Option<String>,
     update: UpdateUi,
     models: Vec<ModelInfo>,
+    models_gen: u64,
     models_status: Option<String>,
     detecting: bool,
     ai_check: Option<String>,
@@ -262,6 +369,7 @@ impl App {
             chat: Vec::new(),
             chat_gen: 0,
             chat_busy: false,
+            chat_cancel: None,
             chat_context: Intent::default(),
             chat_jump: false,
             chat_composer_collapsed: false,
@@ -305,6 +413,7 @@ impl App {
             settings_check: None,
             update: UpdateUi::default(),
             models: Vec::new(),
+            models_gen: 0,
             models_status: None,
             detecting: false,
             ai_check: None,
@@ -319,7 +428,7 @@ impl App {
         };
         // Se c'e gia un servizio AI configurato, l'elenco modelli si carica da solo
         // all'avvio: aprendo le Impostazioni lo trovi pronto.
-        if app.settings.provider != "rules" && !app.settings.base_url.trim().is_empty() {
+        if app.settings.can_detect() {
             app.detect_models();
         }
         app
@@ -415,22 +524,31 @@ impl App {
                         Err(e) => format!("✕ {e}"),
                     });
                 }
-                Msg::Models { res } => {
+                Msg::Models { gen, res } => {
+                    if gen != self.models_gen {
+                        continue;
+                    }
                     self.detecting = false;
                     match res {
                         Ok(models) => {
                             let count = models.len();
-                            let cheapest = cheapest_models(&models).map(|m| m.id.clone());
-                            // se il modello scelto non esiste nel servizio, proponi quello che costa meno
-                            let known = models.iter().any(|m| m.id == self.settings.model.trim());
-                            if !known {
-                                if let Some(id) = cheapest {
-                                    self.settings.model = id;
+                            let provider = self.settings.provider.clone();
+                            let current = match provider.as_str() {
+                                "deepseek" => self.settings.deepseek_model.clone(),
+                                "openrouter" => self.settings.openrouter_model.clone(),
+                                "ollama" => self.settings.ollama_model.clone(),
+                                _ => String::new(),
+                            };
+                            if let Some(id) = preferred_model(&provider, &current, &models) {
+                                match provider.as_str() {
+                                    "deepseek" => self.settings.deepseek_model = id,
+                                    "openrouter" => self.settings.openrouter_model = id,
+                                    "ollama" => self.settings.ollama_model = id,
+                                    _ => {}
                                 }
                             }
-                            self.models_status = Some(format!(
-                                "✔ {count} modelli disponibili con questa credenziale"
-                            ));
+                            self.models_status =
+                                Some(format!("✔ {count} modelli disponibili"));
                             self.models = models;
                         }
                         Err(e) => {
@@ -856,13 +974,26 @@ impl App {
         self.chat_jump = true;
         self.chat_composer_collapsed = false;
         self.suggestion_hovered = false;
-        self.spawn_chat(text, Vec::new());
+        // «Altri» e simili: stessi criteri, ma senza i film gia mostrati.
+        let action = classify_chat_action(&text, &self.chat_context);
+        let exclude: Vec<u64> = if action == ChatAction::Replace {
+            self.chat
+                .iter()
+                .flat_map(|e| e.answer.cards.iter().map(|c| c.movie.id))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.spawn_chat(text, exclude, None);
         // Il composer resta a fuoco: la chat e una conversazione, si resta li.
         self.focus = Some(ViewMode::Chat);
     }
 
     /// Ricomincia da zero: la conversazione vive in memoria, niente file.
     fn new_chat(&mut self) {
+        if let Some(cancel) = self.chat_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
         self.chat.clear();
         self.chat_gen += 1;
         self.chat_busy = false;
@@ -875,13 +1006,43 @@ impl App {
         self.focus = Some(ViewMode::Chat);
     }
 
+    /// Interrompe la risposta: il worker alza bandiera, chiude lo streaming e
+    /// non avvia altre richieste; i messaggi vecchi restano fuori generazione.
+    fn stop_chat(&mut self) {
+        if !self.chat_busy {
+            return;
+        }
+        if let Some(cancel) = &self.chat_cancel {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.chat_gen += 1;
+        self.chat_busy = false;
+        if let Some(entry) = self
+            .chat
+            .iter_mut()
+            .rev()
+            .find(|e| e.answer.state == chat::State::Busy)
+        {
+            entry.answer.state = chat::State::Done;
+            entry.answer.error = Some("Risposta interrotta.".into());
+            entry.answer.done_at = self.ctx.input(|i| i.time);
+        }
+        self.toast("Risposta interrotta.");
+    }
+
     /// Memoria breve per l'interprete: ultimi scambi, compressi in una riga.
-    fn chat_history(&self) -> Vec<(String, String)> {
-        let start = self.chat.len().saturating_sub(3);
+    /// `upto` esclude il messaggio appena inviato, che il prompt passa a parte.
+    fn chat_history(&self, upto: usize) -> Vec<(String, String)> {
+        let end = upto.min(self.chat.len());
+        let start = end.saturating_sub(3);
         let mut out: Vec<(String, String)> = Vec::new();
-        for entry in &self.chat[start..] {
+        for entry in &self.chat[start..end] {
             out.push(("utente".into(), entry.user.clone()));
             let a = &entry.answer;
+            let mut line = String::new();
+            if !a.understood.is_empty() {
+                line.push_str(&format!("Criteri: {}", a.understood));
+            }
             if !a.cards.is_empty() {
                 let titles = a
                     .cards
@@ -889,21 +1050,28 @@ impl App {
                     .map(|c| c.movie.title.clone())
                     .collect::<Vec<_>>()
                     .join(", ");
-                out.push(("assistente".into(), format!("Ho proposto: {titles}")));
-            } else if !a.intro.is_empty() {
-                out.push(("assistente".into(), theme::truncate(&a.intro, 160)));
+                if !line.is_empty() {
+                    line.push_str(" · ");
+                }
+                line.push_str(&format!("Ho proposto: {titles}"));
+            }
+            if line.is_empty() && !a.intro.is_empty() {
+                line = a.intro.clone();
+            }
+            if !line.is_empty() {
+                out.push(("assistente".into(), theme::truncate(&line, 220)));
             }
         }
         out
     }
 
-    fn spawn_chat(&mut self, text: String, exclude: Vec<u64>) {
+    fn spawn_chat(&mut self, text: String, exclude: Vec<u64>, reuse: Option<Intent>) {
         let index = self.chat.len();
         self.chat.push(chat::Entry {
             user: text.clone(),
             answer: chat::Answer::busy(),
         });
-        self.spawn_chat_worker(index, text, exclude, None);
+        self.spawn_chat_worker(index, text, exclude, reuse);
     }
 
     /// «Rigenera»: stessi criteri, altri film (esclude quelli mostrati).
@@ -922,9 +1090,6 @@ impl App {
             .context
             .clone()
             .or_else(|| entry.answer.intent.as_ref().map(|(_, it)| it.clone()));
-        if exclude.is_empty() {
-            return;
-        }
         if let Some(entry) = self.chat.get_mut(index) {
             entry.answer = chat::Answer::busy();
         }
@@ -970,10 +1135,14 @@ impl App {
         exclude: Vec<u64>,
         reuse: Option<Intent>,
     ) {
-        let Some(tmdb) = self.tmdb.clone() else {
+        let Some((tmdb, cancel)) = self.tmdb.as_ref().map(|t| {
+            let (client, cancel) = t.cancellable();
+            (Arc::new(client), cancel)
+        }) else {
             self.show_settings = true;
             return;
         };
+        self.chat_cancel = Some(cancel.clone());
         self.chat_gen += 1;
         let gen = self.chat_gen;
         self.chat_busy = true;
@@ -982,7 +1151,7 @@ impl App {
         let known = self.keyword_map.clone();
         let tax = self.tax.clone();
         let provider = self.provider.clone();
-        let history = self.chat_history();
+        let history = self.chat_history(index);
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
 
@@ -1006,38 +1175,90 @@ impl App {
             // 1) Interpreta il messaggio. Il contesto dei seguiti e locale
             //    alla chat: i filtri della griglia non c'entrano.
             let reuse_ctx = reuse.is_some();
-            let follow = is_follow_up(&text);
+            let pre_action = classify_chat_action(&text, &base);
+            let pre_follow = pre_action.is_contextual();
             let empty = Intent::default();
-            // Una richiesta nuova non vede il contesto precedente: cosi il
-            // modello non puo trascinare filtri o temi vecchi per inerzia.
-            let parse_active = if follow { &base } else { &empty };
-            let parse_history: &[(String, String)] = if follow { &history } else { &[] };
+            // L'AI vede sempre la memoria e decide lei se il messaggio e un
+            // seguito; le regole hanno bisogno della classificazione locale.
+            let parse_active = if provider.is_llm() || pre_follow {
+                &base
+            } else {
+                &empty
+            };
+            let parse_history: &[(String, String)] =
+                if provider.is_llm() || pre_follow { &history } else { &[] };
             let intent = match reuse {
                 Some(it) => Some(it),
-                None => match provider.parse_chat(&text, &tax, parse_history, parse_active) {
+                None => match provider.parse_chat_cancellable(
+                    &text,
+                    &tax,
+                    parse_history,
+                    parse_active,
+                    &cancel,
+                ) {
                     Ok(it) => Some(it),
+                    Err(_) if cancel.load(Ordering::Relaxed) => return,
                     Err(e) => {
                         payload.notes.push(format!("Interprete non disponibile: {e}"));
                         None
                     }
                 },
             };
-            let mut eff = if follow { base.facets.clone() } else { Facets::default() };
-            let mut themes = if follow { base.themes.clone() } else { Vec::new() };
-            let off_topic = intent
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
+            let mut action = intent
                 .as_ref()
-                .map(|i| i.mode.eq_ignore_ascii_case("off_topic"))
-                .unwrap_or(false);
+                .map(|i| i.action)
+                .unwrap_or(pre_action);
+            if let Some(it) = &intent {
+                // Retrocompatibilita con interpreti che non restituiscono
+                // `action`: la classificazione locale resta la rete di sicurezza.
+                if action == ChatAction::New
+                    && pre_follow
+                    && it.is_empty()
+                    && it.mode != "reset"
+                    && it.mode != "off_topic"
+                {
+                    action = pre_action;
+                }
+            }
+            let follow = reuse_ctx || action.is_contextual();
+            let off_topic = action == ChatAction::OffTopic
+                || intent
+                    .as_ref()
+                    .map(|i| i.mode.eq_ignore_ascii_case("off_topic"))
+                    .unwrap_or(false);
+            let mut eff = if follow {
+                base.facets.clone()
+            } else {
+                Facets::default()
+            };
+            let mut themes = if follow { base.themes.clone() } else { Vec::new() };
             if let Some(it) = &intent {
                 if reuse_ctx {
                     eff = it.facets.clone();
                     themes = it.themes.clone();
+                } else if action == ChatAction::Reset
+                    || it.mode.eq_ignore_ascii_case("reset")
+                {
+                    eff = Facets::default();
+                    themes.clear();
                 } else if provider.is_llm() && it.source == "AI" {
-                    // L'AI di chat riceve il contesto e restituisce lo stato
-                    // completo (o lo azzera se la richiesta e nuova).
-                    eff = it.facets.clone();
-                    themes = it.themes.clone();
-                } else if follow {
+                    // L'AI di chat riceve il contesto e, per un seguito,
+                    // restituisce lo stato completo. Se non ha capito nulla,
+                    // il contesto attivo resta la base.
+                    if action.is_contextual() && it.is_empty() && !base.is_empty() {
+                        eff = base.facets.clone();
+                        themes = base.themes.clone();
+                        payload
+                            .notes
+                            .push("Ho mantenuto il contesto gia attivo.".into());
+                    } else {
+                        eff = it.facets.clone();
+                        themes = it.themes.clone();
+                    }
+                } else if action.is_contextual() {
                     // Il parser a regole descrive solo il messaggio: va unito
                     // al contesto, che un seguito esplicito non deve perdere.
                     merge_facets(&mut eff, &it.facets);
@@ -1046,19 +1267,29 @@ impl App {
                     eff = it.facets.clone();
                     themes = it.themes.clone();
                 }
-                if it.mode.eq_ignore_ascii_case("reset") {
-                    eff = Facets::default();
-                    themes.clear();
-                }
                 payload.notes.extend(it.notes.clone());
             }
             let (eff, removed) = constraints::sanitize(&tax, &eff);
             payload.notes.extend(removed);
+            let context_free = intent.as_ref().and_then(|i| i.free_text.clone());
+            let context_similar = intent
+                .as_ref()
+                .and_then(|i| i.similar_to.clone())
+                .or_else(|| {
+                    if action.is_contextual() {
+                        base.similar_to.clone()
+                    } else {
+                        None
+                    }
+                });
+            let title = context_free.clone();
+            let similar = context_similar.clone();
             payload.context = Intent {
                 facets: eff.clone(),
                 themes: themes.clone(),
-                free_text: intent.as_ref().and_then(|i| i.free_text.clone()),
-                similar_to: intent.as_ref().and_then(|i| i.similar_to.clone()),
+                free_text: context_free,
+                similar_to: context_similar,
+                action,
                 ..Default::default()
             };
             payload.facets = eff.clone();
@@ -1075,8 +1306,6 @@ impl App {
                 stage: 1,
             });
             ctx.request_repaint();
-            let title = intent.as_ref().and_then(|i| i.free_text.clone());
-            let similar = intent.as_ref().and_then(|i| i.similar_to.clone());
 
             let pool = match chat_pool(
                 &tmdb,
@@ -1089,6 +1318,7 @@ impl App {
                 &mut payload.notes,
             ) {
                 Ok(p) => p,
+                Err(_) if cancel.load(Ordering::Relaxed) => return,
                 Err(e) => {
                     payload.error = Some(e);
                     let _ = tx.send(Msg::ChatDone {
@@ -1134,6 +1364,9 @@ impl App {
             }
             movies.retain(|m| !exclude.contains(&m.id));
             movies.truncate(20);
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
 
             if movies.is_empty() {
                 payload.intro = "Non ho trovato film che corrispondano davvero a questa richiesta. Preferisco non riempire la lista con titoli a caso.".into();
@@ -1146,6 +1379,9 @@ impl App {
             }
 
             // 3) Curatela: sceglie fino a 5 film reali e scrive i commenti (streaming).
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
             let _ = tx.send(Msg::ChatStage {
                 gen,
                 index,
@@ -1173,23 +1409,32 @@ impl App {
                 stage: 3,
             });
             ctx.request_repaint();
-            let cur = provider
-                .curate(&req, &mut |chunk: &str| {
+            let cur = match provider.curate_cancellable(
+                &req,
+                &cancel,
+                &mut |chunk: &str| {
                     let _ = tx.send(Msg::ChatStream {
                         gen,
                         index,
                         chunk: chunk.to_string(),
                     });
                     ctx.request_repaint();
-                })
-                .unwrap_or_else(|e| {
+                },
+            ) {
+                Ok(c) => c,
+                Err(_) if cancel.load(Ordering::Relaxed) => return,
+                Err(e) => {
                     // La chat funziona anche senza AI: scelta deterministica.
                     payload
                         .notes
                         .push(format!("Curatela AI non disponibile ({e}): scelta automatica."));
                     curator::deterministic(&req)
-                });
+                }
+            };
             payload.intro = cur.intro;
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
 
             // 4) Completa le scelte e carica la scheda dei film mostrati
             //    (regia, durata, disponibilita, IMDb): solo per loro.
@@ -1240,6 +1485,9 @@ impl App {
                 cards
             });
             payload.cards = cards;
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
             if payload.cards.is_empty() {
                 payload.error = Some("Non sono riuscito a preparare le schede dei film.".into());
             }
@@ -1270,7 +1518,13 @@ impl App {
             self.page = 1;
             self.launch_search(true);
         }
+        if a.stop {
+            self.stop_chat();
+        }
         if let Some(i) = a.regenerate {
+            self.regenerate(i);
+        }
+        if let Some(i) = a.retry {
             self.regenerate(i);
         }
         if let Some(i) = a.show_all {
@@ -1441,30 +1695,26 @@ impl App {
     /// Verifica della credenziale AI: prova una vera interpretazione con il
     /// collegamento e il modello scritti nel modulo, senza salvare nulla.
     fn check_ai(&mut self) {
-        let base = self.settings.base_url.trim().to_string();
-        let key = self.settings.api_key.trim().to_string();
-        let model = self.settings.model.trim().to_string();
-        if base.is_empty() || model.is_empty() {
-            self.ai_check = Some("✕ Servono collegamento e modello.".to_string());
+        let ai = self.settings.ai_cfg();
+        let Some(config) = llm_config(&ai) else {
+            self.ai_check = Some("✕ Scegli un interprete AI.".to_string());
+            return;
+        };
+        if self.settings.provider == "deepseek" && ai.api_key.trim().is_empty() {
+            self.ai_check = Some("✕ Inserisci la chiave API DeepSeek.".to_string());
+            return;
+        }
+        if self.settings.provider == "openrouter" && ai.openrouter_api_key.trim().is_empty() {
+            self.ai_check = Some("✕ Inserisci la chiave API OpenRouter.".to_string());
             return;
         }
         self.ai_checking = true;
         self.ai_check = Some("Prova in corso…".to_string());
         let tax = self.tax.clone();
-        let kind = if self.settings.provider == "ollama" {
-            LlmKind::Ollama
-        } else {
-            LlmKind::OpenAi
-        };
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
-            let provider = LlmProvider::new(LlmConfig {
-                kind,
-                base_url: base,
-                model,
-                api_key: key,
-            });
+            let provider = LlmProvider::new(config);
             let res = provider.probe(&tax);
             let _ = tx.send(Msg::AiCheck { res });
             ctx.request_repaint();
@@ -1473,20 +1723,45 @@ impl App {
 
     /// Interroga il servizio e riempie l'elenco dei modelli utilizzabili.
     fn detect_models(&mut self) {
-        let base = self.settings.base_url.trim().to_string();
-        let key = self.settings.api_key.trim().to_string();
-        let kind = if self.settings.provider == "ollama" {
-            LlmKind::Ollama
-        } else {
-            LlmKind::OpenAi
+        self.models_gen = self.models_gen.wrapping_add(1);
+        let gen = self.models_gen;
+        let (kind, base, key) = match self.settings.provider.as_str() {
+            "deepseek" => {
+                if self.settings.deepseek_key.trim().is_empty() {
+                    self.models_status = Some("✕ Inserisci la chiave API DeepSeek.".to_string());
+                    self.models.clear();
+                    return;
+                }
+                (
+                    LlmKind::OpenAi,
+                    DEEPSEEK_BASE.to_string(),
+                    self.settings.deepseek_key.trim().to_string(),
+                )
+            }
+            "openrouter" => (
+                LlmKind::OpenAi,
+                OPENROUTER_BASE.to_string(),
+                self.settings.openrouter_key.trim().to_string(),
+            ),
+            "ollama" => (
+                LlmKind::Ollama,
+                if self.settings.ollama_url.trim().is_empty() {
+                    "http://localhost:11434".to_string()
+                } else {
+                    self.settings.ollama_url.trim().to_string()
+                },
+                String::new(),
+            ),
+            _ => return,
         };
         self.detecting = true;
+        self.ai_check = None;
         self.models_status = Some("Interrogo il servizio…".to_string());
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
             let res = list_models(kind, &base, &key);
-            let _ = tx.send(Msg::Models { res });
+            let _ = tx.send(Msg::Models { gen, res });
             ctx.request_repaint();
         });
     }
@@ -1620,12 +1895,7 @@ impl App {
         let cfg = Config {
             tmdb_api_key: self.settings.tmdb_key.trim().to_string(),
             language: self.settings.language.clone(),
-            ai: crate::infra::config::AiCfg {
-                provider: self.settings.provider.clone(),
-                base_url: self.settings.base_url.trim().to_string(),
-                model: self.settings.model.trim().to_string(),
-                api_key: self.settings.api_key.trim().to_string(),
-            },
+            ai: self.settings.ai_cfg(),
         };
         match cfg.save() {
             Ok(()) => {
@@ -1634,10 +1904,11 @@ impl App {
                 self.provider = build_provider(&cfg.ai);
                 self.keyword_map.clear();
                 self.ai_cache = None;
+                self.models_gen = self.models_gen.wrapping_add(1);
                 self.models.clear();
                 self.models_status = None;
                 self.ai_check = None;
-                if cfg.ai.provider != "rules" && !cfg.ai.base_url.trim().is_empty() {
+                if self.settings.can_detect() {
                     self.detect_models();
                 }
                 self.toast(format!("Impostazioni salvate · interprete: {}", self.provider.label()));
@@ -2430,6 +2701,8 @@ impl App {
         let mut detect = false;
         let mut probe = false;
         let mut open_api_page = false;
+        let mut open_deepseek_page = false;
+        let mut open_openrouter_page = false;
         let mut update_check = false;
         let mut update_download = false;
         let mut update_install = false;
@@ -2625,11 +2898,13 @@ impl App {
                         .strong()
                         .color(theme::ACCENT),
                 );
-                ui.horizontal(|ui| {
+                let previous_provider = self.settings.provider.clone();
+                ui.horizontal_wrapped(|ui| {
                     for (id, label) in [
                         ("rules", "Regole offline"),
+                        ("deepseek", "DeepSeek"),
+                        ("openrouter", "OpenRouter"),
                         ("ollama", "Ollama (locale)"),
-                        ("openai", "API compatibile OpenAI"),
                     ] {
                         ui.selectable_value(
                             &mut self.settings.provider,
@@ -2638,42 +2913,134 @@ impl App {
                         );
                     }
                 });
-                if self.settings.provider != "rules" {
+                if self.settings.provider != previous_provider {
+                    self.models_gen = self.models_gen.wrapping_add(1);
+                    self.models.clear();
+                    self.models_status = None;
+                    self.ai_check = None;
+                    self.detecting = false;
+                    detect = self.settings.can_detect();
+                }
+
+                if self.settings.provider == "deepseek" {
                     ui.label(
-                        egui::RichText::new("Collegamento del servizio")
+                        egui::RichText::new("Chiave API DeepSeek (resta su questo PC)")
                             .size(11.0)
                             .color(theme::DIM),
                     );
                     ui.add(
-                        egui::TextEdit::singleline(&mut self.settings.base_url)
-                            .hint_text(if self.settings.provider == "ollama" {
-                                "http://localhost:11434"
-                            } else {
-                                "https://api.openai.com/v1"
-                            })
+                        egui::TextEdit::singleline(&mut self.settings.deepseek_key)
+                            .password(true)
                             .desired_width(f32::INFINITY),
                     );
-                    if self.settings.provider == "openai" {
+                    if ui
+                        .hyperlink_to(
+                            egui::RichText::new("Crea o copia la chiave su platform.deepseek.com")
+                                .size(10.5),
+                            "https://platform.deepseek.com/api_keys",
+                        )
+                        .clicked()
+                    {
+                        open_deepseek_page = true;
+                    }
+                    ui.add_space(4.0);
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(
-                            egui::RichText::new(
-                                "Va bene la base (…/v1) o l'URL completo (…/v1/chat/completions): lo accorcio io.",
-                            )
-                            .size(10.0)
-                            .color(theme::DIM),
-                        );
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new("Chiave API del servizio (resta su questo PC)")
+                            egui::RichText::new("Sforzo di ragionamento")
                                 .size(11.0)
                                 .color(theme::DIM),
                         );
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.settings.api_key)
-                                .password(true)
-                                .desired_width(f32::INFINITY),
-                        );
+                        for (id, label) in [
+                            ("max", "Massimo"),
+                            ("high", "Alto"),
+                            ("medium", "Medio"),
+                            ("low", "Basso"),
+                            ("none", "Disattivato"),
+                        ] {
+                            ui.selectable_value(
+                                &mut self.settings.effort,
+                                id.to_string(),
+                                egui::RichText::new(label).size(11.0),
+                            );
+                        }
+                    });
+                    ui.label(
+                        egui::RichText::new(
+                            "Massimo ragiona di più: risposte più curate, ma più lente e più token.",
+                        )
+                        .size(10.0)
+                        .color(theme::DIM),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(egui::RichText::new("Modello DeepSeek").size(11.0).color(theme::DIM));
+                    model_picker(
+                        ui,
+                        &mut self.settings.deepseek_model,
+                        &self.models,
+                        DEEPSEEK_MODEL,
+                    );
+                } else if self.settings.provider == "openrouter" {
+                    ui.label(
+                        egui::RichText::new("Chiave API OpenRouter (resta su questo PC)")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.settings.openrouter_key)
+                            .password(true)
+                            .desired_width(f32::INFINITY),
+                    );
+                    if ui
+                        .hyperlink_to(
+                            egui::RichText::new("Crea o copia la chiave su openrouter.ai")
+                                .size(10.5),
+                            "https://openrouter.ai/keys",
+                        )
+                        .clicked()
+                    {
+                        open_openrouter_page = true;
                     }
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("Modello OpenRouter")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                    model_picker(
+                        ui,
+                        &mut self.settings.openrouter_model,
+                        &self.models,
+                        OPENROUTER_MODEL,
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "L'elenco mostra tutti i modelli pubblicati da OpenRouter: scegli quello che vuoi usare.",
+                        )
+                        .size(10.0)
+                        .color(theme::DIM),
+                    );
+                } else if self.settings.provider == "ollama" {
+                    ui.label(
+                        egui::RichText::new("Collegamento Ollama")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.settings.ollama_url)
+                            .hint_text("http://localhost:11434")
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(egui::RichText::new("Modello Ollama").size(11.0).color(theme::DIM));
+                    model_picker(
+                        ui,
+                        &mut self.settings.ollama_model,
+                        &self.models,
+                        "qwen2.5:3b",
+                    );
+                }
 
+                if self.settings.provider != "rules" {
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         if ui
@@ -2724,66 +3091,6 @@ impl App {
                                 .size(10.5)
                                 .color(color),
                         );
-                    }
-
-                    ui.add_space(4.0);
-                    ui.label(egui::RichText::new("Modello").size(11.0).color(theme::DIM));
-                    if self.models.is_empty() {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.settings.model)
-                                .hint_text(if self.settings.provider == "ollama" {
-                                    "qwen2.5:3b"
-                                } else {
-                                    "gpt-4o-mini"
-                                })
-                                .desired_width(f32::INFINITY),
-                        );
-                        ui.label(
-                            egui::RichText::new(
-                                "Premi «Rileva modelli» per vedere l'elenco completo di quelli usabili con questa chiave.",
-                            )
-                            .size(10.0)
-                            .color(theme::DIM),
-                        );
-                    } else {
-                        egui::ComboBox::from_id_salt("model_pick")
-                            .selected_text(
-                                egui::RichText::new(self.settings.model.clone()).size(11.5),
-                            )
-                            .width(ui.available_width())
-                            .height(380.0)
-                            .show_ui(ui, |ui| {
-                                for m in &self.models {
-                                    let selected = self.settings.model == m.id;
-                                    if ui
-                                        .selectable_label(
-                                            selected,
-                                            egui::RichText::new(m.menu_label()).size(11.5),
-                                        )
-                                        .clicked()
-                                    {
-                                        self.settings.model = m.id.clone();
-                                    }
-                                }
-                            });
-                        if let Some(m) = self.models.iter().find(|m| m.id == self.settings.model) {
-                            ui.label(
-                                egui::RichText::new(model_details(m))
-                                    .size(10.0)
-                                    .color(theme::DIM),
-                            );
-                        }
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("oppure id a mano:")
-                                    .size(10.0)
-                                    .color(theme::DIM),
-                            );
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.model)
-                                    .desired_width(230.0),
-                            );
-                        });
                     }
                 }
 
@@ -2920,6 +3227,12 @@ impl App {
 
         if open_api_page {
             open_url("https://www.themoviedb.org/settings/api");
+        }
+        if open_deepseek_page {
+            open_url("https://platform.deepseek.com/api_keys");
+        }
+        if open_openrouter_page {
+            open_url("https://openrouter.ai/keys");
         }
         if update_check {
             self.start_update_check(true);
@@ -3195,10 +3508,10 @@ fn merge_facets(base: &mut Facets, extra: &Facets) {
             base.without_genres.push(*v);
         }
     }
-    for v in &extra.countries {
-        if !base.countries.contains(v) {
-            base.countries.push(v.clone());
-        }
+    // I paesi si sostituiscono: «solo italiani» significa cambiare paese,
+    // non aggiungere l'Italia a un filtro precedente.
+    if !extra.countries.is_empty() {
+        base.countries = extra.countries.clone();
     }
     for v in &extra.moods {
         if !base.moods.contains(v) {
@@ -3978,6 +4291,13 @@ fn describe(tax: &Taxonomy, f: &Facets, year: Option<(u16, u16)>) -> String {
     if let Some(r) = rating {
         parts.push(r);
     }
+    if let Some((min, max)) = f.runtime {
+        parts.push(if min == 0 {
+            format!("fino a {max} min")
+        } else {
+            format!("{min}-{max} min")
+        });
+    }
     if let Some(v) = f.min_votes {
         parts.push(format!("≥ {} voti", theme::thousands(v)));
     }
@@ -4222,9 +4542,34 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, has_word, looks_like_question, resize_edge, side_panel_widths,
+        allowed_url, describe, has_word, looks_like_question, merge_facets, resize_edge,
+        side_panel_widths, Facets,
     };
+    use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn la_durata_compare_nei_criteri() {
+        let f = Facets {
+            runtime: Some((0, 100)),
+            ..Default::default()
+        };
+        assert!(describe(&Taxonomy::load(), &f, None).contains("100 min"));
+    }
+
+    #[test]
+    fn un_nuovo_paese_sostituisce_quello_precedente() {
+        let mut base = Facets {
+            countries: vec!["FR".into()],
+            ..Default::default()
+        };
+        let extra = Facets {
+            countries: vec!["IT".into()],
+            ..Default::default()
+        };
+        merge_facets(&mut base, &extra);
+        assert_eq!(base.countries, ["IT"]);
+    }
 
     #[test]
     fn il_tema_cerca_parole_intere() {
