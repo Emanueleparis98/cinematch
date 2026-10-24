@@ -1,16 +1,18 @@
-//! La chat di CineMatch: la conversazione (bolle dell'utente e risposte
-//! dell'AI) e le card dei film consigliati, con il «perché» e il consiglio.
-//! Il modulo espone solo la vista e un pacchetto di azioni: chi la usa (app)
-//! decide cosa farne.
+//! Chat LUMEN: home editoriale, conversazione lineare, risultati hero + griglia
+//! e composer piatto. Le azioni restano quelle della 0.2.3.
 
-use egui::{Align2, Color32, FontId, Rect, RichText, Rounding, Sense, Stroke};
+use egui::{Align2, Color32, FontFamily, FontId, Rect, Rounding, Sense, Stroke};
 
 use crate::domain::model::{Facets, ImdbRating, Movie};
 use crate::domain::suggestions::Suggestion;
 use crate::domain::taxonomy::Taxonomy;
-use crate::tmdb::poster_url;
+use crate::ui::fonts;
 use crate::ui::images::ImageStore;
-use crate::ui::{fx, theme};
+
+use super::{fx, lumen, theme};
+
+const CONTENT_MAX: f32 = 1100.0;
+const RESULT_BREAKPOINT: f32 = 940.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -24,7 +26,6 @@ impl Default for State {
     }
 }
 
-/// Dati di contorno di un film scelto (dalla scheda TMDB).
 #[derive(Clone, Default)]
 pub struct CardMeta {
     pub director: Option<String>,
@@ -34,7 +35,6 @@ pub struct CardMeta {
     pub imdb: Option<ImdbRating>,
 }
 
-/// Un film consigliato con i commenti del curatore.
 #[derive(Clone)]
 pub struct Card {
     pub movie: Movie,
@@ -43,31 +43,22 @@ pub struct Card {
     pub meta: Option<CardMeta>,
 }
 
-/// La risposta a un messaggio: in corso oppure finita.
 #[derive(Clone, Default)]
 pub struct Answer {
     pub state: State,
     pub intro: String,
     pub understood: String,
-    /// Limite dichiarato: nessun film copre tutti i criteri, oppure i criteri
-    /// esatti sono stati allargati.
     pub limit: Option<String>,
-    /// Contesto effettivo della risposta: i seguiti ripartono da qui.
     pub context: Option<crate::ai::Intent>,
-    /// La griglia rappresenta davvero questi criteri (niente temi liberi).
     pub grid_ready: bool,
     pub notes: Vec<String>,
     pub cards: Vec<Card>,
     pub total: u32,
     pub error: Option<String>,
-    /// Istante (ctx time) in cui la risposta e arrivata: guida la comparsa.
     pub done_at: f64,
-    /// Filtri interpretati, per «vedi tutti in griglia».
     pub facets: Facets,
     pub keyword_pairs: Vec<(String, u64)>,
-    /// Intento completo, riusato dalla griglia senza una nuova chiamata AI.
     pub intent: Option<(String, crate::ai::Intent)>,
-    /// Avanzamento della pipeline: 1 interprete, 2 TMDB, 3 curatela.
     pub stage: u8,
 }
 
@@ -86,7 +77,6 @@ pub struct Entry {
     pub answer: Answer,
 }
 
-/// Cosa ha chiesto l'utente alla vista in questo frame.
 #[derive(Default)]
 pub struct Actions {
     pub open_detail: Option<u64>,
@@ -95,234 +85,482 @@ pub struct Actions {
     pub stop: bool,
     pub show_all: Option<usize>,
     pub new_chat: bool,
-    /// Offset dello scroll in questo frame: l'app lo usa per capire se si
-    /// sta leggendo verso l'alto e minimizzare il composer.
     pub scroll_offset: f32,
-    /// Vero quando la conversazione e' arrivata in fondo.
     pub at_bottom: bool,
 }
 
-/// Azioni della casa: il composer invia, gli spunti riempiono soltanto.
 #[derive(Default)]
 pub struct HomeActions {
     pub prefill: Option<String>,
-    /// «Sorprendimi» chiede all'app una proposta locale non visibile.
     pub surprise: bool,
     pub send: bool,
-    /// La rotazione si ferma mentre il mouse e sopra una card.
     pub suggestions_hovered: bool,
 }
 
-/// Disposizione della casa: colonne, righe e altezza stimata del blocco.
-/// La stima serve solo a centrare senza spingere il composer sotto il bordo.
-fn home_layout(content_w: f32, count: usize) -> (usize, usize, f32) {
-    let cols = if content_w >= 820.0 { 4 } else { 2 };
-    let rows = count.min(4).div_ceil(cols);
-    let mut height = 252.0 + rows.saturating_sub(1) as f32 * 130.0;
-    if content_w < 900.0 {
-        height += 15.0;
+// ------------------------------------------------------------- misure ------
+
+fn content_pad(width: f32) -> f32 {
+    if width < 900.0 {
+        20.0
+    } else {
+        34.0
     }
-    (cols, rows, height)
 }
 
-fn home_top(avail_y: f32, content_h: f32) -> f32 {
-    ((avail_y - content_h) * 0.5).clamp(8.0, 320.0)
+fn content_width(avail: f32) -> f32 {
+    let pad = content_pad(avail);
+    (avail - pad * 2.0).clamp(280.0, CONTENT_MAX)
 }
 
-/// Prima schermata della chat: titolo, quattro spunti e composer. Sulle
-/// finestre basse il composer resta ancorato in basso; con più altezza torna
-/// subito sotto gli spunti. Gli spunti non inviano: preparano il testo nel
-/// composer, pronti da correggere. `focus` arriva da «/» o da un click.
-/// `shown_at` e' l'istante dell'ultima rotazione: serve alla comparsa morbida.
+fn result_columns(width: f32) -> usize {
+    if width >= RESULT_BREAKPOINT {
+        2
+    } else {
+        1
+    }
+}
+
+// ------------------------------------------------------------ utilita' -----
+
+fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
+    let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
+    let label = text.to_uppercase();
+    let width = ui
+        .fonts(|f| f.layout_no_wrap(label.clone(), font.clone(), color).size().x)
+        + 2.0;
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 20.0), Sense::click());
+    let ink = if resp.hovered() {
+        if color == lumen::MUTED {
+            lumen::IVORY
+        } else {
+            lumen::EMBER_HI
+        }
+    } else {
+        color
+    };
+    ui.painter().text(
+        rect.left_center(),
+        Align2::LEFT_CENTER,
+        label,
+        font,
+        ink,
+    );
+    lumen::focus(ui, &resp, 0.0);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+fn hairline(ui: &mut egui::Ui) {
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), 1.0),
+        Sense::hover(),
+    );
+    ui.painter()
+        .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
+}
+
+fn key_hint(ui: &mut egui::Ui, text: &str) {
+    egui::Frame::none()
+        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
+        .inner_margin(egui::Margin::symmetric(5.0, 2.0))
+        .show(ui, |ui| {
+            ui.label(
+                lumen::mono(8.0, text).color(lumen::FAINT),
+            );
+        });
+}
+
+fn wrapped(
+    text: &str,
+    size: f32,
+    color: Color32,
+    width: f32,
+    rows: usize,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::simple(
+        text.to_string(),
+        FontId::proportional(size),
+        color,
+        width.max(40.0),
+    );
+    job.wrap.max_rows = rows;
+    job.wrap.overflow_character = Some('…');
+    job
+}
+
+fn movie_meta(card: &Card, tax: &Taxonomy) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(y) = card.movie.year {
+        parts.push(y.to_string());
+    }
+    if let Some(m) = &card.meta {
+        if let Some(d) = &m.director {
+            parts.push(d.clone());
+        }
+        if let Some(r) = m.runtime {
+            parts.push(format!("{r} min"));
+        }
+    }
+    let genres = card
+        .movie
+        .genre_ids
+        .iter()
+        .take(2)
+        .filter_map(|g| tax.genre_name(*g))
+        .collect::<Vec<_>>();
+    if !genres.is_empty() {
+        parts.push(genres.join(", "));
+    }
+    if card.movie.votes > 0 {
+        parts.push(format!("TMDB {:.1}", card.movie.rating));
+    }
+    if let Some(imdb) = card.meta.as_ref().and_then(|m| m.imdb) {
+        if imdb.votes > 0 {
+            parts.push(format!("IMDb {:.1}", imdb.rating));
+        }
+    }
+    parts.join(" · ")
+}
+
+fn availability(card: &Card) -> Option<String> {
+    let meta = card.meta.as_ref()?;
+    if !meta.flatrate.is_empty() {
+        Some(format!(
+            "IN ABBONAMENTO · {}",
+            meta.flatrate
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    } else if !meta.rent.is_empty() {
+        Some(format!(
+            "A NOLEGGIO · {}",
+            meta.rent
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    } else {
+        None
+    }
+}
+
+// -------------------------------------------------------------- casa -------
+
 #[allow(clippy::too_many_arguments)]
 pub fn home(
     ui: &mut egui::Ui,
+    images: &ImageStore,
+    movies: &[Movie],
     draft: &mut String,
     busy: bool,
     ai: bool,
     focus: bool,
     suggestions: &[Suggestion],
-    now: f64,
-    shown_at: f64,
 ) -> HomeActions {
     let mut actions = HomeActions::default();
-    let avail = ui.available_size();
-    // Il margine tiene conto della scrollbar verticale: senza, le card
-    // dell'ultima colonna finirebbero sotto la barra.
-    let content_w = (avail.x - 16.0).clamp(320.0, 980.0);
-    let (cols, rows, body_h) = home_layout(content_w, suggestions.len());
-
-    let body = |ui: &mut egui::Ui| -> HomeActions {
-        let mut body_actions = HomeActions::default();
-        ui.vertical_centered(|ui| {
-            ui.label(
-                RichText::new("Cosa guardiamo stasera?")
-                    .size(30.0)
-                    .strong(),
-            );
-            ui.add_space(8.0);
-            let (line, _) = ui.allocate_exact_size(egui::vec2(178.0, 3.0), Sense::hover());
-            fx::gradient_bar(
-                ui.painter(),
-                line,
-                theme::ACCENT,
-                theme::ACCENT_2,
-                2.0,
-            );
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new(if ai {
-                    "Scrivi libero, anche a modo tuo: interpreto la richiesta, cerco su TMDB e ti propongo fino a 5 film con il perché e un consiglio."
-                } else {
-                    "Scrivi libero: le regole interpretano la richiesta, cerco su TMDB e ti propongo fino a 5 film con una spiegazione."
-                })
-                .size(12.5)
-                .color(theme::DIM),
-            );
-        });
-
-        ui.add_space(22.0);
-        let gap = 12.0;
-        let card_w = ((content_w - gap * (cols - 1) as f32) / cols as f32).floor();
-        let shown = suggestions.iter().take(4).collect::<Vec<_>>();
-        let elapsed = (now - shown_at).max(0.0);
-        if elapsed < 0.45 {
-            // Solo la comparsa: la rotazione successiva viene
-            // programmata dall'app, non da un ciclo continuo.
-            ui.ctx().request_repaint();
-        }
-        for row in 0..rows {
-            if row > 0 {
-                ui.add_space(gap);
-            }
+    egui::ScrollArea::vertical()
+        .id_salt("chat-home-scroll")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let avail = ui.available_width();
+            let pad = content_pad(avail);
+            let width = content_width(avail);
+            let compact = width < 900.0;
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = gap;
-                for col in 0..cols {
-                    let index = row * cols + col;
-                    let Some(item) = shown.get(index) else {
-                        break;
-                    };
-                    let reveal = card_reveal(elapsed, index);
-                    ui.push_id(&item.prompt, |ui| {
-                        let response = spunto_card(
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space(pad);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                    ui.add_space(24.0);
+                    if compact {
+                        hero_left(
                             ui,
-                            card_w,
-                            &item.tag,
-                            &item.prompt,
-                            &item.desc,
-                            reveal,
+                            width,
+                            true,
+                            draft,
+                            busy,
+                            ai,
+                            focus,
+                            &mut actions,
                         );
-                        body_actions.suggestions_hovered |= response.hovered();
-                        if response.clicked() {
-                            body_actions.prefill = Some(item.prompt.clone());
-                        }
-                    });
-                }
-            });
-        }
-
-        ui.add_space(8.0);
-        ui.vertical_centered(|ui| {
-            if ui
-                .add(
-                    egui::Button::new(
-                        RichText::new("Sorprendimi")
-                            .size(11.0)
-                            .color(theme::ACCENT_3),
-                    )
-                    .frame(false),
-                )
-                .on_hover_text("Un'idea locale: la scrivo nel composer")
-                .clicked()
-            {
-                body_actions.surprise = true;
-            }
-        });
-        body_actions
-    };
-
-    let mut composer_row = |ui: &mut egui::Ui| -> bool {
-        let composer_w = content_w.min(820.0);
-        let pad = ((content_w - composer_w) * 0.5).max(0.0);
-        let mut send = false;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.add_space(pad);
-            if composer(ui, draft, busy, focus, composer_w) {
-                send = true;
-            }
-        });
-        send
-    };
-
-    // Sotto i 560 px il composer resta ancorato in basso e il blocco sopra
-    // scorre. Con più altezza si torna al blocco unico, con il composer
-    // subito sotto gli spunti.
-    if avail.y < 560.0 {
-        let scroll_h = (avail.y - 96.0).max(120.0);
-        let top = home_top(scroll_h, body_h);
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), scroll_h),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("chat-home-scroll")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.add_space(top);
-                        let left = ((ui.available_width() - content_w) * 0.5).max(0.0);
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            ui.add_space(left);
-                            ui.vertical(|ui| {
-                                ui.set_width(content_w);
-                                let body_actions = body(ui);
-                                actions.suggestions_hovered |= body_actions.suggestions_hovered;
-                                if body_actions.prefill.is_some() {
-                                    actions.prefill = body_actions.prefill;
-                                }
-                                actions.surprise |= body_actions.surprise;
-                            });
+                        ui.add_space(20.0);
+                        poster_strip(ui, images, movies, width);
+                    } else {
+                        let left_w = (width * 0.56).floor();
+                        let right_w = width - left_w - 30.0;
+                        ui.horizontal_top(|ui| {
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(left_w, 0.0),
+                                egui::Layout::top_down(egui::Align::LEFT),
+                                |ui| {
+                                    hero_left(
+                                        ui,
+                                        left_w,
+                                        false,
+                                        draft,
+                                        busy,
+                                        ai,
+                                        focus,
+                                        &mut actions,
+                                    )
+                                },
+                            );
+                            ui.add_space(30.0);
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(right_w, 0.0),
+                                egui::Layout::top_down(egui::Align::LEFT),
+                                |ui| collage(ui, images, movies, right_w),
+                            );
                         });
+                    }
+
+                    ui.add_space(26.0);
+                    ui.horizontal(|ui| {
+                        ui.label(lumen::label("Parti da"));
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if lumen::link(ui, "Sorprendimi ↗", lumen::EMBER)
+                                    .clicked()
+                                {
+                                    actions.surprise = true;
+                                }
+                                ui.add_space(12.0);
+                                ui.label(
+                                    lumen::mono(9.0, "04 SPUNTI LOCALI")
+                                        .color(lumen::FAINT),
+                                );
+                            },
+                        );
                     });
-            },
-        );
-        ui.add_space(8.0);
-        if composer_row(ui) {
-            actions.send = true;
-        }
-    } else {
-        let top = home_top(avail.y, body_h + 92.0);
-        egui::ScrollArea::vertical()
-            .id_salt("chat-home-scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.add_space(top);
-                let left = ((ui.available_width() - content_w) * 0.5).max(0.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.add_space(left);
-                    ui.vertical(|ui| {
-                        ui.set_width(content_w);
-                        let body_actions = body(ui);
-                        actions.suggestions_hovered |= body_actions.suggestions_hovered;
-                        if body_actions.prefill.is_some() {
-                            actions.prefill = body_actions.prefill;
-                        }
-                        actions.surprise |= body_actions.surprise;
-                        ui.add_space(14.0);
-                        if composer_row(ui) {
-                            actions.send = true;
-                        }
-                    });
+                    ui.add_space(8.0);
+                    hairline(ui);
+                    ui.add_space(12.0);
+
+                    let gap = 10.0;
+                    let card_w = ((width - gap) / 2.0).floor();
+                    for row in 0..2 {
+                        ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = gap;
+                            for col in 0..2 {
+                                let i = row * 2 + col;
+                                let (tag, title, desc) = suggestion_text(suggestions, i);
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(card_w, 0.0),
+                                    egui::Layout::top_down(egui::Align::LEFT),
+                                    |ui| {
+                                        let resp = suggestion_card(
+                                            ui, card_w, i, tag, title, desc,
+                                        );
+                                        actions.suggestions_hovered |= resp.hovered();
+                                        if resp.clicked() {
+                                            actions.prefill = Some(title.to_string());
+                                        }
+                                    },
+                                );
+                            }
+                        });
+                        ui.add_space(gap);
+                    }
+                    ui.add_space(20.0);
                 });
             });
-    }
+        });
     actions
 }
 
-/// Disegna la conversazione. `busy` = c'e una risposta in corso (la vista
-/// resta incollata in fondo); `now` = clock di egui per le animazioni.
+fn hero_left(
+    ui: &mut egui::Ui,
+    width: f32,
+    compact: bool,
+    draft: &mut String,
+    busy: bool,
+    ai: bool,
+    focus: bool,
+    actions: &mut HomeActions,
+) {
+    let _ = ai;
+    ui.label(lumen::mono(10.0, "SALA 01 / RICERCA").color(lumen::EMBER));
+    ui.add_space(8.0);
+    let size = if compact { 38.0 } else { 56.0 };
+    ui.label(
+        lumen::display(size, "Cosa guardiamo\nstasera?")
+            .line_height(Some(size * 0.94)),
+    );
+    ui.add_space(12.0);
+    ui.label(
+        lumen::body(
+            if compact { 12.0 } else { 13.0 },
+            "Descrivi un’atmosfera, un regista o un dettaglio. CineMatch cerca film reali su TMDB e ti mostra perché sono lì.",
+        )
+        .color(lumen::MUTED),
+    );
+    ui.add_space(20.0);
+    let hint = if compact {
+        "Un film intenso, ben diretto…"
+    } else {
+        "Un film intenso, ben diretto, non troppo lungo…"
+    };
+    if composer_inner(ui, draft, busy, focus, width, hint, true, compact) {
+        actions.send = true;
+    }
+}
+
+fn collage(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
+    ui.label(lumen::label("In sala"));
+    ui.add_space(8.0);
+    let big_w = (width * 0.55).min(220.0);
+    let small_w = (width - big_w - 12.0).min(100.0);
+    let group_w = big_w + 12.0 + small_w;
+    ui.horizontal_top(|ui| {
+        ui.add_space(((width - group_w) * 0.5).max(0.0));
+        lumen::poster(
+            ui,
+            images,
+            movies.get(0),
+            big_w,
+            big_w * 1.5,
+            true,
+        );
+        ui.add_space(12.0);
+        ui.vertical(|ui| {
+            ui.add_space(18.0);
+            lumen::poster(
+                ui,
+                images,
+                movies.get(1),
+                small_w,
+                small_w * 1.5,
+                false,
+            );
+            ui.add_space(12.0);
+            lumen::poster(
+                ui,
+                images,
+                movies.get(2),
+                small_w,
+                small_w * 1.5,
+                false,
+            );
+        });
+    });
+}
+
+fn poster_strip(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
+    let gap = 8.0;
+    let w = ((width - gap * 2.0) / 3.0).floor();
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        for i in 0..3 {
+            lumen::poster(ui, images, movies.get(i), w, w * 1.5, i == 0);
+        }
+    });
+}
+
+fn suggestion_text<'a>(
+    suggestions: &'a [Suggestion],
+    i: usize,
+) -> (&'a str, &'a str, &'a str) {
+    const TAGS: [&str; 4] = ["CORRENTE", "ATMOSFERA", "PERIODO", "DURATA"];
+    const TITLES: [&str; 4] = [
+        "Nouvelle Vague, senza museo",
+        "Un noir che non spiega tutto",
+        "Italia anni ’70, fuori dai soliti nomi",
+        "Un film sotto i 100 minuti",
+    ];
+    const DESC: [&str; 4] = [
+        "La Parigi che si muove, tra strade, jazz e macchina da presa a spalla.",
+        "Notte, pioggia, una città che sembra complice.",
+        "Poliziottesco, commedia amara e cinema civile da riscoprire.",
+        "Serata piena, tempo stretto, nessun minuto di troppo.",
+    ];
+    match suggestions.get(i) {
+        Some(s) => (s.tag.as_str(), s.prompt.as_str(), s.desc.as_str()),
+        None => (TAGS[i % 4], TITLES[i % 4], DESC[i % 4]),
+    }
+}
+
+fn suggestion_card(
+    ui: &mut egui::Ui,
+    width: f32,
+    index: usize,
+    tag: &str,
+    title: &str,
+    desc: &str,
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(
+        egui::vec2(width, 118.0),
+        Sense::click(),
+    );
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
+    let p = ui.painter();
+    p.rect_filled(
+        rect,
+        Rounding::same(lumen::RADIUS),
+        if hover > 0.01 {
+            lumen::RAISED
+        } else {
+            lumen::SURFACE
+        },
+    );
+    p.rect_stroke(
+        rect,
+        Rounding::same(lumen::RADIUS),
+        Stroke::new(
+            1.0_f32,
+            if hover > 0.01 {
+                lumen::EMBER
+            } else {
+                lumen::BORDER
+            },
+        ),
+    );
+    p.text(
+        rect.min + egui::vec2(14.0, 12.0),
+        Align2::LEFT_TOP,
+        format!("{:02} / {}", index + 1, tag.to_uppercase()),
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::EMBER,
+    );
+    p.text(
+        rect.min + egui::vec2(14.0, 32.0),
+        Align2::LEFT_TOP,
+        theme::truncate(title, 34),
+        FontId::new(18.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
+        lumen::IVORY,
+    );
+    p.text(
+        rect.min + egui::vec2(14.0, 60.0),
+        Align2::LEFT_TOP,
+        theme::truncate(desc, 72),
+        FontId::proportional(11.0),
+        lumen::MUTED,
+    );
+    p.text(
+        rect.right_bottom() + egui::vec2(-14.0, -12.0),
+        Align2::RIGHT_BOTTOM,
+        "↗",
+        FontId::proportional(13.0),
+        if hover > 0.01 {
+            lumen::EMBER
+        } else {
+            lumen::FAINT
+        },
+    );
+    lumen::focus(ui, &resp, lumen::RADIUS);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+// -------------------------------------------------------- conversazione -----
+
 pub fn view(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -334,8 +572,6 @@ pub fn view(
     bottom_pad: f32,
 ) -> Actions {
     let mut actions = Actions::default();
-    // Resta in fondo durante lo streaming e per un attimo dopo: le card
-    // arrivano in blocco e altrimenti resterebbero sotto il bordo.
     let stick = busy
         || entries
             .last()
@@ -348,22 +584,36 @@ pub fn view(
         .auto_shrink([false, false])
         .stick_to_bottom(stick)
         .show(ui, |ui| {
-            ui.add_space(8.0);
-            for (index, entry) in entries.iter().enumerate() {
-                user_bubble(ui, &entry.user);
-                ui.add_space(7.0);
-                answer_view(ui, images, tax, entry, index, now, &mut actions);
-                ui.add_space(16.0);
-            }
-            // Dopo un invio si torna in fondo anche se si era scrollato su:
-            // il messaggio appena scritto non deve restare fuori vista.
-            if *jump {
-                ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
-                *jump = false;
-            }
-            // Il composer galleggia sopra la conversazione: lo spazio finale
-            // evita che l'ultima card finisca dietro al riquadro di scrittura.
-            ui.add_space(bottom_pad);
+            let avail = ui.available_width();
+            let pad = content_pad(avail);
+            let width = content_width(avail);
+            ui.add_space(20.0);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space(pad);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        ui.set_max_width(width);
+                        for (index, entry) in entries.iter().enumerate() {
+                            user_message(ui, &entry.user);
+                            ui.add_space(18.0);
+                            answer_view(ui, images, tax, entry, index, now, &mut actions);
+                            if index + 1 < entries.len() {
+                                ui.add_space(24.0);
+                                hairline(ui);
+                                ui.add_space(24.0);
+                            }
+                        }
+                        if *jump {
+                            ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
+                            *jump = false;
+                        }
+                        ui.add_space(bottom_pad.max(16.0));
+                    },
+                );
+            });
         });
     let max_offset = (output.content_size.y - output.inner_rect.height()).max(0.0);
     actions.scroll_offset = output.state.offset.y;
@@ -371,356 +621,40 @@ pub fn view(
     actions
 }
 
-/// Composer condiviso da casa e conversazione. `width` e' la larghezza del
-/// riquadro; `focus` richiede il cursore (scorciatoia «/» o spunto cliccato).
-/// Restituisce true quando l'utente vuole inviare.
-pub fn composer(
-    ui: &mut egui::Ui,
-    draft: &mut String,
-    busy: bool,
-    focus: bool,
-    width: f32,
-) -> bool {
-    let mut send = false;
-    let edit_id = egui::Id::new("chat-composer");
-    // Il fuoco va letto prima del TextEdit: Invio puo' farlo perdere nello
-    // stesso frame (egui lo tratta come attivazione del widget a fuoco).
-    let focused_at_start = ui.memory(|m| m.has_focus(edit_id));
-    let focused = focused_at_start;
-    let inner_w = (width - 28.0).max(60.0);
-
-    let mut prepared = egui::Frame::none()
-        .fill(if focused {
-            theme::mix(theme::CARD, theme::CARD_HOVER, 0.28)
-        } else {
-            theme::CARD
-        })
-        .stroke(Stroke::new(
-            1.0_f32,
-            if focused {
-                theme::alpha(theme::ACCENT, 205)
-            } else {
-                theme::BORDER
-            },
-        ))
-        .rounding(Rounding::same(17.0))
-        .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 10.0),
-            blur: 28.0,
-            spread: 0.0,
-            color: Color32::from_black_alpha(120),
-        })
-        .inner_margin(egui::Margin::symmetric(14.0, 10.0))
-        .begin(ui);
-    // Il Frame eredita il layout orizzontale del chiamante: qui dentro
-    // vogliamo esplicitamente testo sopra e riga dei comandi sotto.
-    prepared
-        .content_ui
-        .with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.set_width(inner_w);
-            let resp = ui.add(
-                egui::TextEdit::multiline(draft)
-                    .id(edit_id)
-                    .frame(false)
-                    .desired_rows(1)
-                    .desired_width(inner_w)
-                    .hint_text("Scrivi cosa vuoi vedere…")
-                    .font(egui::TextStyle::Body)
-                    .return_key(egui::KeyboardShortcut::new(
-                        egui::Modifiers::SHIFT,
-                        egui::Key::Enter,
-                    )),
-            );
-            if focus {
-                resp.request_focus();
-            }
-            let enter = ui.input(|i| {
-                i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
-            });
-            if enter && (focused_at_start || resp.has_focus()) {
-                send = true;
-            }
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                // La riga occupa tutto il composer: il suggerimento resta a
-                // sinistra, il pulsante di invio a destra.
-                ui.set_width(inner_w);
-                ui.label(
-                    RichText::new("Invio invia · Shift+Invio va a capo")
-                        .size(10.0)
-                        .color(theme::FAINT),
-                );
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let enabled = !busy && !draft.trim().is_empty();
-                        let button = send_button(ui, enabled, busy);
-                        if button.clicked() {
-                            send = true;
-                        }
-                    },
-                );
-            });
-        });
-    prepared.end(ui);
-    if send && (busy || draft.trim().is_empty()) {
-        send = false;
-    }
-    send
-}
-
-/// Barra compatta del composer: mentre si legge la conversazione occupa
-/// poco spazio; un click riapre il campo vero.
-pub fn composer_mini(ui: &mut egui::Ui, draft: &str, busy: bool, width: f32) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 44.0), Sense::click());
-    let hover = ui
-        .ctx()
-        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    let painter = ui.painter();
-    painter.rect_filled(
-        rect,
-        Rounding::same(17.0),
-        theme::mix(theme::CARD, theme::CARD_HOVER, hover),
+fn user_message(ui: &mut egui::Ui, text: &str) {
+    let avail = ui.available_width();
+    let galley = ui.painter().layout(
+        text.to_string(),
+        FontId::proportional(13.0),
+        lumen::IVORY,
+        (avail * 0.7).min(620.0),
     );
-    painter.rect_stroke(
-        rect,
-        Rounding::same(17.0),
-        Stroke::new(
-            1.0_f32,
-            if resp.hovered() {
-                theme::alpha(theme::ACCENT, 170)
-            } else {
-                theme::BORDER
-            },
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(avail, galley.size().y + 8.0),
+        Sense::hover(),
+    );
+    let right = rect.right() - 36.0;
+    let left = (right - galley.size().x).max(rect.left());
+    ui.painter().galley(
+        egui::pos2(left, rect.top() + 2.0),
+        galley.clone(),
+        lumen::IVORY,
+    );
+    ui.painter().rect_filled(
+        Rect::from_min_max(
+            egui::pos2(right + 10.0, rect.top() + 2.0),
+            egui::pos2(right + 12.0, rect.top() + 2.0 + galley.size().y),
         ),
+        Rounding::ZERO,
+        lumen::EMBER,
     );
-    let text = if busy {
-        "Sto preparando i consigli…"
-    } else if draft.trim().is_empty() {
-        "Scrivi un messaggio…"
-    } else {
-        draft.trim()
-    };
-    painter.text(
-        rect.left_center() + egui::vec2(16.0, 0.0),
-        Align2::LEFT_CENTER,
-        theme::truncate(text, 72),
-        FontId::proportional(12.5),
-        theme::DIM,
+    ui.painter().text(
+        egui::pos2(rect.right() - 8.0, rect.top() + 3.0),
+        Align2::RIGHT_TOP,
+        "TU",
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
     );
-    painter.text(
-        rect.right_center() - egui::vec2(16.0, 0.0),
-        Align2::RIGHT_CENTER,
-        "Apri",
-        FontId::proportional(10.5),
-        theme::FAINT,
-    );
-    resp.on_hover_text("Riapri la barra di ricerca").clicked()
-}
-
-/// Cerchio di invio: gradiente quando c'e testo, puntini mentre l'AI lavora.
-fn send_button(ui: &mut egui::Ui, enabled: bool, busy: bool) -> egui::Response {
-    let sense = if enabled {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(30.0, 30.0), sense);
-    let hover = if enabled {
-        ui.ctx()
-            .animate_bool_with_time(resp.id, resp.hovered(), 0.12)
-    } else {
-        0.0
-    };
-    let painter = ui.painter();
-    if enabled && hover > 0.02 {
-        painter.circle_filled(
-            rect.center(),
-            18.0 + hover,
-            theme::alpha(theme::ACCENT, (38.0 * hover) as u8),
-        );
-    }
-    let fill = if enabled {
-        theme::mix(theme::ACCENT, theme::ACCENT_2, 0.24 + 0.16 * hover)
-    } else {
-        theme::CARD
-    };
-    painter.circle_filled(rect.center(), 15.0, fill);
-    painter.circle_stroke(
-        rect.center(),
-        15.0,
-        Stroke::new(
-            1.0_f32,
-            if enabled {
-                theme::alpha(theme::ACCENT_3, 95)
-            } else {
-                theme::BORDER
-            },
-        ),
-    );
-    if busy {
-        let now = ui.input(|i| i.time);
-        for i in 0..3 {
-            let a = 0.30 + 0.70 * theme::pulse(now - i as f64 * 0.12, 5.0);
-            painter.circle_filled(
-                rect.center() + egui::vec2((i as f32 - 1.0) * 5.0, 0.0),
-                1.7,
-                theme::alpha(theme::ACCENT_3, (210.0 * a) as u8),
-            );
-        }
-        ui.ctx().request_repaint();
-    } else {
-        painter.text(
-            rect.center() + egui::vec2(0.0, -0.5),
-            Align2::CENTER_CENTER,
-            "↑",
-            FontId::proportional(16.0),
-            if enabled {
-                Color32::WHITE
-            } else {
-                theme::FAINT
-            },
-        );
-    }
-    if enabled {
-        if resp.has_focus() {
-            painter.circle_stroke(
-                rect.center(),
-                18.0,
-                Stroke::new(1.5_f32, theme::alpha(theme::ACCENT_3, 190)),
-            );
-        }
-        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text("Invia")
-    } else if busy {
-        resp.on_hover_text("Sto preparando i consigli…")
-    } else {
-        resp.on_hover_text("Scrivi un messaggio")
-    }
-}
-
-/// Comparsa scaglionata delle card dopo una rotazione. Curva ease-out
-/// cubica: veloce all'inizio, morbida sull'arrivo.
-fn card_reveal(elapsed: f64, index: usize) -> f32 {
-    let local = ((elapsed - index as f64 * 0.035) / 0.26).clamp(0.0, 1.0);
-    (1.0 - (1.0 - local).powi(3)) as f32
-}
-
-/// Schedina di spunto: etichetta, richiesta e una riga di contesto.
-/// `reveal` va da 0 (appena arrivata) a 1 (ferma). Il rect del hit-test resta
-/// fermo: si muove solo la pittura, cosi' il clic non balla durante la
-/// comparsa.
-fn spunto_card(
-    ui: &mut egui::Ui,
-    w: f32,
-    tag: &str,
-    prompt: &str,
-    desc: &str,
-    reveal: f32,
-) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 118.0), Sense::click());
-    let hover = ui
-        .ctx()
-        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    let ease = reveal.clamp(0.0, 1.0);
-    let rect = rect.translate(egui::vec2(0.0, (1.0 - ease) * 7.0));
-    let fade = |c: Color32| theme::alpha(c, (c.a() as f32 * ease) as u8);
-    let painter = ui.painter();
-    painter.rect_filled(
-        rect,
-        Rounding::same(14.0),
-        fade(theme::mix(theme::CARD, theme::CARD_HOVER, hover)),
-    );
-    if ease > 0.01 && ease < 0.99 {
-        // Filo di luce blu/ciano: accompagna il cambio senza un lampo pieno.
-        let edge = egui::Rect::from_min_size(rect.left_top(), egui::vec2(rect.width(), 1.6));
-        let glow = (1.0 - ease) * 150.0;
-        fx::gradient_bar(
-            painter,
-            edge,
-            theme::alpha(theme::ACCENT, glow as u8),
-            theme::alpha(theme::ACCENT_2, (glow * 0.8) as u8),
-            1.0,
-        );
-    }
-    painter.rect_stroke(
-        rect,
-        Rounding::same(14.0),
-        Stroke::new(
-            1.0_f32,
-            fade(theme::mix(
-                theme::BORDER,
-                theme::alpha(theme::ACCENT, 200),
-                hover,
-            )),
-        ),
-    );
-    theme::focus_ring(ui, &resp, 14.0);
-    painter.text(
-        rect.min + egui::vec2(14.0, 12.0),
-        Align2::LEFT_TOP,
-        tag.to_uppercase(),
-        FontId::proportional(10.0),
-        fade(theme::alpha(theme::ACCENT_3, 220)),
-    );
-    let mut title = egui::text::LayoutJob::simple(
-        prompt.to_string(),
-        FontId::proportional(12.5),
-        fade(theme::TEXT),
-        (w - 28.0).max(40.0),
-    );
-    title.wrap.max_rows = 2;
-    title.wrap.overflow_character = Some('…');
-    let title = painter.layout_job(title);
-    painter.galley(rect.min + egui::vec2(14.0, 30.0), title, fade(theme::TEXT));
-
-    let mut subtitle = egui::text::LayoutJob::simple(
-        desc.to_string(),
-        FontId::proportional(11.0),
-        fade(theme::DIM),
-        (w - 28.0).max(40.0),
-    );
-    subtitle.wrap.max_rows = 2;
-    subtitle.wrap.overflow_character = Some('…');
-    let subtitle = painter.layout_job(subtitle);
-    painter.galley(rect.min + egui::vec2(14.0, 68.0), subtitle, fade(theme::DIM));
-    painter.text(
-        rect.right_bottom() + egui::vec2(-14.0, -12.0),
-        Align2::RIGHT_BOTTOM,
-        "→",
-        FontId::proportional(12.0),
-        fade(theme::mix(theme::FAINT, theme::ACCENT_3, hover)),
-    );
-    if resp.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
-    resp
-}
-
-fn user_bubble(ui: &mut egui::Ui, text: &str) {
-    let max = (ui.available_width() * 0.72).min(620.0);
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-        egui::Frame::none()
-            .fill(theme::mix(theme::ACCENT_DIM, theme::ACCENT, 0.16))
-            .stroke(Stroke::new(1.0_f32, theme::alpha(theme::ACCENT, 90)))
-            .rounding(Rounding {
-                nw: 14.0,
-                ne: 5.0,
-                sw: 14.0,
-                se: 14.0,
-            })
-            .shadow(egui::epaint::Shadow {
-                offset: egui::vec2(0.0, 8.0),
-                blur: 20.0,
-                spread: 0.0,
-                color: Color32::from_black_alpha(80),
-            })
-            .inner_margin(egui::Margin::symmetric(13.0, 9.0))
-            .show(ui, |ui| {
-                ui.set_max_width(max);
-                ui.label(RichText::new(text).size(13.0));
-            });
-    });
 }
 
 fn answer_view(
@@ -733,132 +667,352 @@ fn answer_view(
     actions: &mut Actions,
 ) {
     let a = &entry.answer;
-    match a.state {
-        State::Busy => {
-            busy_view(ui, a, index, now, actions);
-            return;
-        }
-        State::Done => {}
+    let meta = match a.state {
+        State::Busy => "IN CORSO".to_string(),
+        State::Done if a.error.is_some() => "ERRORE".to_string(),
+        State::Done if a.cards.is_empty() => "NESSUN RISULTATO".to_string(),
+        State::Done => format!("SELEZIONE · {} FILM", a.cards.len()),
+    };
+    ui.horizontal(|ui| {
+        ui.label(lumen::mono(10.0, "CINEMATCH").color(lumen::EMBER));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(8.0);
+            ui.label(lumen::mono(9.0, meta).color(lumen::FAINT));
+        });
+    });
+    ui.add_space(8.0);
+    hairline(ui);
+    ui.add_space(12.0);
+
+    if a.state == State::Busy {
+        busy_view(ui, a, index, now, actions);
+        return;
     }
 
     if let Some(err) = &a.error {
         let interrupted = err == "Risposta interrotta.";
         ui.label(
-            RichText::new(if interrupted {
-                err.clone()
+            lumen::body(
+                12.0,
+                if interrupted {
+                    err.clone()
+                } else {
+                    format!("Qualcosa non ha funzionato: {err}")
+                },
+            )
+            .color(if interrupted {
+                lumen::MUTED
             } else {
-                format!("Qualcosa non ha funzionato: {err}")
-            })
-            .size(12.5)
-            .color(if interrupted { theme::DIM } else { theme::DANGER }),
+                lumen::DANGER
+            }),
         );
         ui.add_space(4.0);
-        if theme::chip(
-            ui,
-            "↻  Riprova",
-            false,
-            true,
-            Some("Ripete questa richiesta"),
-        )
-        .clicked()
-        {
+        if link(ui, "Riprova", lumen::EMBER).clicked() {
             actions.retry = Some(index);
         }
+        if a.cards.is_empty() {
+            return;
+        }
+        ui.add_space(10.0);
     }
+
     if !a.intro.is_empty() {
-        ui.label(RichText::new(&a.intro).size(13.5));
+        ui.scope(|ui| {
+            ui.set_max_width(900.0_f32.min(ui.available_width()));
+            ui.label(lumen::body(14.0, &a.intro));
+        });
     }
     if !a.understood.is_empty() {
-        ui.add_space(2.0);
-        ui.label(
-            RichText::new(format!("Ho capito così · {}", a.understood))
-                .size(11.0)
-                .color(theme::DIM),
-        );
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.label(lumen::label("Criteri"));
+            ui.add(
+                egui::Label::new(
+                    lumen::mono(10.0, theme::truncate(&a.understood, 180))
+                        .color(lumen::MUTED),
+                )
+                .truncate(),
+            );
+        });
     }
     if let Some(limit) = &a.limit {
-        ui.add_space(2.0);
-        ui.label(RichText::new(limit).size(11.5).color(theme::ACCENT_3));
+        ui.add_space(5.0);
+        ui.horizontal_top(|ui| {
+            let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 16.0), Sense::hover());
+            ui.painter().rect_filled(bar, Rounding::ZERO, lumen::EMBER);
+            ui.add_space(7.0);
+            ui.add(
+                egui::Label::new(wrapped(
+                    limit,
+                    10.5,
+                    lumen::MUTED,
+                    ui.available_width(),
+                    3,
+                ))
+                .wrap(),
+            );
+        });
     }
+
     if a.cards.is_empty() {
         if a.intro.is_empty() && a.error.is_none() {
+            ui.add_space(4.0);
             ui.label(
-                RichText::new("Non ho trovato film da proporti con questi criteri.")
-                    .size(12.5)
-                    .color(theme::DIM),
+                lumen::body(
+                    12.0,
+                    "Nessun film con questi criteri. Prova ad allargare la richiesta.",
+                )
+                .color(lumen::MUTED),
             );
         }
         return;
     }
 
-    ui.add_space(8.0);
-    for (i, card) in a.cards.iter().enumerate() {
-        let alpha = if a.done_at <= 0.0 {
-            1.0
-        } else {
-            ((now - a.done_at - 0.05 * i as f64) / 0.22).clamp(0.0, 1.0) as f32
-        };
-        if alpha < 1.0 {
-            ui.ctx().request_repaint();
-        }
-        film_card(ui, images, tax, card, i, alpha, actions);
+    ui.add_space(14.0);
+    hero_card(ui, images, tax, &a.cards[0], actions);
+    if a.cards.len() > 1 {
         ui.add_space(10.0);
+        let cols = result_columns(ui.available_width());
+        let gap = 10.0;
+        let card_w = ((ui.available_width() - gap * (cols - 1) as f32) / cols as f32)
+            .floor();
+        for row in a.cards[1..].chunks(cols) {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for card in row {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(card_w, 0.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| compact_card(ui, images, tax, card, actions),
+                    );
+                }
+            });
+            ui.add_space(gap);
+        }
     }
 
-    if a.grid_ready && a.total > 0 && !a.facets.is_empty() {
-        ui.add_space(2.0);
-        ui.horizontal_wrapped(|ui| {
-            if theme::chip(
+    let total = if a.total > 0 {
+        a.total
+    } else {
+        a.cards.len() as u32
+    };
+    ui.add_space(4.0);
+    hairline(ui);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        if a.grid_ready && total > 0 && !a.facets.is_empty() {
+            if link(
                 ui,
-                &format!("Vedi tutti i {} in griglia", theme::thousands(a.total)),
-                false,
-                true,
-                Some("Apre la griglia con gli stessi criteri"),
+                &format!("Vedi tutti i {} in griglia ↗", theme::thousands(total)),
+                lumen::EMBER,
             )
             .clicked()
             {
                 actions.show_all = Some(index);
             }
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(8.0);
+            ui.label(
+                lumen::mono(9.0, format!("{} RISULTATI", theme::thousands(total)))
+                    .color(lumen::FAINT),
+            );
         });
-    }
+    });
 }
 
-/// Avanzamento della pipeline: tre tappe, quella attiva pulsa; sotto, la
-/// barra che avanza. Durante lo streaming il testo cresce col cursore.
-fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64, actions: &mut Actions) {
-    const TAPPE: [&str; 3] = [
-        "Interpreto la richiesta",
-        "Cerco su TMDB",
-        "Scelgo e scrivo i film",
-    ];
-    let stage = a.stage.min(3);
-    ui.horizontal_wrapped(|ui| {
-        for (i, label) in TAPPE.iter().enumerate() {
-            let done = (i as u8) + 1 < stage;
-            let active = (i as u8) + 1 == stage.max(1);
-            if i > 0 {
-                ui.add_space(10.0);
+fn hero_card(
+    ui: &mut egui::Ui,
+    images: &ImageStore,
+    tax: &Taxonomy,
+    card: &Card,
+    actions: &mut Actions,
+) {
+    let frame = egui::Frame::none()
+        .fill(lumen::SURFACE)
+        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
+        .rounding(Rounding::same(lumen::RADIUS))
+        .inner_margin(egui::Margin::same(12.0));
+    frame.show(ui, |ui| {
+        let available = ui.available_width();
+        ui.set_min_width(available);
+        let poster_w = if available < 760.0 { 110.0 } else { 150.0 };
+        ui.horizontal_top(|ui| {
+            let resp = lumen::poster(
+                ui,
+                images,
+                Some(&card.movie),
+                poster_w,
+                poster_w * 1.5,
+                true,
+            );
+            if resp.clicked() {
+                actions.open_detail = Some(card.movie.id);
             }
-            ui.horizontal(|ui| {
-                if done {
-                    fx::dot(ui, theme::OK, 0.0);
-                    ui.label(
-                        RichText::new(format!("✓ {label}"))
-                            .size(11.0)
-                            .color(theme::mix(theme::OK, theme::DIM, 0.35)),
-                    );
-                } else if active {
-                    let p = theme::pulse(now, 6.0);
-                    fx::dot(ui, theme::mix(theme::ACCENT, theme::ACCENT_2, p), p);
-                    ui.label(RichText::new(*label).size(11.0).strong());
-                } else {
-                    fx::dot(ui, theme::FAINT, 0.0);
-                    ui.label(RichText::new(*label).size(11.0).color(theme::FAINT));
+            ui.add_space(14.0);
+            ui.vertical(|ui| {
+                ui.label(lumen::display(
+                    if poster_w < 120.0 { 22.0 } else { 28.0 },
+                    &card.movie.title,
+                ));
+                ui.add(
+                    egui::Label::new(
+                        lumen::mono(10.0, movie_meta(card, tax)).color(lumen::FAINT),
+                    )
+                    .truncate(),
+                );
+                ui.add_space(8.0);
+                ui.add(egui::Label::new(wrapped(
+                    &card.perche,
+                    13.0,
+                    lumen::MUTED,
+                    ui.available_width(),
+                    3,
+                )));
+                if !card.consiglio.is_empty() {
+                    ui.add_space(6.0);
+                    consiglio(ui, &card.consiglio, 11.0);
                 }
+                if let Some(av) = availability(card) {
+                    ui.add_space(6.0);
+                    ui.add(
+                        egui::Label::new(
+                            lumen::mono(10.0, av).color(lumen::CELADON),
+                        )
+                        .truncate(),
+                    );
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 14.0;
+                    if link(ui, "Apri scheda", lumen::EMBER).clicked() {
+                        actions.open_detail = Some(card.movie.id);
+                    }
+                    if link(ui, "Film simili", lumen::MUTED)
+                        .on_hover_text("Cerca film simili a questo nella griglia")
+                        .clicked()
+                    {
+                        actions.similar_to = Some(card.movie.title.clone());
+                    }
+                });
             });
+        });
+    });
+}
+
+fn compact_card(
+    ui: &mut egui::Ui,
+    images: &ImageStore,
+    tax: &Taxonomy,
+    card: &Card,
+    actions: &mut Actions,
+) {
+    let frame = egui::Frame::none()
+        .fill(lumen::SURFACE)
+        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
+        .rounding(Rounding::same(lumen::RADIUS))
+        .inner_margin(egui::Margin::same(10.0));
+    frame.show(ui, |ui| {
+        let content_w = ui.available_width();
+        ui.set_min_width(content_w);
+        ui.horizontal_top(|ui| {
+            let resp = lumen::poster(ui, images, Some(&card.movie), 64.0, 96.0, false);
+            if resp.clicked() {
+                actions.open_detail = Some(card.movie.id);
+            }
+            ui.add_space(10.0);
+            ui.vertical(|ui| {
+                ui.add(
+                    egui::Label::new(lumen::bold(15.0, &card.movie.title)).truncate(),
+                );
+                ui.add(
+                    egui::Label::new(
+                        lumen::mono(9.0, movie_meta(card, tax)).color(lumen::FAINT),
+                    )
+                    .truncate(),
+                );
+                ui.add_space(4.0);
+                ui.add(egui::Label::new(wrapped(
+                    &card.perche,
+                    11.0,
+                    lumen::MUTED,
+                    ui.available_width(),
+                    2,
+                )));
+                if !card.consiglio.is_empty() {
+                    ui.add_space(4.0);
+                    consiglio(ui, &card.consiglio, 10.0);
+                }
+                if let Some(av) = availability(card) {
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::Label::new(
+                            lumen::mono(8.5, av).color(lumen::CELADON),
+                        )
+                        .truncate(),
+                    );
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 12.0;
+                    if link(ui, "Apri scheda", lumen::EMBER).clicked() {
+                        actions.open_detail = Some(card.movie.id);
+                    }
+                    if link(ui, "Film simili", lumen::MUTED).clicked() {
+                        actions.similar_to = Some(card.movie.title.clone());
+                    }
+                });
+            });
+        });
+    });
+}
+
+fn consiglio(ui: &mut egui::Ui, text: &str, size: f32) {
+    ui.horizontal_top(|ui| {
+        let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 26.0), Sense::hover());
+        ui.painter().rect_filled(bar, Rounding::ZERO, lumen::EMBER);
+        ui.add_space(7.0);
+        ui.add(
+            egui::Label::new(wrapped(
+                &format!("Consiglio · {text}"),
+                size,
+                lumen::MUTED,
+                ui.available_width(),
+                2,
+            ))
+            .wrap(),
+        );
+    });
+}
+
+fn busy_view(
+    ui: &mut egui::Ui,
+    a: &Answer,
+    index: usize,
+    _now: f64,
+    actions: &mut Actions,
+) {
+    const TAPPE: [&str; 3] = ["INTERPRETO", "CERCO SU TMDB", "SCELGO I FILM"];
+    let stage = a.stage.min(3).max(1);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        for (i, label) in TAPPE.iter().enumerate() {
+            let step = i as u8 + 1;
+            let (color, text) = if step < stage {
+                (lumen::MUTED, format!("✓ {label}"))
+            } else if step == stage {
+                (lumen::EMBER, label.to_string())
+            } else {
+                (lumen::FAINT, label.to_string())
+            };
+            ui.label(lumen::mono(9.0, text).color(color));
+            if i + 1 < TAPPE.len() {
+                ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
+            }
         }
     });
-    ui.add_space(7.0);
+    ui.add_space(9.0);
     let target = (stage as f32 / 3.0).max(0.08);
     let anim = ui.ctx().animate_value_with_time(
         egui::Id::new(("chat-progress", index)),
@@ -867,283 +1021,194 @@ fn busy_view(ui: &mut egui::Ui, a: &Answer, index: usize, now: f64, actions: &mu
     );
     fx::progress(ui, 260.0, anim);
     if !a.intro.is_empty() {
-        ui.add_space(9.0);
-        let caret = if theme::pulse(now, 4.0) > 0.5 { "▌" } else { "" };
+        ui.add_space(10.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label(RichText::new(&a.intro).size(13.5));
-            ui.label(RichText::new(caret).size(13.5).color(theme::ACCENT));
+            ui.label(lumen::body(13.0, &a.intro));
+            ui.label(lumen::body(13.0, "▌").color(lumen::EMBER));
         });
     }
-    ui.add_space(7.0);
-    if theme::chip(ui, "■  Interrompi", false, true, Some("Ferma la risposta in corso"))
-        .clicked()
-    {
+    ui.add_space(9.0);
+    if link(ui, "Interrompi", lumen::MUTED).clicked() {
         actions.stop = true;
     }
 }
 
-fn badge(ui: &mut egui::Ui, text: &str) {
-    let galley = ui.painter().layout(
-        text.to_string(),
-        FontId::proportional(10.0),
-        Color32::WHITE,
-        f32::INFINITY,
-    );
-    let size = galley.size() + egui::vec2(12.0, 4.0);
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    fx::gradient_bar(
-        ui.painter(),
-        rect,
-        theme::ACCENT,
-        theme::mix(theme::ACCENT_2, theme::ACCENT, 0.45),
-        6.0,
-    );
-    ui.painter()
-        .galley(rect.min + egui::vec2(6.0, 2.0), galley, Color32::WHITE);
+// ------------------------------------------------------------ composer -----
+
+pub fn composer(
+    ui: &mut egui::Ui,
+    draft: &mut String,
+    busy: bool,
+    focus: bool,
+    width: f32,
+) -> bool {
+    composer_inner(
+        ui,
+        draft,
+        busy,
+        focus,
+        width,
+        "Scrivi cosa vuoi vedere…",
+        false,
+        false,
+    )
 }
 
-fn film_card(
+fn composer_inner(
     ui: &mut egui::Ui,
-    images: &ImageStore,
-    tax: &Taxonomy,
-    card: &Card,
-    index: usize,
-    alpha: f32,
-    actions: &mut Actions,
-) {
-    ui.scope(|ui| {
-        ui.set_opacity(alpha);
-        let outer = theme::card_frame()
-            .show(ui, |ui| {
-                // Tutte le card occupano la stessa colonna: i bordi laterali
-                // restano allineati anche con titoli e commenti di lunghezza
-                // diversa.
-                ui.set_width(ui.available_width());
-                ui.horizontal_top(|ui| {
-                    // Poster cliccabile, con shimmer finché l'immagine arriva.
-                    let (rect, resp) =
-                        ui.allocate_exact_size(egui::vec2(116.0, 174.0), Sense::click());
-                    ui.painter().rect_filled(
-                        rect,
-                        Rounding::same(12.0),
-                        theme::POSTER_BG,
-                    );
-                    let mut loaded = false;
-                    if let Some(path) = &card.movie.poster_path {
-                        let uri = poster_url(path, "w342");
-                        if let Some(tex) = images.texture(ui.ctx(), &uri) {
-                            let sized = egui::load::SizedTexture::new(tex.id(), rect.size());
-                            ui.put(rect, egui::Image::new(sized).rounding(Rounding::same(12.0)));
-                            loaded = true;
-                        }
-                    }
-                    let now = ui.ctx().input(|i| i.time);
-                    if !loaded {
-                        fx::shimmer(ui, rect, 12.0, now);
-                    }
-                    let hover = ui
-                        .ctx()
-                        .animate_bool_with_time(resp.id, resp.hovered(), 0.16);
-                    fx::ring(ui, rect, 12.0, theme::ACCENT, hover);
-                    theme::focus_ring(ui, &resp, 12.0);
-                    if resp.on_hover_text("Apri la scheda").clicked() {
-                        actions.open_detail = Some(card.movie.id);
-                    }
-                    // Voto in sovraimpressione, in basso sul poster.
-                    if card.movie.votes > 0 {
-                        let g = ui.painter().layout(
-                            format!("★ {:.1}", card.movie.rating),
-                            FontId::proportional(10.0),
-                            Color32::WHITE,
-                            f32::INFINITY,
-                        );
-                        let size = g.size() + egui::vec2(10.0, 4.0);
-                        let chip = Rect::from_min_size(
-                            egui::pos2(rect.left() + 6.0, rect.bottom() - size.y - 6.0),
-                            size,
-                        );
-                        let p = ui.painter();
-                        p.rect_filled(chip, Rounding::same(7.0), Color32::from_black_alpha(160));
-                        p.galley(chip.min + egui::vec2(5.0, 2.0), g, Color32::WHITE);
-                    }
+    draft: &mut String,
+    busy: bool,
+    focus: bool,
+    width: f32,
+    hint: &str,
+    wide_send: bool,
+    compact: bool,
+) -> bool {
+    let mut send = false;
+    let edit_id = egui::Id::new("chat-composer");
+    let focused_at_start = ui.memory(|m| m.has_focus(edit_id));
+    let focused = focused_at_start;
+    let button_w = if wide_send { 100.0 } else { 40.0 };
+    let gap = 8.0;
+    let inner_w = (width - 24.0).max(120.0);
+    let extra = if wide_send && !compact { 52.0 } else { 0.0 };
+    let text_w = (inner_w - button_w - gap - extra).max(70.0);
 
-                    ui.add_space(4.0);
-                    ui.vertical(|ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            // Il titolo e i metadati hanno bisogno del loro
-                            // respiro: lo spacing zero dell'intro non si eredita.
-                            ui.spacing_mut().item_spacing.x = 6.0;
-                            ui.label(
-                                RichText::new(format!("{}.", index + 1))
-                                    .size(15.0)
-                                    .strong()
-                                    .color(theme::ACCENT),
-                            );
-                            ui.label(RichText::new(&card.movie.title).size(15.5).strong());
-                            if let Some(y) = card.movie.year {
-                                ui.label(
-                                    RichText::new(y.to_string()).size(12.0).color(theme::DIM),
-                                );
-                            }
-                            if index == 0 {
-                                badge(ui, "SCELTA MIGLIORE");
-                            }
-                        });
-
-                        let mut meta: Vec<String> = Vec::new();
-                        if let Some(m) = &card.meta {
-                            if let Some(dir) = &m.director {
-                                meta.push(format!("di {dir}"));
-                            }
-                            if let Some(rt) = m.runtime {
-                                meta.push(format!("{rt} min"));
-                            }
-                        }
-                        if card.movie.votes > 0 {
-                            meta.push(format!(
-                                "TMDB {:.1} ★ · {} voti",
-                                card.movie.rating,
-                                theme::thousands(card.movie.votes)
-                            ));
-                        }
-                        if let Some(imdb) = card.meta.as_ref().and_then(|m| m.imdb) {
-                            if imdb.votes > 0 {
-                                meta.push(format!("IMDb {:.1} ★", imdb.rating));
-                            }
-                        }
-                        if !meta.is_empty() {
-                            ui.label(
-                                RichText::new(meta.join("   ·   "))
-                                    .size(11.5)
-                                    .color(theme::DIM),
-                            );
-                        }
-
-                        let genres: Vec<String> = card
-                            .movie
-                            .genre_ids
-                            .iter()
-                            .take(3)
-                            .filter_map(|g| tax.genre_name(*g))
-                            .collect();
-                        if !genres.is_empty() {
-                            ui.label(
-                                RichText::new(genres.join(" · "))
-                                    .size(11.0)
-                                    .color(theme::DIM),
-                            );
-                        }
-                        if let Some(m) = &card.meta {
-                            let dove = if !m.flatrate.is_empty() {
-                                Some(("In abbonamento", &m.flatrate))
-                            } else if !m.rent.is_empty() {
-                                Some(("A noleggio", &m.rent))
-                            } else {
-                                None
-                            };
-                            if let Some((label, list)) = dove {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{label}: {}",
-                                        list.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
-                                    ))
-                                    .size(11.0)
-                                    .color(theme::OK),
-                                );
-                            }
-                        }
-
-                        ui.add_space(6.0);
-                        ui.label(
-                            RichText::new("PERCHÉ QUESTO FILM")
-                                .size(10.5)
-                                .strong()
-                                .color(theme::ACCENT),
-                        );
-                        ui.add_space(1.0);
-                        ui.label(RichText::new(&card.perche).size(12.5));
-
-                        ui.add_space(6.0);
-                        egui::Frame::none()
-                            .fill(theme::mix(theme::ACCENT_DIM, theme::CARD, 0.45))
-                            .rounding(Rounding::same(12.0))
-                            .inner_margin(egui::Margin::symmetric(11.0, 8.0))
-                            .show(ui, |ui| {
-                                ui.set_max_width(ui.available_width());
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 6.0;
-                                    ui.label(
-                                        RichText::new("Consiglio")
-                                            .size(11.0)
-                                            .strong()
-                                            .color(theme::ACCENT),
-                                    );
-                                    ui.label(RichText::new(&card.consiglio).size(12.0));
-                                });
-                            });
-
-                        ui.add_space(8.0);
-                        ui.horizontal_wrapped(|ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(RichText::new("Apri scheda").size(12.0))
-                                        .fill(Color32::TRANSPARENT)
-                                        .stroke(Stroke::new(1.0_f32, theme::BORDER))
-                                        .rounding(Rounding::same(10.0)),
-                                )
-                                .clicked()
-                            {
-                                actions.open_detail = Some(card.movie.id);
-                            }
-                            if ui
-                                .add(
-                                    egui::Button::new(RichText::new("Film simili").size(12.0))
-                                        .fill(Color32::TRANSPARENT)
-                                        .stroke(Stroke::new(1.0_f32, theme::BORDER))
-                                        .rounding(Rounding::same(10.0)),
-                                )
-                                .on_hover_text("Cerca film simili a questo nella griglia")
-                                .clicked()
-                            {
-                                actions.similar_to = Some(card.movie.title.clone());
-                            }
-                        });
-                    });
+    egui::Frame::none()
+        .fill(lumen::DEEP)
+        .stroke(Stroke::new(
+            1.0_f32,
+            if focused {
+                lumen::EMBER
+            } else {
+                lumen::BORDER
+            },
+        ))
+        .rounding(Rounding::same(lumen::RADIUS_SM))
+        .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                let resp = ui.add_sized(
+                    [text_w, 22.0],
+                    egui::TextEdit::multiline(draft)
+                        .id(edit_id)
+                        .frame(false)
+                        .desired_rows(1)
+                        .hint_text(hint)
+                        .font(egui::TextStyle::Body)
+                        .return_key(egui::KeyboardShortcut::new(
+                            egui::Modifiers::SHIFT,
+                            egui::Key::Enter,
+                        )),
+                );
+                if focus {
+                    resp.request_focus();
+                }
+                let enter = ui.input(|i| {
+                    i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
                 });
+                if enter && (focused_at_start || resp.has_focus()) {
+                    send = true;
+                }
+                if wide_send && !compact {
+                    key_hint(ui, "INVIO");
+                }
+                if send_button(
+                    ui,
+                    !busy && (!draft.trim().is_empty() || wide_send),
+                    wide_send,
+                )
+                .clicked()
+                {
+                    send = true;
+                }
             });
-        // Anello di luce sull'intera card quando il mouse ci passa sopra.
-        let card_hover = ui.ctx().animate_bool_with_time(
-            ui.id().with(("card", card.movie.id)),
-            outer.response.hovered(),
-            0.15,
+        });
+    if send && (busy || draft.trim().is_empty()) {
+        send = false;
+    }
+    send
+}
+
+fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
+    let (w, h) = if wide { (100.0, 40.0) } else { (40.0, 40.0) };
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), sense);
+    let hover = if enabled {
+        ui.ctx()
+            .animate_bool_with_time(resp.id, resp.hovered(), 0.12)
+    } else {
+        0.0
+    };
+    let fill = if enabled {
+        if hover > 0.01 {
+            lumen::EMBER_HI
+        } else {
+            lumen::EMBER
+        }
+    } else {
+        lumen::DEEP
+    };
+    ui.painter()
+        .rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
+    let ink = if enabled {
+        lumen::INK
+    } else {
+        lumen::FAINT
+    };
+    if wide {
+        ui.painter().text(
+            egui::pos2(rect.left() + 12.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            "CERCA",
+            FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            ink,
         );
-        fx::ring(
-            ui,
-            outer.response.rect,
-            theme::ROUND_CARD,
-            theme::ACCENT,
-            card_hover,
+        lumen::icon(
+            ui.painter(),
+            Rect::from_center_size(
+                egui::pos2(rect.right() - 16.0, rect.center().y),
+                egui::vec2(14.0, 14.0),
+            ),
+            lumen::Icon::ArrowRight,
+            ink,
         );
-    });
+    } else {
+        lumen::icon(
+            ui.painter(),
+            rect.shrink(11.0),
+            lumen::Icon::ArrowRight,
+            ink,
+        );
+    }
+    lumen::focus(ui, &resp, lumen::RADIUS_SM);
+    if enabled {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text("Invia · Shift+Invio va a capo")
+    } else {
+        resp.on_hover_text("Scrivi un messaggio")
+    }
 }
 
 #[cfg(test)]
 mod layout_tests {
-    use super::{home_layout, home_top};
+    use super::result_columns;
 
     #[test]
-    fn home_entra_nella_finestra_minima() {
-        // 800x600: sopra il composer restano circa 426 px di scroll.
-        let (cols, rows, height) = home_layout(756.0, 4);
-        assert_eq!((cols, rows), (2, 2));
-        assert!(height + home_top(426.0, height) <= 426.0);
+    fn risultati_una_colonna_nella_finestra_minima() {
+        assert_eq!(result_columns(760.0), 1);
+        assert_eq!(result_columns(939.0), 1);
     }
 
     #[test]
-    fn home_resta_a_quattro_colonne_quando_c_e_spazio() {
-        let (cols, rows, height) = home_layout(969.0, 4);
-        assert_eq!((cols, rows), (4, 1));
-        assert!(height + home_top(484.0, height) <= 484.0);
+    fn risultati_due_colonne_quando_c_e_spazio() {
+        assert_eq!(result_columns(940.0), 2);
+        assert_eq!(result_columns(1100.0), 2);
     }
 }

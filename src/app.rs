@@ -619,10 +619,6 @@ pub struct App {
     chat_context: Intent,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
     chat_jump: bool,
-    /// Composer ridotto a barra mentre si legge la conversazione.
-    chat_composer_collapsed: bool,
-    /// Ultimo offset dello scroll della chat: serve a capire la direzione.
-    chat_scroll_last: f32,
 
     /// Bozza del composer della chat: separata dalla ricerca della griglia.
     chat_draft: String,
@@ -727,8 +723,6 @@ impl App {
             chat_cancel: None,
             chat_context: Intent::default(),
             chat_jump: false,
-            chat_composer_collapsed: false,
-            chat_scroll_last: 0.0,
             chat_draft: String::new(),
             suggestions: Vec::new(),
             suggestion_pool: Vec::new(),
@@ -1083,11 +1077,18 @@ impl App {
         if self.style_lab {
             return;
         }
-        let texts: Vec<&str> = self
+        let mut texts: Vec<&str> = self
             .movies
             .iter()
             .flat_map(|m| [m.title.as_str(), m.original_title.as_str()])
             .collect();
+        for entry in &self.chat {
+            for card in &entry.answer.cards {
+                texts.push(card.movie.title.as_str());
+                texts.push(card.movie.original_title.as_str());
+                texts.push(card.movie.overview.as_str());
+            }
+        }
         crate::ui::fonts::ensure_cjk(&self.ctx, &mut self.cjk_loaded, &texts);
     }
 
@@ -1277,7 +1278,6 @@ impl App {
             // lasciano tutto lo spazio alla conversazione.
             self.close_detail();
             self.guide_open = false;
-            self.chat_composer_collapsed = false;
         }
     }
 
@@ -1334,8 +1334,6 @@ impl App {
             },
         });
         self.chat_jump = true;
-        self.chat_composer_collapsed = false;
-        self.chat_scroll_last = 0.0;
         self.suggestion_hovered = false;
         self.focus = Some(ViewMode::Chat);
     }
@@ -1424,7 +1422,6 @@ impl App {
         }
         self.chat_draft.clear();
         self.chat_jump = true;
-        self.chat_composer_collapsed = false;
         self.suggestion_hovered = false;
         // Spiegazioni e confronti sono comandi locali: non sono nuove
         // ricerche e funzionano anche senza una chiamata AI.
@@ -1463,8 +1460,6 @@ impl App {
         self.chat_context = Intent::default();
         self.chat_draft.clear();
         self.chat_jump = false;
-        self.chat_composer_collapsed = false;
-        self.chat_scroll_last = 0.0;
         self.suggestion_hovered = false;
         self.focus = Some(ViewMode::Chat);
     }
@@ -3013,7 +3008,10 @@ impl App {
                     .fill(egui::Color32::TRANSPARENT)
                     // In chat il composer arriva fino al piè di pagina; la
                     // griglia conserva il suo respiro sopra e sotto.
-                    .inner_margin(egui::Margin::symmetric(14.0, if chat { 0.0 } else { 10.0 })),
+                    .inner_margin(egui::Margin::symmetric(
+                        if chat { 0.0 } else { 14.0 },
+                        if chat { 0.0 } else { 10.0 },
+                    )),
             )
             .show(ctx, |ui| {
                 if self.tmdb.is_none() {
@@ -3066,23 +3064,23 @@ impl App {
             });
     }
 
-    /// Casa e conversazione: la casa ha i quattro spunti al centro e il
-    /// composer sotto, oppure ancorato in basso sulle finestre basse; appena
-    /// si invia, la conversazione occupa lo spazio e il composer resta in basso.
+    /// Casa e conversazione LUMEN. Il composer della conversazione vive in un
+    /// pannello fisso sopra la barra di stato; la casa ha il comando in alto.
     fn chat_central(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        self.ensure_fonts_for_results();
         let now = ctx.input(|i| i.time);
         if self.chat.is_empty() {
             self.refresh_home_suggestions(now);
             let want_focus = self.focus == Some(ViewMode::Chat);
             let actions = chat::home(
                 ui,
+                &self.images,
+                &self.movies,
                 &mut self.chat_draft,
                 self.chat_busy,
                 self.provider.is_llm(),
                 want_focus,
                 &self.suggestions,
-                now,
-                self.suggestion_shown_at,
             );
             if want_focus {
                 self.focus = None;
@@ -3108,128 +3106,72 @@ impl App {
             if actions.send {
                 self.send_chat();
             }
-            if now - self.suggestion_shown_at < 0.45 {
-                ctx.request_repaint();
-            }
             if !self.suggestion_hovered {
                 let wait = (self.suggestion_next_at - now).max(0.05);
                 ctx.request_repaint_after(Duration::from_secs_f64(wait));
             }
         } else {
-            // La conversazione sta in una colonna centrata, larga al massimo
-            // come la casa: su schermi grandi non si allarga all'infinito.
-            let width = ui.available_width().min(980.0);
-            let pad = ((ui.available_width() - width) * 0.5).max(0.0);
-            let height = ui.available_height();
-            let mut actions = None;
-            {
+            let actions = {
                 let images = &self.images;
                 let tax = &self.tax;
                 let entries = &self.chat;
                 let busy = self.chat_busy;
                 let jump = &mut self.chat_jump;
+                chat::view(
+                    ui, images, tax, entries, busy, now, jump, 20.0,
+                )
+            };
+            self.apply_chat_actions(actions);
+        }
+    }
+
+    /// Composer della conversazione: pannello fisso sopra la barra di stato,
+    /// allineato alla colonna dei risultati.
+    fn chat_composer(&mut self, ctx: &egui::Context) {
+        if self.mode != ViewMode::Chat
+            || self.chat.is_empty()
+            || self.show_settings
+            || self.guide_open
+        {
+            return;
+        }
+        let avail = (ctx.screen_rect().width() - 72.0).max(200.0);
+        let pad = if avail < 900.0 { 20.0 } else { 34.0 };
+        let width = (avail - pad * 2.0).min(1100.0);
+        let want_focus = self.focus == Some(ViewMode::Chat);
+        let mut send = false;
+        egui::TopBottomPanel::bottom("chat-composer")
+            .exact_height(64.0)
+            .frame(egui::Frame::none().fill(lumen::INK))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.left_top(), r.right_top()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
+                ui.add_space(11.0);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.add_space(pad);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, height),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            actions = Some(chat::view(
-                                ui,
-                                images,
-                                tax,
-                                entries,
-                                busy,
-                                now,
-                                jump,
-                                112.0,
-                            ));
-                        },
-                    );
+                    if chat::composer(
+                        ui,
+                        &mut self.chat_draft,
+                        self.chat_busy,
+                        want_focus,
+                        width,
+                    ) {
+                        send = true;
+                    }
                 });
-            }
-            if let Some(actions) = actions {
-                let at_bottom = actions.at_bottom;
-                let delta = actions.scroll_offset - self.chat_scroll_last;
-                self.chat_scroll_last = actions.scroll_offset;
-                let typing = ctx.memory(|m| m.has_focus(egui::Id::new("chat-composer")));
-                if at_bottom {
-                    self.chat_composer_collapsed = false;
-                } else if delta < -18.0 && !typing {
-                    // Si sta leggendo verso l'alto: il composer si riduce.
-                    self.chat_composer_collapsed = true;
-                }
-                self.apply_chat_actions(actions);
-            }
-
-            // Il composer vive in un'Area sopra la conversazione: disegnato
-            // dopo lo ScrollArea, vince sempre l'hit-test del mouse. La
-            // conversazione lascia 112 px in fondo (vedi chat::view).
-            if !self.chat.is_empty() && !self.show_settings && !self.guide_open {
-                if self.focus == Some(ViewMode::Chat) {
-                    self.chat_composer_collapsed = false;
-                }
-                let want_focus = self.focus == Some(ViewMode::Chat);
-                let area_w = (ui.max_rect().width() - 56.0).clamp(240.0, 820.0);
-                let mut send = false;
-                let mut expand = false;
-                egui::Area::new(egui::Id::new("chat-composer-dock"))
-                    .order(egui::Order::Foreground)
-                    .anchor(
-                        egui::Align2::CENTER_BOTTOM,
-                        egui::vec2(0.0, -36.0),
-                    )
-                    .show(ctx, |ui| {
-                        ui.set_width(area_w);
-                        if self.chat_composer_collapsed {
-                            expand = chat::composer_mini(
-                                ui,
-                                &self.chat_draft,
-                                self.chat_busy,
-                                area_w,
-                            );
-                        } else {
-                            send = chat::composer(
-                                ui,
-                                &mut self.chat_draft,
-                                self.chat_busy,
-                                want_focus,
-                                area_w,
-                            );
-                        }
-                    });
-                if expand {
-                    self.chat_composer_collapsed = false;
-                    self.focus = Some(ViewMode::Chat);
-                }
-                if want_focus {
-                    self.focus = None;
-                }
-                if send {
-                    self.send_chat();
-                }
-            } else if self.focus == Some(ViewMode::Chat) {
-                self.focus = None;
-            }
+            });
+        if want_focus {
+            self.focus = None;
         }
-
-        // Un velo brevissimo accompagna il passaggio casa <-> conversazione:
-        // il composer si sposta in basso senza uno stacco secco.
-        let t = ctx.animate_bool_with_time(
-            egui::Id::new("chat-view-fade"),
-            !self.chat.is_empty(),
-            0.18,
-        );
-        let veil = if self.chat.is_empty() { t } else { 1.0 - t };
-        if veil > 0.01 {
-            ui.painter().rect_filled(
-                ui.max_rect(),
-                egui::Rounding::same(0.0),
-                theme::alpha(theme::BG, (veil * 120.0) as u8),
-            );
+        if send {
+            self.send_chat();
         }
     }
+
 
     /// Griglia a tutta altezza: conteggio e comandi stanno nella barra di
     /// comando, quindi qui restano i poster.
@@ -3892,11 +3834,7 @@ impl App {
             && !self.show_settings
             && !self.guide_open
         {
-            if self.chat_composer_collapsed {
-                62.0
-            } else {
-                148.0
-            }
+            100.0
         } else {
             74.0
         };
@@ -3984,6 +3922,7 @@ impl eframe::App for App {
         self.status_bar(ctx);
         self.rail(ctx);
         self.grid_toolbar(ctx);
+        self.chat_composer(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
         self.central(ctx);
@@ -4025,48 +3964,11 @@ impl App {
         });
         if !typing && slash {
             self.focus = Some(self.mode);
-            if self.mode == ViewMode::Chat {
-                self.chat_composer_collapsed = false;
-            }
             ctx.input_mut(|i| {
                 i.consume_key(egui::Modifiers::NONE, egui::Key::Slash);
                 i.events
                     .retain(|e| !matches!(e, egui::Event::Text(_)));
             });
-        }
-        // Se il composer e' minimizzato e si inizia a scrivere, si riapre
-        // subito e il primo carattere non va perso.
-        if self.mode == ViewMode::Chat
-            && self.chat_composer_collapsed
-            && !typing
-            && !self.show_settings
-            && !self.guide_open
-        {
-            // Con una bozza gia' pronta, Invio riapre e invia in un colpo.
-            if !self.chat_busy
-                && !self.chat_draft.trim().is_empty()
-                && ctx.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift)
-            {
-                self.chat_composer_collapsed = false;
-                self.send_chat();
-                ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-                return;
-            }
-            let typed: String = ctx.input(|i| {
-                i.events
-                    .iter()
-                    .filter_map(|e| match e {
-                        egui::Event::Text(t) => Some(t.clone()),
-                        _ => None,
-                    })
-                    .collect()
-            });
-            if !typed.is_empty() {
-                self.chat_composer_collapsed = false;
-                self.focus = Some(ViewMode::Chat);
-                self.chat_draft.push_str(&typed);
-                ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Text(_))));
-            }
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Num1)) {
             self.switch_mode(ViewMode::Chat);

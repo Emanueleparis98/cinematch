@@ -111,7 +111,13 @@ pub fn ensure_cjk(ctx: &egui::Context, loaded: &mut bool, texts: &[&str]) {
         fonts
             .font_data
             .insert(name.to_string(), FontData::from_owned(bytes));
-        for family in [FontFamily::Proportional, FontFamily::Monospace] {
+        for family in [
+            FontFamily::Proportional,
+            FontFamily::Monospace,
+            FontFamily::Name(LUMEN_DISPLAY.into()),
+            FontFamily::Name(LUMEN_UI_BOLD.into()),
+            FontFamily::Name(LUMEN_MONO.into()),
+        ] {
             fonts
                 .families
                 .entry(family)
