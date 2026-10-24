@@ -169,6 +169,24 @@ fn key_hint(ui: &mut egui::Ui, text: &str) {
         });
 }
 
+fn wrapped_font(
+    text: &str,
+    font: FontId,
+    color: Color32,
+    width: f32,
+    rows: usize,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::simple(
+        text.to_string(),
+        font,
+        color,
+        width.max(40.0),
+    );
+    job.wrap.max_rows = rows;
+    job.wrap.overflow_character = Some('…');
+    job
+}
+
 fn wrapped(
     text: &str,
     size: f32,
@@ -176,15 +194,7 @@ fn wrapped(
     width: f32,
     rows: usize,
 ) -> egui::text::LayoutJob {
-    let mut job = egui::text::LayoutJob::simple(
-        text.to_string(),
-        FontId::proportional(size),
-        color,
-        width.max(40.0),
-    );
-    job.wrap.max_rows = rows;
-    job.wrap.overflow_character = Some('…');
-    job
+    wrapped_font(text, FontId::proportional(size), color, width, rows)
 }
 
 fn movie_meta(card: &Card, tax: &Taxonomy) -> String {
@@ -495,7 +505,7 @@ fn suggestion_card(
     desc: &str,
 ) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(
-        egui::vec2(width, 118.0),
+        egui::vec2(width, 126.0),
         Sense::click(),
     );
     let hover = ui
@@ -530,18 +540,26 @@ fn suggestion_card(
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::EMBER,
     );
-    p.text(
-        rect.min + egui::vec2(14.0, 32.0),
-        Align2::LEFT_TOP,
-        theme::truncate(title, 34),
+    let title_galley = p.layout_job(wrapped_font(
+        title,
         FontId::new(18.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
         lumen::IVORY,
-    );
-    p.text(
-        rect.min + egui::vec2(14.0, 60.0),
-        Align2::LEFT_TOP,
-        theme::truncate(desc, 72),
+        width - 28.0,
+        2,
+    ));
+    let title_pos = rect.min + egui::vec2(14.0, 32.0);
+    let title_h = title_galley.size().y;
+    p.galley(title_pos, title_galley, lumen::IVORY);
+    let desc_galley = p.layout_job(wrapped_font(
+        desc,
         FontId::proportional(11.0),
+        lumen::MUTED,
+        width - 56.0,
+        2,
+    ));
+    p.galley(
+        title_pos + egui::vec2(0.0, title_h + 6.0),
+        desc_galley,
         lumen::MUTED,
     );
     p.text(

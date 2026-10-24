@@ -2619,7 +2619,7 @@ impl App {
             self.new_chat();
         }
         if settings {
-            self.show_settings = true;
+            self.show_settings = !self.show_settings;
         }
     }
 
@@ -2850,7 +2850,7 @@ impl App {
     fn left_panel(&mut self, ctx: &egui::Context) {
         // Il pannello e uno strumento della griglia: in chat sparisce del
         // tutto, ma lo stato (aperto, filtri, larghezza) resta intatto.
-        if self.mode != ViewMode::Griglia || !self.filters_open {
+        if self.mode != ViewMode::Griglia || !self.filters_open || self.show_settings {
             return;
         }
         let (left_max, _) = side_panel_widths(ctx.screen_rect().width());
@@ -2914,7 +2914,7 @@ impl App {
 
     fn right_panel(&mut self, ctx: &egui::Context) {
         // La scheda appartiene alla griglia; la chat resta a tutta larghezza.
-        if self.mode != ViewMode::Griglia {
+        if self.mode != ViewMode::Griglia || self.show_settings {
             return;
         }
         // I filtri hanno la precedenza: mai due pannelli aperti insieme.
@@ -3011,7 +3011,7 @@ impl App {
     }
 
     fn central(&mut self, ctx: &egui::Context) {
-        let chat = self.mode == ViewMode::Chat;
+        let chat = self.mode == ViewMode::Chat && !self.show_settings;
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::none()
@@ -3024,6 +3024,10 @@ impl App {
                     )),
             )
             .show(ctx, |ui| {
+                if self.show_settings {
+                    self.settings_page(ui);
+                    return;
+                }
                 if self.tmdb.is_none() {
                     ui.add_space(40.0);
                     ui.vertical_centered(|ui| {
@@ -3270,8 +3274,8 @@ impl App {
         }
     }
 
-    fn settings_window(&mut self, ctx: &egui::Context) {
-        let mut open = true;
+    fn settings_page(&mut self, ui: &mut egui::Ui) {
+        let mut close = false;
         let mut save = false;
         let mut check = false;
         let mut detect = false;
@@ -3282,21 +3286,51 @@ impl App {
         let mut update_check = false;
         let mut update_download = false;
         let mut update_install = false;
-        egui::Window::new("Impostazioni")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .vscroll(true)
-            .default_width(440.0)
-            .show(ctx, |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt("settings-scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let width = ui.available_width().min(760.0);
+                let pad = ((ui.available_width() - width) * 0.5).max(0.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.add_space(pad);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            ui.add_space(24.0);
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        lumen::mono(10.0, "IMPOSTAZIONI").color(lumen::EMBER),
+                                    );
+                                    ui.add_space(5.0);
+                                    ui.label(lumen::display(30.0, "Preferenze"));
+                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
+                                            close = true;
+                                        }
+                                    },
+                                );
+                            });
+                            ui.add_space(4.0);
+                            ui.label(
+                                lumen::body(
+                                    11.5,
+                                    "Chiavi, interprete e aggiornamenti restano su questo PC.",
+                                )
+                                .color(lumen::MUTED),
+                            );
+                            ui.add_space(14.0);
+                            lumen::hairline(ui);
+                            ui.add_space(14.0);
                 if update::enabled() {
                     ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("AGGIORNAMENTI")
-                                .size(11.5)
-                                .strong()
-                                .color(theme::DIM),
-                        );
+                        ui.label(lumen::mono(10.0, "AGGIORNAMENTI").color(lumen::IVORY));
                         ui.with_layout(
                             egui::Layout::right_to_left(egui::Align::Center),
                             |ui| {
@@ -3419,12 +3453,8 @@ impl App {
                     ui.add_space(8.0);
                     ui.separator();
                 }
-                ui.label(
-                    egui::RichText::new("TMDB")
-                        .size(12.0)
-                        .strong()
-                        .color(theme::ACCENT),
-                );
+                ui.label(lumen::mono(10.0, "TMDB").color(lumen::EMBER));
+                ui.add_space(2.0);
                 ui.label(
                     egui::RichText::new("Credenziale TMDB: API Key v3 (32 caratteri) oppure Read Access Token v4 (inizia con eyJ)")
                         .size(11.0)
@@ -3468,12 +3498,17 @@ impl App {
 
                 ui.add_space(8.0);
                 ui.separator();
+                ui.add_space(4.0);
+                ui.label(lumen::display(24.0, "Interprete delle richieste"));
+                ui.add_space(2.0);
                 ui.label(
-                    egui::RichText::new("Interprete delle richieste")
-                        .size(12.0)
-                        .strong()
-                        .color(theme::ACCENT),
+                    lumen::body(
+                        11.0,
+                        "Le regole funzionano offline. Un modello è opzionale: i film arrivano sempre da TMDB.",
+                    )
+                    .color(lumen::MUTED),
                 );
+                ui.add_space(6.0);
                 let previous_provider = self.settings.provider.clone();
                 ui.horizontal_wrapped(|ui| {
                     for (id, label) in [
@@ -3618,25 +3653,22 @@ impl App {
 
                 if self.settings.provider != "rules" {
                     ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        if ui
-                            .add_enabled(
-                                !self.detecting,
-                                egui::Button::new(egui::RichText::new("Rileva modelli").size(12.0))
-                                    .rounding(egui::Rounding::same(10.0)),
-                            )
-                            .clicked()
-                        {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        let detect_btn = ui
+                            .add_enabled_ui(!self.detecting, |ui| {
+                                lumen::button_sized(ui, "Rileva modelli", false, 130.0)
+                            })
+                            .inner;
+                        if detect_btn.clicked() {
                             detect = true;
                         }
-                        if ui
-                            .add_enabled(
-                                !self.ai_checking,
-                                egui::Button::new(egui::RichText::new("Verifica risposta AI").size(12.0))
-                                    .rounding(egui::Rounding::same(10.0)),
-                            )
-                            .clicked()
-                        {
+                        let probe_btn = ui
+                            .add_enabled_ui(!self.ai_checking, |ui| {
+                                lumen::button_sized(ui, "Verifica risposta AI", false, 170.0)
+                            })
+                            .inner;
+                        if probe_btn.clicked() {
                             probe = true;
                         }
                     });
@@ -3673,11 +3705,7 @@ impl App {
                 ui.add_space(8.0);
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("Lingua dei contenuti")
-                            .size(11.5)
-                            .color(theme::DIM),
-                    );
+                    ui.label(lumen::label("Lingua"));
                     for (id, label) in [("it-IT", "Italiano"), ("en-US", "Inglese")] {
                         ui.selectable_value(
                             &mut self.settings.language,
@@ -3690,12 +3718,8 @@ impl App {
                 // ---- dati locali: voti IMDb ----
                 ui.add_space(8.0);
                 ui.separator();
-                ui.label(
-                    egui::RichText::new("DATI LOCALI")
-                        .size(11.5)
-                        .strong()
-                        .color(theme::DIM),
-                );
+                ui.add_space(4.0);
+                ui.label(lumen::mono(10.0, "DATI LOCALI").color(lumen::IVORY));
                 ui.add_space(2.0);
                 let ready = crate::infra::imdb::is_ready();
                 ui.horizontal(|ui| {
@@ -3704,12 +3728,12 @@ impl App {
                     } else {
                         "Scarica i voti IMDb (7 MB)"
                     };
-                    if ui
-                        .add_enabled(
-                            !self.imdb_busy,
-                            egui::Button::new(egui::RichText::new(label).size(12.0))
-                                .rounding(egui::Rounding::same(10.0)),
-                        )
+                    let imdb_btn = ui
+                        .add_enabled_ui(!self.imdb_busy, |ui| {
+                            lumen::button_sized(ui, label, false, 200.0)
+                        })
+                        .inner;
+                    if imdb_btn
                         .on_hover_text(
                             "Dati pubblici IMDb (datasets.imdbws.com): nessuna chiave, nessun limite. Consente di mostrare il voto IMDb accanto a quello TMDB.",
                         )
@@ -3717,6 +3741,7 @@ impl App {
                     {
                         self.start_imdb_download();
                     }
+                    ui.add_space(8.0);
                     if ready {
                         ui.label(
                             egui::RichText::new(format!(
@@ -3756,47 +3781,38 @@ impl App {
                 }
 
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    if ui
-                        .add(
-                            egui::Button::new(egui::RichText::new("Salva").size(13.0))
-                                .fill(theme::ACCENT)
-                                .rounding(egui::Rounding::same(10.0)),
-                        )
-                        .clicked()
-                    {
+                lumen::hairline(ui);
+                ui.add_space(10.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if lumen::button_sized(ui, "Salva", true, 100.0).clicked() {
                         save = true;
                     }
-                    if ui
-                        .add(
-                            egui::Button::new(egui::RichText::new("Verifica credenziale").size(12.0))
-                                .rounding(egui::Rounding::same(10.0)),
-                        )
-                        .clicked()
+                    if lumen::button_sized(ui, "Verifica credenziale", false, 160.0).clicked()
                     {
                         check = true;
                     }
                     ui.label(
-                        egui::RichText::new(format!("config: {}", Config::path().display()))
-                            .size(10.0)
-                            .color(theme::DIM),
+                        lumen::mono(9.0, format!("config: {}", Config::path().display()))
+                            .color(lumen::FAINT),
                     );
                 });
 
                 ui.add_space(8.0);
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
+                    ui.label(lumen::mono(9.0, format!("build {}", self.build)).color(lumen::FAINT));
+                    ui.add_space(10.0);
                     ui.label(
-                        egui::RichText::new(format!("build {}", self.build))
-                            .size(9.5)
-                            .color(theme::FAINT),
-                    );
-                    ui.label(
-                        egui::RichText::new(
+                        lumen::mono(
+                            9.0,
                             "This product uses the TMDB API but is not endorsed or certified by TMDB.",
                         )
-                        .size(9.5)
-                        .color(theme::DIM),
+                        .color(lumen::MUTED),
+                    );
+                });
+                ui.add_space(24.0);
+                        },
                     );
                 });
             });
@@ -3831,7 +3847,7 @@ impl App {
         if save {
             self.save_settings();
         }
-        if !open {
+        if close {
             self.show_settings = false;
         }
     }
@@ -3952,9 +3968,6 @@ impl eframe::App for App {
             if !actions.is_empty() {
                 self.apply_actions(actions);
             }
-        }
-        if self.show_settings {
-            self.settings_window(ctx);
         }
         self.toast_overlay(ctx);
         if self.loading
