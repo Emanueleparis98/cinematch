@@ -548,19 +548,25 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
         return out;
     }
     let mut apply: Option<FacetAction> = None;
-    egui::Window::new("Correnti del cinema")
+    egui::Window::new(
+        RichText::new("Correnti del cinema")
+            .font(FontId::new(20.0, egui::FontFamily::Name(fonts::LUMEN_DISPLAY.into())))
+            .color(lumen::IVORY),
+    )
         .open(open)
         .collapsible(false)
         .resizable(true)
         .default_width(560.0)
         .show(ctx, |ui| {
             ui.label(
-                RichText::new(format!(
-                    "{} correnti: ognuna è una combinazione di filtri TMDB. Applicala e poi scegli i generi che vuoi stringere.",
-                    tax.movements.len()
-                ))
-                .size(10.5)
-                .color(theme::DIM),
+                lumen::body(
+                    11.0,
+                    format!(
+                        "{} correnti: ognuna è una combinazione di filtri TMDB. Applicala e poi scegli i generi che vuoi stringere.",
+                        tax.movements.len()
+                    ),
+                )
+                .color(lumen::MUTED),
             );
             ui.add_space(6.0);
             let qid = Id::new("cinematch_guide_query");
@@ -598,16 +604,12 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
                         }
                         found += 1;
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(&m.label).size(13.0).strong());
+                            ui.add(
+                                egui::Label::new(lumen::display(18.0, &m.label))
+                                    .truncate(),
+                            );
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                let btn = egui::Button::new(
-                                    RichText::new("Applica").size(10.5).color(theme::ACCENT_3),
-                                )
-                                .fill(theme::CARD)
-                                .stroke(Stroke::new(1.0_f32, theme::BORDER))
-                                .rounding(Rounding::same(8.0));
-                                if ui
-                                    .add(btn)
+                                if lumen::button_sized(ui, "Applica", false, 82.0)
                                     .on_hover_text(
                                         "Accende periodo, paesi e corrente; i generi restano da scegliere",
                                     )
@@ -622,10 +624,11 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
                                 }
                             });
                         });
-                        ui.label(RichText::new(period).size(10.0).color(theme::FAINT));
-                        ui.label(RichText::new(details).size(10.5).color(theme::DIM));
+                        ui.add_space(2.0);
+                        ui.label(lumen::mono(9.0, &period).color(lumen::FAINT));
+                        ui.label(lumen::body(10.5, &details).color(lumen::MUTED));
                         if !m.note.is_empty() {
-                            ui.label(RichText::new(&m.note).size(10.0).color(theme::FAINT));
+                            ui.label(lumen::body(10.0, &m.note).color(lumen::FAINT));
                         }
                         ui.add_space(6.0);
                         hairline(ui);

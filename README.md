@@ -4,9 +4,9 @@ App desktop Windows in Rust per esplorare film su TMDB con una **barra di ricerc
 combinata a vincoli**: non tutte le combinazioni di tassonomia sono ammesse, e il
 programma spiega sempre il perche.
 
-L'interfaccia ha due viste, commutabili da un'unica barra di comando: la **Chat**
+L'interfaccia ha due viste, commutabili dalla rail di sinistra: la **Chat**
 per chiedere in liberta e ricevere fino a cinque film pertinenti, la **Griglia**
-per esplorare con la Tavolozza dei filtri.
+per esplorare con il pannello dei filtri.
 
 Esempio: `anni '80` + `Neorealismo` + `Horror` e impossibile — il Neorealismo copre
 il 1943–1954 in Italia, quindi non puo coesistere con gli anni '80. Se scegli prima
@@ -100,14 +100,15 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   richiederebbe una correzione, la card non compare. Il catalogo si costruisce
   in memoria, senza rete.
 - **Rotazione lenta**: ogni circa 7 secondi arriva un quartetto nuovo, con una
-  comparsa scaglionata blu/ciano; nessuna card ripete subito quella precedente.
+  comparsa sobria; nessuna card ripete subito quella precedente.
   La rotazione si ferma mentre il mouse e sopra una card, cosi il clic non
   scappa. «Sorprendimi» pesca una proposta locale non visibile.
 
-- **Due viste, due stati**: la barra di comando ha il marchio, il selettore
-  Chat/Griglia e, in Griglia, ricerca e comandi. La chat conserva la bozza, la
-  griglia conserva ricerca, filtri e larghezza del pannello; i filtri compaiono
-  solo in Griglia. Filtri e scheda film non stanno mai aperti insieme.
+- **Due viste, due stati**: la rail a sinistra cambia vista (Chat, Griglia, Nuova,
+  Setup); la striscia in alto porta marchio, contesto e controlli finestra. La
+  chat conserva la bozza, la griglia conserva ricerca, filtri e larghezza del
+  pannello; i filtri compaiono solo in Griglia. Filtri e scheda film non stanno
+  mai aperti insieme.
 - **Il contesto segue i seguiti**: l'app conserva il contesto per i seguiti
   espliciti («no, senza commedia», «e uno piu recente?», «e se fossero italiani?»).
   Una richiesta nuova riparte da criteri puliti: non si porta dietro i temi del
@@ -147,53 +148,38 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 
 ## Aspetto e interazioni
 
-- **Sfondo «aurora»**: gradiente notte con tre aloni che derivano lentamente,
-  dipinti con mesh e ventagli di triangoli (nessuna libreria in piu). I pannelli
-  sono appena translucidi e lo lasciano intravedere; la deriva chiede un
-  ridisegno ogni 125 ms (8 fps), quindi costa praticamente nulla.
-- **Blu cinematografico**: tutta l'interfaccia ruota attorno al blu elettrico
-  (`#3B82F6`) su superfici blu notte; il ciano (`#22D3EE`) e la seconda luce,
-  usata solo nei gradienti (pulsanti, sottolineatura, barra di avanzamento) e
-  negli aloni. Gli stati restano semantici (verde/ambra/rosso).
-- **Tipografia di sistema**: all'avvio usa *Segoe UI Variable* (o Segoe UI) e
-  *Consolas* da `C:\Windows\Fonts`; se i file non ci sono restano i font interni
-  di egui. I ripieghi CJK continuano ad arrivare solo quando servono davvero.
-- **Chrome leggera e senza barra di Windows**: una sola barra di comando
-  (marchio, Chat/Griglia e, in Griglia, ricerca, Cerca, Filtri, ordinamento,
-  aggiorna, impostazioni) e il pager subito sopra i poster. Niente seconda barra
-  orizzontale: la barra fa anche da titlebar, si trascina per spostare la
-  finestra e con doppio clic massimizza o ripristina. A destra ci sono riduci a
-  icona, ingrandisci/ripristina
-  e chiudi. A finestra stretta l'ordinamento diventa un'icona, «Cerca» diventa
-  una lente e il conteggio si nasconde; credito TMDB e build stanno in
-  Impostazioni. Il pannello filtri vive solo nella griglia e lo scroll torna in
-  cima a ogni nuova ricerca o pagina.
-- **Ridimensionamento**: la finestra scende fino a 800×600 (bordi trascinabili
-  anche senza decorazioni native). La casa passa da quattro a due colonne di
-  spunti; sulle finestre basse il blocco scorre e il composer resta ancorato in
-  basso, mentre con più altezza torna sotto gli spunti. Nella griglia si apre un
-  solo pannello per volta: a 800 px restano tre colonne di poster sia con i
-  filtri sia con la scheda, a 1000 px quattro, a 1220 px cinque.
-- **Da tastiera**: il fuoco e sempre visibile su card, chip e pulsanti; Tab
-  naviga, Invio/Spazio attivano, `/` porta al campo di ricerca, `Esc` chiude
-  scheda, filtri o finestra aperta.
-- **Chat**: tre tappe di avanzamento animate durante la pipeline (interprete ->
-  TMDB -> curatela), intro in streaming con cursore lampeggiante, card con
-  poster (shimmer finche l'immagine arriva), voto in sovraimpressione, anello di
-  luce al passaggio del mouse, «Consiglio» in una scheda dedicata e chip di
-  continuazione («e uno piu recente?», «piu corti»...). Lo stato vuoto propone
-  quattro spunti cliccabili che ruotano ogni ~7 s con una comparsa blu/ciano, e
-  un pulsante «Sorprendimi»; nessuno dei due invia da solo.
-- **Griglia**: poster con shimmer mentre arrivano, voto al passaggio del mouse,
-  anello di luce, scheletro animato al posto del pannello mentre la scheda
-  carica. La card selezionata resta evidenziata.
-- **Scheda film**: intestazione fissa con chiusura (anche con `Esc`), immagine
-  hero con sfumatura sul pannello, sezioni scorrevoli.
-- **Scorciatoie e dettagli**: `/` porta il fuoco nel campo di scrittura in Chat o
-  nella ricerca in Griglia; `Ctrl+1`/`Ctrl+2` cambiano vista; `Ctrl+B` apre o chiude i
-  filtri solo in Griglia; `Esc` chiude scheda, filtri, guida o Impostazioni. I toast
-  entrano scivolando ed escono in dissolvenza.
-
+- **LUMEN**: editoriale e cinematografico. Fondo ink (`#08090C`), superfici piatte,
+  avorio per il testo, ember (`#FF5C35`) per i comandi e celadon per le
+  disponibilita. Niente gradienti, aloni o bolle: solo linee sottili, tipografia e
+  poster.
+- **Tipografia inclusa**: Fraunces per i titoli, Instrument Sans per il testo e
+  JetBrains Mono per etichette, metadati e comandi. I font (licenza OFL) stanno in
+  `assets/fonts`; i ripieghi CJK arrivano solo quando servono davvero.
+- **Shell**: rail da 72 px (Chat, Griglia, Nuova, Setup), striscia superiore da
+  48 px con marchio, contesto e controlli finestra, barra di stato da 28 px con
+  versione, sorgente e provider. La finestra si trascina dalla striscia e si
+  ridimensiona dai bordi.
+- **Chat**: casa con hero, collage di poster reali, composer e quattro spunti
+  locali in griglia 2x2; risultati con un film in evidenza e le altre card sotto.
+  Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
+  riprova e Â«Vedi tutti in grigliaÂ» restano dove erano.
+- **Griglia**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
+  card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza
+  filtri, quattro a 1220 px. Il pager sta in basso, fuori dallo scroll.
+- **Filtri**: pannello a fisarmonica su fondo ink, testata ferma (titolo,
+  conteggio, azzera, aiuto, ricerca interna), pill dei filtri attivi, sezioni in
+  mono maiuscolo e chip piatte con bordo ember quando attive.
+- **Scheda film**: pannello laterale fisso con backdrop e poster, titolo Fraunces,
+  fatti, azioni (cerca, riassumi, dove vederlo), disponibilita e simili.
+- **Impostazioni**: pagina intera con colonna centrata: TMDB, interprete, lingua,
+  dati IMDb, aggiornamenti e salvataggio. Â«ChiudiÂ» o `Esc` tornano alla vista.
+- **Ridimensionamento**: minimo 800x600; i testi vanno a capo e i pannelli non si
+  sovrappongono. A 1220x660 la griglia passa a quattro colonne e la scheda resta
+  leggibile.
+- **Da tastiera**: il fuoco e sempre visibile (filo ember) su card, chip e
+  pulsanti; Tab naviga, Invio/Spazio attivano, `/` porta al campo di ricerca,
+  `Esc` chiude scheda, filtri, guida o impostazioni. I toast entrano scivolando ed
+  escono in dissolvenza.
 ## Barra di ricerca (Griglia)
 
 Nella scheda **Griglia** l'unico campo accetta sia un titolo sia una frase in
@@ -221,15 +207,15 @@ nessuna allucinazione puo finire nei risultati.
 
 ## Pannello dei filtri
 
-Il pannello e la **Tavolozza**, una fisarmonica con la testata sempre ferma in
+Il pannello **Filtri** e una fisarmonica con la testata sempre ferma in
 alto. Vive solo nella Griglia: in Chat sparisce, ma stato e larghezza restano
 memorizzati e tornano al rientro. Si apre un pannello per volta: aprire i filtri
 chiude la scheda film e viceversa.
 
-- **Testata sticky**: titolo «Tavolozza», numero di filtri accesi, «Azzera», aiuto
+- **Testata sticky**: titolo «Filtri», numero di filtri accesi, «Azzera», aiuto
   e ricerca interna (non interroga TMDB: filtra le voci del pannello). Sotto, i
   filtri attivi diventano **pill rimovibili** con un clic, comprese le correnti.
-- **Minimizza e riapri**: il pulsante «‹ Filtri» nella barra di comando
+- **Minimizza e riapri**: il pulsante «Filtri» nella barra di comando
   (scorciatoia Ctrl+B) chiude il pannello per lasciare piu' spazio ai poster; lo
   stesso pulsante lo riapre alla larghezza di prima, anche dopo un passaggio in
   Chat. Il badge sul pulsante continua a mostrare i filtri accesi, cosi' non si
@@ -405,10 +391,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.2.3 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.3.0 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.2.3.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.3.0.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
