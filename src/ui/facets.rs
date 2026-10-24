@@ -14,7 +14,8 @@ use egui::{
 use crate::domain::constraints::{movement_recipe, Availability, Prune};
 use crate::domain::model::{Facets, Sort};
 use crate::domain::taxonomy::{Movement, Taxonomy};
-use crate::ui::theme;
+use crate::ui::fonts;
+use crate::ui::{lumen, theme};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Section {
@@ -66,7 +67,7 @@ pub fn header(
     let active = f.active_count();
 
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Tavolozza").size(16.0).strong());
+        ui.label(lumen::mono(11.0, "FILTRI").color(lumen::IVORY));
         if active > 0 {
             let (w, _) = badge_size(ui, active);
             let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 15.0), Sense::hover());
@@ -676,10 +677,10 @@ fn paint_badge(painter: &egui::Painter, rect: egui::Rect, n: usize) {
 
 /// Pulsante testuale discreto: «Azzera», «pulisci», «Tutti i paesi».
 fn ghost(ui: &mut Ui, text: &str, enabled: bool) -> Response {
-    let color = if enabled { theme::ACCENT_3 } else { theme::FAINT };
+    let color = if enabled { theme::ACCENT } else { theme::FAINT };
     let galley = ui.painter().layout_no_wrap(
-        text.to_owned(),
-        FontId::proportional(10.5),
+        text.to_uppercase(),
+        FontId::new(9.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let size = galley.size() + egui::vec2(12.0, 6.0);
@@ -740,24 +741,24 @@ fn help_button(ui: &mut Ui) -> Response {
 /// Campo di testo con cornice arrotondata e anello di fuoco blu.
 fn text_input(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Response {
     let frame = Frame::none()
-        .fill(theme::CARD)
+        .fill(lumen::DEEP)
         .stroke(Stroke::new(1.0_f32, theme::BORDER))
-        .rounding(Rounding::same(9.0))
+        .rounding(Rounding::same(lumen::RADIUS_SM))
         .inner_margin(Margin::symmetric(8.0, 4.0));
     let inner = frame.show(ui, |ui| {
         ui.add_sized(
             [width - 16.0, 20.0],
             egui::TextEdit::singleline(text)
                 .frame(false)
-                .font(FontId::proportional(12.0))
-                .hint_text(RichText::new(hint).size(11.5).color(theme::FAINT)),
+                .font(FontId::proportional(11.5))
+                .hint_text(RichText::new(hint).size(11.0).color(theme::FAINT)),
         )
     });
     if inner.inner.has_focus() {
         ui.painter().rect_stroke(
             inner.response.rect,
-            Rounding::same(9.0),
-            Stroke::new(1.0_f32, theme::alpha(theme::ACCENT, 210)),
+            Rounding::same(lumen::RADIUS_SM),
+            Stroke::new(1.0_f32, theme::ACCENT),
         );
     }
     inner.inner
@@ -781,7 +782,7 @@ fn search_field(ui: &mut Ui, text: &mut String, hint: &str) -> Response {
                 Align2::CENTER_CENTER,
                 "×",
                 FontId::proportional(13.0),
-                theme::mix(theme::DIM, theme::ACCENT_3, hover),
+                theme::mix(theme::DIM, theme::ACCENT, hover),
             );
             if click.clicked() {
                 text.clear();
@@ -797,7 +798,7 @@ fn search_field(ui: &mut Ui, text: &mut String, hint: &str) -> Response {
 fn pill(ui: &mut Ui, label: &str) -> Response {
     let galley = ui.painter().layout_no_wrap(
         format!("× {label}"),
-        FontId::proportional(11.0),
+        FontId::new(10.5, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let size = galley.size() + egui::vec2(14.0, 8.0);
@@ -808,21 +809,21 @@ fn pill(ui: &mut Ui, label: &str) -> Response {
     let p = ui.painter();
     p.rect_filled(
         rect,
-        Rounding::same(rect.height() * 0.5),
-        theme::mix(theme::ACCENT_DIM, theme::CARD_HOVER, hover * 0.6),
+        Rounding::same(lumen::RADIUS_SM),
+        theme::mix(lumen::DEEP, lumen::RAISED, hover * 0.6),
     );
     p.rect_stroke(
         rect,
-        Rounding::same(rect.height() * 0.5),
+        Rounding::same(lumen::RADIUS_SM),
         Stroke::new(
             1.0_f32,
-            theme::alpha(theme::ACCENT, (90.0 + 70.0 * hover) as u8),
+            theme::mix(theme::BORDER, theme::ACCENT, hover),
         ),
     );
     p.galley(
         rect.min + egui::vec2(7.0, 4.0),
         galley,
-        theme::ACCENT_3,
+        theme::mix(lumen::MUTED, theme::TEXT, hover),
     );
     resp.on_hover_text(format!("Rimuovi «{label}»"))
         .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -930,22 +931,22 @@ fn section(
     if hover > 0.02 {
         ui.painter().rect_filled(
             rect,
-            Rounding::same(8.0),
-            theme::alpha(theme::CARD_HOVER, (120.0 * hover) as u8),
+            Rounding::ZERO,
+            theme::alpha(lumen::RAISED, (110.0 * hover) as u8),
         );
     }
 
     let p = ui.painter();
     let title_color = if active > 0 {
-        theme::ACCENT_3
-    } else if forced_open || hover > 0.3 {
+        theme::ACCENT
+    } else if forced_open || open || hover > 0.3 {
         theme::TEXT
     } else {
         theme::DIM
     };
     let galley = p.layout_no_wrap(
-        title.to_owned(),
-        FontId::proportional(12.5),
+        title.to_uppercase(),
+        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     p.galley(
@@ -969,15 +970,14 @@ fn section(
         p,
         egui::pos2(rect.right() - 11.0, rect.center().y),
         chev,
-        theme::mix(theme::FAINT, theme::ACCENT_3, hover.max(if forced_open { 1.0 } else { 0.0 })),
+        theme::mix(theme::FAINT, theme::ACCENT, hover.max(if forced_open { 1.0 } else { 0.0 })),
     );
 
     let mut clear_clicked = false;
     if active > 0 {
-        let label = "pulisci";
         let cg = p.layout_no_wrap(
-            label.to_owned(),
-            FontId::proportional(10.0),
+            "PULISCI".to_owned(),
+            FontId::new(8.5, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
             Color32::PLACEHOLDER,
         );
         let cpos = egui::pos2(
@@ -989,7 +989,7 @@ fn section(
         let ch = ui
             .ctx()
             .animate_bool_with_time(id.with("clear-hover"), cresp.hovered(), 0.1);
-        p.galley(cpos, cg, theme::mix(theme::DIM, theme::ACCENT_3, ch));
+        p.galley(cpos, cg, theme::mix(theme::DIM, theme::ACCENT, ch));
         clear_clicked = cresp.clicked();
         if cresp.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -1153,23 +1153,27 @@ fn metric_chip(
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
     let (fill, stroke, text) = if active {
         (
-            theme::mix(theme::ACCENT_DIM, theme::CARD_HOVER, hover * 0.5),
-            theme::alpha(theme::ACCENT, (110.0 + 50.0 * hover) as u8),
-            theme::ACCENT_3,
+            lumen::DEEP,
+            theme::mix(theme::ACCENT, theme::ACCENT_2, hover),
+            theme::TEXT,
         )
     } else {
         (
-            theme::mix(theme::CARD, theme::CARD_HOVER, hover),
-            theme::mix(theme::BORDER, theme::alpha(theme::ACCENT, 160), hover),
-            theme::mix(theme::DIM, theme::TEXT, hover),
+            theme::mix(lumen::DEEP, lumen::RAISED, hover),
+            theme::mix(theme::BORDER, theme::ACCENT, hover),
+            theme::mix(lumen::MUTED, theme::TEXT, hover),
         )
     };
     let p = ui.painter();
-    p.rect_filled(rect, Rounding::same(9.0), fill);
-    p.rect_stroke(rect, Rounding::same(9.0), Stroke::new(1.0_f32, stroke));
+    p.rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
+    p.rect_stroke(
+        rect,
+        Rounding::same(lumen::RADIUS_SM),
+        Stroke::new(1.0_f32, stroke),
+    );
     let galley = p.layout_no_wrap(
         label.to_owned(),
-        FontId::proportional(10.5),
+        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     p.galley(

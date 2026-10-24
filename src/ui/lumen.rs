@@ -284,6 +284,7 @@ pub enum Icon {
     Settings,
     New,
     Refresh,
+    ArrowLeft,
     ArrowRight,
 }
 
@@ -354,6 +355,11 @@ pub fn icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
             let tip = p(4.4, -4.4);
             painter.line_segment([tip, tip + egui::vec2(-2.0 * s, -2.4 * s)], stroke);
             painter.line_segment([tip, tip + egui::vec2(5.2 * s, -0.4 * s)], stroke);
+        }
+        Icon::ArrowLeft => {
+            painter.line_segment([p(6.0, 0.0), p(-5.4, 0.0)], stroke);
+            painter.line_segment([p(-1.8, -3.8), p(-5.4, 0.0)], stroke);
+            painter.line_segment([p(-1.8, 3.8), p(-5.4, 0.0)], stroke);
         }
         Icon::ArrowRight => {
             painter.line_segment([p(-6.0, 0.0), p(5.4, 0.0)], stroke);

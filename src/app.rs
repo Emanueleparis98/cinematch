@@ -2860,10 +2860,15 @@ impl App {
             .width_range(260.0..=left_max)
             .frame(
                 egui::Frame::none()
-                    .fill(theme::PANEL_SOFT)
+                    .fill(lumen::INK)
                     .inner_margin(egui::Margin::symmetric(12.0, 10.0)),
             )
             .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.right_top(), r.right_bottom()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
                 // La testata (titolo, ricerca, filtri attivi) sta fuori dallo
                 // ScrollArea: resta ferma mentre si scorrono le sezioni.
                 let mut actions = facets::header(
@@ -3176,10 +3181,6 @@ impl App {
     /// Griglia a tutta altezza: conteggio e comandi stanno nella barra di
     /// comando, quindi qui restano i poster.
     fn grid_central(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(4.0);
-        if self.total_pages > 1 {
-            self.grid_pager(ui);
-        }
         let selected = self.detail.as_ref().map(|d| d.movie.id);
         let reset_scroll = std::mem::take(&mut self.grid_reset_scroll);
         let clicked = grid::grid(ui, &self.images, &self.movies, selected, reset_scroll);
@@ -3205,49 +3206,63 @@ impl App {
         }
     }
 
-    /// Pager compatto sopra la griglia: sta vicino ai risultati.
-    fn grid_pager(&mut self, ui: &mut egui::Ui) {
+    /// Pager fisso sopra la barra di stato: pagina corrente a sinistra,
+    /// frecce a destra. Non ruba spazio quando c'è una pagina sola.
+    fn grid_pager(&mut self, ctx: &egui::Context) {
+        if self.mode != ViewMode::Griglia || self.total_pages <= 1 || self.show_settings {
+            return;
+        }
+        let pages = self.total_pages.max(1);
+        let page = self.page.min(pages);
+        let prev = page > 1 && !self.loading;
+        let next = page < pages && !self.loading;
         let mut target = None;
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new(format!(
-                    "Pagina {} di {}",
-                    self.page.min(self.total_pages.max(1)),
-                    self.total_pages
-                ))
-                .size(10.5)
-                .color(theme::DIM),
-            );
-            if ui
-                .add_enabled(
-                    self.page > 1 && !self.loading,
-                    egui::Button::new(egui::RichText::new("‹").size(15.0))
-                        .frame(false)
-                        .min_size(egui::vec2(24.0, 22.0)),
-                )
-                .on_hover_text("Pagina precedente")
-                .clicked()
-            {
-                target = Some(self.page.saturating_sub(1));
-            }
-            if ui
-                .add_enabled(
-                    self.page < self.total_pages && !self.loading,
-                    egui::Button::new(egui::RichText::new("›").size(15.0))
-                        .frame(false)
-                        .min_size(egui::vec2(24.0, 22.0)),
-                )
-                .on_hover_text("Pagina successiva")
-                .clicked()
-            {
-                target = Some((self.page + 1).min(self.total_pages));
-            }
-        });
+        egui::TopBottomPanel::bottom("grid-pager")
+            .exact_height(36.0)
+            .frame(egui::Frame::none().fill(lumen::INK))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.left_top(), r.right_top()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(
+                        lumen::mono(9.0, format!("PAGINA {page} DI {pages}"))
+                            .color(lumen::FAINT),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(20.0);
+                        if pager_button(
+                            ui,
+                            lumen::Icon::ArrowRight,
+                            next,
+                            "Pagina successiva",
+                        )
+                        .clicked()
+                        {
+                            target = Some((page + 1).min(pages));
+                        }
+                        ui.add_space(6.0);
+                        if pager_button(
+                            ui,
+                            lumen::Icon::ArrowLeft,
+                            prev,
+                            "Pagina precedente",
+                        )
+                        .clicked()
+                        {
+                            target = Some(page.saturating_sub(1));
+                        }
+                    });
+                });
+            });
         if let Some(page) = target {
             self.page = page;
             self.spawn_search(false);
         }
-        ui.add_space(2.0);
     }
 
     fn settings_window(&mut self, ctx: &egui::Context) {
@@ -3925,6 +3940,7 @@ impl eframe::App for App {
         self.chat_composer(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
+        self.grid_pager(ctx);
         self.central(ctx);
         if self.guide_open {
             let actions = facets::guide_window(ctx, &self.tax, &mut self.guide_open);
@@ -4898,6 +4914,64 @@ fn describe_chat(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
         format!("temi: {labels}")
     } else {
         format!("{base} · temi: {labels}")
+    }
+}
+
+/// Frecce del pager: quadrato piatto, spento quando la pagina non esiste.
+fn pager_button(
+    ui: &mut egui::Ui,
+    kind: lumen::Icon,
+    enabled: bool,
+    tip: &str,
+) -> egui::Response {
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), sense);
+    let hover = if enabled {
+        ui.ctx().animate_bool_with_time(resp.id, resp.hovered(), 0.12)
+    } else {
+        0.0
+    };
+    ui.painter().rect_filled(
+        rect,
+        egui::Rounding::same(lumen::RADIUS_SM),
+        if hover > 0.01 {
+            lumen::RAISED
+        } else {
+            lumen::DEEP
+        },
+    );
+    ui.painter().rect_stroke(
+        rect,
+        egui::Rounding::same(lumen::RADIUS_SM),
+        egui::Stroke::new(
+            1.0_f32,
+            if hover > 0.01 {
+                lumen::BORDER_HI
+            } else {
+                lumen::BORDER
+            },
+        ),
+    );
+    lumen::icon(
+        ui.painter(),
+        egui::Rect::from_center_size(rect.center(), egui::vec2(14.0, 14.0)),
+        kind,
+        if enabled {
+            lumen::mix(lumen::MUTED, lumen::IVORY, hover)
+        } else {
+            lumen::FAINT
+        },
+    );
+    lumen::focus(ui, &resp, lumen::RADIUS_SM);
+    if enabled {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(tip)
+    } else {
+        resp
     }
 }
 

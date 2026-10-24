@@ -54,16 +54,16 @@ pub fn chip(
 ) -> egui::Response {
     let mut rich = egui::RichText::new(text).size(11.5);
     let fill = if !enabled {
-        lumen::DEEP
+        lumen::INK
     } else if selected {
-        ACCENT
+        lumen::DEEP
     } else {
         lumen::DEEP
     };
     rich = if !enabled {
         rich.color(FAINT)
     } else if selected {
-        rich.color(lumen::INK).strong()
+        rich.color(lumen::IVORY).strong()
     } else {
         rich.color(TEXT)
     };
