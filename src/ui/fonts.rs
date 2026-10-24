@@ -75,6 +75,80 @@ pub fn install(ctx: &egui::Context) {
     ctx.set_style(style);
 }
 
+/// Font inclusi per il linguaggio LUMEN (style lab e redesign).
+pub const LUMEN_DISPLAY: &str = "lumen-display";
+pub const LUMEN_UI_BOLD: &str = "lumen-ui-bold";
+pub const LUMEN_MONO: &str = "lumen-mono";
+
+/// Installa i font LUMEN: Fraunces per i titoli, Instrument Sans per l'UI,
+/// JetBrains Mono per i metadati. Usata solo dalla style lab.
+pub fn install_lumen(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "lumen-ui".into(),
+        egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/InstrumentSans-Regular.ttf"
+        )),
+    );
+    fonts.font_data.insert(
+        LUMEN_DISPLAY.into(),
+        egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/Fraunces-SemiBold.ttf"
+        )),
+    );
+    fonts.font_data.insert(
+        LUMEN_UI_BOLD.into(),
+        egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/InstrumentSans-SemiBold.ttf"
+        )),
+    );
+    fonts.font_data.insert(
+        LUMEN_MONO.into(),
+        egui::FontData::from_static(include_bytes!(
+            "../../assets/fonts/JetBrainsMono-Regular.ttf"
+        )),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "lumen-ui".into());
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .insert(0, LUMEN_MONO.into());
+    fonts.families.insert(
+        egui::FontFamily::Name(LUMEN_DISPLAY.into()),
+        vec![LUMEN_DISPLAY.into()],
+    );
+    fonts.families.insert(
+        egui::FontFamily::Name(LUMEN_UI_BOLD.into()),
+        vec![LUMEN_UI_BOLD.into()],
+    );
+    fonts.families.insert(
+        egui::FontFamily::Name(LUMEN_MONO.into()),
+        vec![LUMEN_MONO.into()],
+    );
+    ctx.set_fonts(fonts);
+
+    let mut style = (*ctx.style()).clone();
+    use egui::{FontFamily::Proportional, TextStyle::*};
+    style
+        .text_styles
+        .insert(Heading, egui::FontId::new(24.0, Proportional));
+    style
+        .text_styles
+        .insert(Body, egui::FontId::new(13.0, Proportional));
+    style
+        .text_styles
+        .insert(Button, egui::FontId::new(12.0, Proportional));
+    style
+        .text_styles
+        .insert(Small, egui::FontId::new(11.0, Proportional));
+    ctx.set_style(style);
+}
+
 /// Vero se il testo contiene scritture che i font di base non coprono.
 fn needs_cjk(text: &str) -> bool {
     text.chars().any(|c| {

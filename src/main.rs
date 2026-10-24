@@ -46,8 +46,12 @@ fn main() -> eframe::Result<()> {
         "CineMatch",
         options,
         Box::new(move |cc| {
-            ui::theme::apply(&cc.egui_ctx);
-            ui::fonts::install(&cc.egui_ctx);
+            if std::env::var_os("CINEMATCH_STYLE_LAB").is_some() {
+                ui::lumen::install(&cc.egui_ctx);
+            } else {
+                ui::theme::apply(&cc.egui_ctx);
+                ui::fonts::install(&cc.egui_ctx);
+            }
             Ok(Box::new(app::App::new(&cc.egui_ctx, cfg)))
         }),
     )

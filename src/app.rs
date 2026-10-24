@@ -21,7 +21,7 @@ use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
 use crate::ui::images::ImageStore;
-use crate::ui::{chat, detail, facets, fx, grid, theme};
+use crate::ui::{chat, detail, facets, fx, grid, style_lab, theme};
 
 struct Results {
     facets: Facets,
@@ -676,6 +676,10 @@ pub struct App {
     /// Widget che deve ricevere il fuoco al prossimo frame (composer o ricerca).
     focus: Option<ViewMode>,
     show_settings: bool,
+    /// Style lab LUMEN: avviata con CINEMATCH_STYLE_LAB=1.
+    style_lab: bool,
+    lab: style_lab::LabState,
+    lab_booted: bool,
     settings: SettingsDraft,
     settings_check: Option<String>,
     update: UpdateUi,
@@ -760,6 +764,9 @@ impl App {
             dirty: None,
             focus: None,
             show_settings: false,
+            style_lab: std::env::var_os("CINEMATCH_STYLE_LAB").is_some(),
+            lab: style_lab::LabState::default(),
+            lab_booted: false,
             settings,
             settings_check: None,
             update: UpdateUi::default(),
@@ -1072,6 +1079,10 @@ impl App {
     /// Se tra i risultati ci sono titoli in scritture non latine (giapponese,
     /// coreano), carica i font di sistema che le coprono: una volta sola.
     fn ensure_fonts_for_results(&mut self) {
+        // La style lab ha i suoi font: non ricaricare i font di sistema.
+        if self.style_lab {
+            return;
+        }
         let texts: Vec<&str> = self
             .movies
             .iter()
@@ -3847,6 +3858,26 @@ impl eframe::App for App {
         }
         self.tick();
         window_resize_edges(ctx);
+        if self.style_lab {
+            if !self.lab_booted {
+                self.lab_booted = true;
+                if self.tmdb.is_some() {
+                    self.load_trending();
+                }
+            }
+            let close = style_lab::show(
+                ctx,
+                &self.images,
+                &self.movies,
+                &self.suggestions,
+                &self.tax,
+                &mut self.lab,
+            );
+            if close {
+                ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
+            }
+            return;
+        }
         let now = ctx.input(|i| i.time);
         fx::background(ctx, now);
         self.shortcuts(ctx);
