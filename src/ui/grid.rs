@@ -23,14 +23,14 @@ pub fn paint_image(
     }
 }
 
-fn trunc_job(text: &str, font: FontId, width: f32) -> LayoutJob {
+fn trunc_job(text: &str, font: FontId, width: f32, rows: usize) -> LayoutJob {
     let mut job = LayoutJob::simple(
         text.to_string(),
         font,
         Color32::PLACEHOLDER,
         width.max(40.0),
     );
-    job.wrap.max_rows = 1;
+    job.wrap.max_rows = rows;
     job.wrap.overflow_character = Some('…');
     job
 }
@@ -83,6 +83,7 @@ fn card(
         &m.title,
         FontId::new(12.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
         width,
+        1,
     ));
     ui.painter().galley(
         egui::pos2(rect.left(), poster_rect.bottom() + 6.0),
@@ -166,7 +167,7 @@ pub fn grid(
 /// Riga compatta, usata per i film consigliati nel pannello dettaglio.
 pub fn mini_card(ui: &mut egui::Ui, images: &ImageStore, m: &Movie) -> bool {
     let width = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 62.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 72.0), Sense::click());
     let hovered = resp.hovered();
     let hover = ui.ctx().animate_bool_with_time(resp.id, hovered, 0.14);
     ui.painter().rect_filled(
@@ -176,7 +177,7 @@ pub fn mini_card(ui: &mut egui::Ui, images: &ImageStore, m: &Movie) -> bool {
     );
     fx::ring(ui, rect, lumen::RADIUS_SM, lumen::EMBER, hover * 0.8);
     lumen::focus(ui, &resp, lumen::RADIUS_SM);
-    let thumb = Rect::from_min_size(rect.min + egui::vec2(4.0, 4.0), egui::vec2(38.0, 54.0));
+    let thumb = Rect::from_min_size(rect.min + egui::vec2(4.0, 4.0), egui::vec2(43.0, 64.0));
     if let Some(path) = &m.poster_path {
         let uri = poster_url(path, "w92");
         paint_image(ui, images, &uri, thumb, 0.0);
@@ -185,19 +186,20 @@ pub fn mini_card(ui: &mut egui::Ui, images: &ImageStore, m: &Movie) -> bool {
     let title = painter.layout_job(trunc_job(
         &m.title,
         FontId::new(12.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
-        width - 58.0,
+        width - 61.0,
+        2,
     ));
-    painter.galley(
-        egui::pos2(thumb.max.x + 8.0, rect.min.y + 12.0),
-        title,
-        if hovered { lumen::IVORY } else { lumen::IVORY },
-    );
+    let title_h = title.size().y;
+    let block_h = title_h + 3.0 + 11.0;
+    let text_y = (rect.center().y - block_h * 0.5).max(rect.top() + 6.0);
+    let title_pos = egui::pos2(thumb.max.x + 8.0, text_y);
+    painter.galley(title_pos, title, lumen::IVORY);
     let year = m
         .year
         .map(|y| y.to_string())
         .unwrap_or_else(|| "—".to_string());
     painter.text(
-        egui::pos2(thumb.max.x + 8.0, rect.min.y + 32.0),
+        title_pos + egui::vec2(0.0, title_h + 3.0),
         Align2::LEFT_TOP,
         format!("{year} · {:.1} ★", m.rating),
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),

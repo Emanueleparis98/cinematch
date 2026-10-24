@@ -2928,7 +2928,7 @@ impl App {
                     .default_width(380.0_f32.min(right_max))
                     .frame(
                         egui::Frame::none()
-                            .fill(theme::PANEL_SOFT)
+                            .fill(lumen::INK)
                             .inner_margin(egui::Margin::same(14.0)),
                     )
                     .show(ctx, |ui| {
@@ -2962,10 +2962,15 @@ impl App {
             .width_range(280.0..=right_max)
             .frame(
                 egui::Frame::none()
-                    .fill(theme::PANEL_SOFT)
+                    .fill(lumen::INK)
                     .inner_margin(egui::Margin::symmetric(14.0, 10.0)),
             )
             .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.left_top(), r.left_bottom()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
                 let ai_available = self.provider.is_llm();
                 let summary = self.summary.clone();
                 let actions = detail::panel(

@@ -188,11 +188,22 @@ pub fn card_frame() -> egui::Frame {
 }
 
 pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 36.0), Sense::click());
-    let hover = ui
-        .ctx()
-        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    let fill = if primary {
+    let enabled = ui.is_enabled();
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 36.0), sense);
+    let hover = if enabled {
+        ui.ctx()
+            .animate_bool_with_time(resp.id, resp.hovered(), 0.12)
+    } else {
+        0.0
+    };
+    let fill = if !enabled {
+        DEEP
+    } else if primary {
         if hover > 0.01 {
             EMBER_HI
         } else {
@@ -203,13 +214,22 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
     } else {
         DEEP
     };
-    let ink = if primary { INK } else { IVORY };
+    let ink = if !enabled {
+        FAINT
+    } else if primary {
+        INK
+    } else {
+        IVORY
+    };
     let p = ui.painter();
     p.rect_filled(rect, Rounding::same(RADIUS_SM), fill);
     p.rect_stroke(
         rect,
         Rounding::same(RADIUS_SM),
-        Stroke::new(1.0_f32, if primary { EMBER } else { BORDER }),
+        Stroke::new(
+            1.0_f32,
+            if primary && enabled { EMBER } else { BORDER },
+        ),
     );
     p.text(
         rect.center(),
@@ -219,7 +239,11 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
         ink,
     );
     focus(ui, &resp, RADIUS_SM);
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    if enabled {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    } else {
+        resp
+    }
 }
 
 pub fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> Response {
