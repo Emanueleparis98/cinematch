@@ -1,136 +1,73 @@
-//! Tipografia e glifi non latini.
+//! Tipografia LUMEN e ripiego CJK.
 //!
-//! All'avvio si usano i font di Windows (Segoe UI Variable quando c'e'):
-//! nessun download, nessun byte in piu' nell'eseguibile. I font di sistema
-//! CJK (Yu Gothic, Malgun Gothic) entrano come ripiego **una volta sola e
-//! solo quando servono davvero**: una ricerca italiana normale non carica
-//! nulla e l'avvio resta leggero.
+//! Fraunces per i titoli, Instrument Sans per l'interfaccia, JetBrains Mono
+//! per i metadati. I font CJK di Windows entrano una volta sola, solo quando
+//! un titolo li richiede, senza perdere i font LUMEN.
 
-const UI_FONTS: [(&str, &str); 2] = [
-    ("SegUIVar.ttf", "Segoe UI Variable"),
-    ("segoeui.ttf", "Segoe UI"),
-];
-const MONO_FONT: &str = "consola.ttf";
+use egui::{FontData, FontDefinitions, FontFamily};
 
 const CJK_FONTS: [(&str, &str); 2] = [
     ("yu_gothic", r"C:\Windows\Fonts\YuGothM.ttc"),
     ("malgun_gothic", r"C:\Windows\Fonts\malgun.ttf"),
 ];
 
-fn read_font(file: &str) -> Option<Vec<u8>> {
-    let path = std::path::Path::new("C:/Windows/Fonts").join(file);
-    if !path.is_file() {
-        return None;
-    }
-    std::fs::read(path).ok()
-}
-
-/// Definizioni base: font di sistema per il testo e per il monospaziato,
-/// con i font interni di egui come rete di sicurezza.
-fn base() -> egui::FontDefinitions {
-    let mut fonts = egui::FontDefinitions::default();
-    if let Some((file, _name)) = UI_FONTS.iter().find(|(f, _)| read_font(f).is_some()) {
-        if let Some(bytes) = read_font(file) {
-            fonts
-                .font_data
-                .insert("cine-ui".into(), egui::FontData::from_owned(bytes));
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default()
-                .insert(0, "cine-ui".into());
-        }
-    }
-    if let Some(bytes) = read_font(MONO_FONT) {
-        fonts
-            .font_data
-            .insert("cine-mono".into(), egui::FontData::from_owned(bytes));
-        fonts
-            .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default()
-            .insert(0, "cine-mono".into());
-    }
-    fonts
-}
-
-/// Installa la tipografia di base e le taglie dei testi.
-pub fn install(ctx: &egui::Context) {
-    ctx.set_fonts(base());
-
-    let mut style = (*ctx.style()).clone();
-    use egui::{FontFamily::Proportional, TextStyle::*};
-    style
-        .text_styles
-        .insert(Heading, egui::FontId::new(20.0, Proportional));
-    style
-        .text_styles
-        .insert(Body, egui::FontId::new(13.5, Proportional));
-    style
-        .text_styles
-        .insert(Button, egui::FontId::new(13.0, Proportional));
-    style
-        .text_styles
-        .insert(Small, egui::FontId::new(11.0, Proportional));
-    ctx.set_style(style);
-}
-
-/// Font inclusi per il linguaggio LUMEN (style lab e redesign).
 pub const LUMEN_DISPLAY: &str = "lumen-display";
 pub const LUMEN_UI_BOLD: &str = "lumen-ui-bold";
 pub const LUMEN_MONO: &str = "lumen-mono";
 
-/// Installa i font LUMEN: Fraunces per i titoli, Instrument Sans per l'UI,
-/// JetBrains Mono per i metadati. Usata solo dalla style lab.
-pub fn install_lumen(ctx: &egui::Context) {
-    let mut fonts = egui::FontDefinitions::default();
+fn lumen_defs() -> FontDefinitions {
+    let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "lumen-ui".into(),
-        egui::FontData::from_static(include_bytes!(
+        FontData::from_static(include_bytes!(
             "../../assets/fonts/InstrumentSans-Regular.ttf"
         )),
     );
     fonts.font_data.insert(
         LUMEN_DISPLAY.into(),
-        egui::FontData::from_static(include_bytes!(
+        FontData::from_static(include_bytes!(
             "../../assets/fonts/Fraunces-SemiBold.ttf"
         )),
     );
     fonts.font_data.insert(
         LUMEN_UI_BOLD.into(),
-        egui::FontData::from_static(include_bytes!(
+        FontData::from_static(include_bytes!(
             "../../assets/fonts/InstrumentSans-SemiBold.ttf"
         )),
     );
     fonts.font_data.insert(
         LUMEN_MONO.into(),
-        egui::FontData::from_static(include_bytes!(
+        FontData::from_static(include_bytes!(
             "../../assets/fonts/JetBrainsMono-Regular.ttf"
         )),
     );
     fonts
         .families
-        .entry(egui::FontFamily::Proportional)
+        .entry(FontFamily::Proportional)
         .or_default()
         .insert(0, "lumen-ui".into());
     fonts
         .families
-        .entry(egui::FontFamily::Monospace)
+        .entry(FontFamily::Monospace)
         .or_default()
         .insert(0, LUMEN_MONO.into());
     fonts.families.insert(
-        egui::FontFamily::Name(LUMEN_DISPLAY.into()),
+        FontFamily::Name(LUMEN_DISPLAY.into()),
         vec![LUMEN_DISPLAY.into()],
     );
     fonts.families.insert(
-        egui::FontFamily::Name(LUMEN_UI_BOLD.into()),
+        FontFamily::Name(LUMEN_UI_BOLD.into()),
         vec![LUMEN_UI_BOLD.into()],
     );
     fonts.families.insert(
-        egui::FontFamily::Name(LUMEN_MONO.into()),
+        FontFamily::Name(LUMEN_MONO.into()),
         vec![LUMEN_MONO.into()],
     );
-    ctx.set_fonts(fonts);
+    fonts
+}
+
+pub fn install_lumen(ctx: &egui::Context) {
+    ctx.set_fonts(lumen_defs());
 
     let mut style = (*ctx.style()).clone();
     use egui::{FontFamily::Proportional, TextStyle::*};
@@ -149,26 +86,23 @@ pub fn install_lumen(ctx: &egui::Context) {
     ctx.set_style(style);
 }
 
-/// Vero se il testo contiene scritture che i font di base non coprono.
 fn needs_cjk(text: &str) -> bool {
     text.chars().any(|c| {
         let u = c as u32;
-        (0x1100..=0x11FF).contains(&u)   // jamo coreani
-            || (0x2E80..=0x9FFF).contains(&u) // radicali, kana, ideogrammi
-            || (0xAC00..=0xD7AF).contains(&u) // sillabe coreane
-            || (0xF900..=0xFAFF).contains(&u) // ideogrammi compatibili
-            || (0x20000..=0x2FA1F).contains(&u) // estensione B e successivi
+        (0x1100..=0x11FF).contains(&u)
+            || (0x2E80..=0x9FFF).contains(&u)
+            || (0xAC00..=0xD7AF).contains(&u)
+            || (0xF900..=0xFAFF).contains(&u)
+            || (0x20000..=0x2FA1F).contains(&u)
     })
 }
 
-/// Carica i font di sistema come ripiego quando i testi li richiedono.
-/// `loaded` evita di rifarlo (anche nel caso i font non esistano).
+/// Aggiunge i font CJK di sistema alla famiglia LUMEN, una volta sola.
 pub fn ensure_cjk(ctx: &egui::Context, loaded: &mut bool, texts: &[&str]) {
     if *loaded || !texts.iter().any(|t| needs_cjk(t)) {
         return;
     }
-    // Si riparte dalla base tipografica: i font UI non vanno persi.
-    let mut fonts = base();
+    let mut fonts = lumen_defs();
     let mut found = false;
     for (name, path) in CJK_FONTS {
         let Ok(bytes) = std::fs::read(path) else {
@@ -176,8 +110,8 @@ pub fn ensure_cjk(ctx: &egui::Context, loaded: &mut bool, texts: &[&str]) {
         };
         fonts
             .font_data
-            .insert(name.to_string(), egui::FontData::from_owned(bytes));
-        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            .insert(name.to_string(), FontData::from_owned(bytes));
+        for family in [FontFamily::Proportional, FontFamily::Monospace] {
             fonts
                 .families
                 .entry(family)
@@ -189,6 +123,5 @@ pub fn ensure_cjk(ctx: &egui::Context, loaded: &mut bool, texts: &[&str]) {
     if found {
         ctx.set_fonts(fonts);
     }
-    // segnato comunque: senza font di sistema non si ritenta a ogni ricerca
     *loaded = true;
 }

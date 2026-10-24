@@ -67,7 +67,9 @@ pub fn apply(ctx: &egui::Context) {
     visuals.widgets.active.bg_fill = EMBER;
     visuals.widgets.active.weak_bg_fill = EMBER;
     visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, EMBER);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, INK);
+    // Il testo «strong» di egui usa il colore dei widget attivi: deve restare
+    // avorio, altrimenti i titoli delle viste 0.2.3 diventano neri su nero.
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, IVORY);
     visuals.widgets.active.rounding = Rounding::same(RADIUS);
     visuals.widgets.open.weak_bg_fill = RAISED;
     visuals.widgets.open.bg_fill = RAISED;
@@ -280,6 +282,8 @@ pub enum Icon {
     Grid,
     Detail,
     Settings,
+    New,
+    Refresh,
 }
 
 pub fn icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
@@ -332,7 +336,58 @@ pub fn icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
                 painter.circle_filled(p(x, y), 2.0 * s, color);
             }
         }
+        Icon::New => {
+            painter.line_segment([p(-6.0, 0.0), p(6.0, 0.0)], stroke);
+            painter.line_segment([p(0.0, -6.0), p(0.0, 6.0)], stroke);
+        }
+        Icon::Refresh => {
+            let mut points = Vec::with_capacity(24);
+            for i in 0..=20 {
+                let a = -0.7 + i as f32 / 20.0 * std::f32::consts::TAU * 0.82;
+                points.push(egui::pos2(
+                    c.x + a.cos() * 5.8 * s,
+                    c.y + a.sin() * 5.8 * s,
+                ));
+            }
+            painter.add(egui::Shape::line(points, stroke));
+            let tip = p(4.4, -4.4);
+            painter.line_segment([tip, tip + egui::vec2(-2.0 * s, -2.4 * s)], stroke);
+            painter.line_segment([tip, tip + egui::vec2(5.2 * s, -0.4 * s)], stroke);
+        }
     }
+}
+
+pub fn icon_button(
+    ui: &mut egui::Ui,
+    icon_kind: Icon,
+    size: f32,
+    tip: &str,
+) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(size, size), Sense::click());
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
+    if hover > 0.01 {
+        ui.painter().rect_filled(
+            rect,
+            Rounding::same(RADIUS_SM),
+            mix(INK, RAISED, hover),
+        );
+        ui.painter().rect_stroke(
+            rect,
+            Rounding::same(RADIUS_SM),
+            Stroke::new(1.0_f32, BORDER),
+        );
+    }
+    icon(
+        ui.painter(),
+        rect.shrink(size * 0.28),
+        icon_kind,
+        mix(FAINT, IVORY, hover),
+    );
+    focus(ui, &resp, RADIUS_SM);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tip)
 }
 
 pub fn nav_item(ui: &mut egui::Ui, icon_kind: Icon, label_text: &str, active: bool) -> Response {

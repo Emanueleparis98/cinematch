@@ -21,7 +21,7 @@ use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
 use crate::ui::images::ImageStore;
-use crate::ui::{chat, detail, facets, fx, grid, style_lab, theme};
+use crate::ui::{chat, detail, facets, fx, grid, lumen, style_lab, theme};
 
 struct Results {
     facets: Facets,
@@ -2447,41 +2447,34 @@ impl App {
 
     // --------------------------------------------------------------- ui ------
 
-    /// Barra di comando unica: marchio, Chat/Griglia e, in Griglia, ricerca e
-    /// comandi. Fa anche da titlebar (trascinamento e controlli finestra);
-    /// il resto del chrome vive nel piè di pagina.
-    fn header(&mut self, ctx: &egui::Context) {
-        let griglia = self.mode == ViewMode::Griglia;
-        let want_focus = griglia && self.focus == Some(ViewMode::Griglia);
-        let compact = ctx.screen_rect().width() < 1120.0;
-        let cap = if compact { 22.0 } else { 24.0 };
-        let mut do_search = false;
-        let mut toggle_filters = false;
-        let mut new_chat = false;
+    /// Nome breve dell'interprete per la barra di stato.
+    fn provider_short(&self) -> &'static str {
+        if !self.provider.is_llm() {
+            return "REGOLE";
+        }
+        match self.cfg.ai.provider.as_str() {
+            "deepseek" => "DEEPSEEK",
+            "openrouter" => "OPENROUTER",
+            "ollama" => "OLLAMA",
+            _ => "REGOLE",
+        }
+    }
 
+    /// Top strip LUMEN: marchio, contesto, controlli finestra.
+    fn header(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("header")
-            .frame(
-                egui::Frame::none()
-                    .fill(theme::PANEL_SOFT)
-                    .inner_margin(egui::Margin::symmetric(14.0, 7.0)),
-            )
+            .exact_height(48.0)
+            .frame(egui::Frame::none().fill(lumen::INK))
             .show(ctx, |ui| {
-                // La barra fa anche da titlebar: il fondo e' trascinabile, i
-                // controlli aggiunti dopo restano cliccabili.
                 let r = ui.max_rect();
-                let drag_rect = egui::Rect::from_min_max(
-                    egui::pos2(r.left() + 6.0, r.top() + 6.0),
-                    egui::pos2(r.right() - 6.0, r.bottom()),
-                );
                 let drag = ui.interact(
-                    drag_rect,
+                    r,
                     egui::Id::new("window-drag"),
                     egui::Sense::click_and_drag(),
                 );
                 if drag.drag_started() {
-                    ui.ctx().send_viewport_cmd(
-                        egui::viewport::ViewportCommand::StartDrag,
-                    );
+                    ui.ctx()
+                        .send_viewport_cmd(egui::viewport::ViewportCommand::StartDrag);
                 }
                 if drag.double_clicked() {
                     let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
@@ -2489,171 +2482,30 @@ impl App {
                         egui::viewport::ViewportCommand::Maximized(!max),
                     );
                 }
-                // Niente cursore Grab: su Windows diventa la croce a quattro
-                // frecce anche quando il puntatore e' sopra i pulsanti.
 
                 ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.label(egui::RichText::new("Cine").size(19.0).strong());
-                    ui.label(
-                        egui::RichText::new("Match")
-                            .size(19.0)
-                            .strong()
-                            .color(theme::ACCENT),
-                    );
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    ui.add_space(14.0);
-
-                    if let Some(mode) = mode_switch(ui, self.mode) {
-                        self.switch_mode(mode);
+                    ui.add_space(20.0);
+                    ui.label(lumen::display(22.0, "CINE"));
+                    ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
+                    ui.add_space(18.0);
+                    let (kicker, title) = if self.show_settings {
+                        ("", "IMPOSTAZIONI")
+                    } else if self.mode == ViewMode::Griglia {
+                        ("SALA 02", "CATALOGO")
+                    } else {
+                        ("SALA 01", "CHAT")
+                    };
+                    if !kicker.is_empty() {
+                        ui.label(lumen::mono(9.0, kicker).color(lumen::FAINT));
+                        ui.add_space(8.0);
                     }
+                    ui.label(lumen::mono(9.0, title).color(lumen::IVORY));
 
-                    if griglia {
-                        ui.add_space(12.0);
-                        // Una sola barra comandi: la ricerca si prende lo
-                        // spazio che resta, i comandi restano a destra.
-                        // Il gruppo a destra include anche i tre controlli
-                        // finestra, quindi va riservato per intero.
-                        let captions = cap * 3.0 + 2.0 * 2.0 + 10.0;
-                        let fixed = if compact {
-                            26.0 + 96.0 + 40.0 + 28.0 + captions + 28.0
-                                + 5.0 * 8.0
-                                + 16.0
-                        } else {
-                            64.0 + 96.0 + 156.0 + 28.0 + 92.0 + 18.0
-                                + captions
-                                + 28.0
-                                + 6.0 * 8.0
-                                + 16.0
-                        };
-                        let search_w = (ui.available_width() - fixed).max(150.0);
-                        let hint = if compact {
-                            "Cerca o descrivi…"
-                        } else if self.provider.is_llm() {
-                            "Descrivi cosa vuoi vedere… (Invio: interpreta l'AI)"
-                        } else {
-                            "Titolo, corrente, tema… (Invio: cerca)"
-                        };
-                        let field_id = egui::Id::new("grid-query");
-                        let focused = ui.memory(|m| m.has_focus(field_id));
-                        let outer = egui::Frame::none()
-                            .fill(if focused {
-                                theme::mix(theme::CARD, theme::ACCENT_DIM, 0.45)
-                            } else {
-                                theme::CARD
-                            })
-                            .stroke(egui::Stroke::new(
-                                1.0_f32,
-                                if focused { theme::ACCENT } else { theme::BORDER },
-                            ))
-                            .rounding(egui::Rounding::same(8.0))
-                            .inner_margin(egui::Margin::symmetric(10.0, 3.0))
-                            .show(ui, |ui| {
-                                ui.add_sized(
-                                    [search_w - 20.0, 20.0],
-                                    egui::TextEdit::singleline(&mut self.grid_query)
-                                        .id(field_id)
-                                        .frame(false)
-                                        .hint_text(hint)
-                                        .font(egui::TextStyle::Body),
-                                )
-                            });
-                        let resp = outer.inner;
-                        if focused {
-                            fx::ring(ui, outer.response.rect, 8.0, theme::ACCENT, 0.8);
-                        }
-                        if want_focus {
-                            resp.request_focus();
-                        }
-                        if resp.changed() && !self.provider.is_llm() {
-                            self.dirty = Some(Instant::now());
-                        }
-                        if resp.lost_focus()
-                            && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                        {
-                            do_search = true;
-                        }
-                        if compact {
-                            if compact_search(ui).clicked() {
-                                do_search = true;
-                            }
-                        } else if theme::primary_button(ui, "Cerca", egui::vec2(64.0, 26.0))
-                            .clicked()
-                        {
-                            do_search = true;
-                        }
-                        if facets::panel_toggle(
-                            ui,
-                            self.filters_open,
-                            self.facets.active_count(),
-                        )
-                        .clicked()
-                        {
-                            toggle_filters = true;
-                        }
-                        let sort_label = if compact {
-                            "⇅".to_string()
-                        } else {
-                            format!("Ordina: {}", self.facets.sort.label())
-                        };
-                        let sort = egui::ComboBox::from_id_salt("grid-sort")
-                            .selected_text(
-                                egui::RichText::new(sort_label).size(11.5),
-                            )
-                            .width(if compact { 40.0 } else { 150.0 })
-                            .show_ui(ui, |ui| {
-                                for s in Sort::ALL {
-                                    ui.selectable_value(
-                                        &mut self.facets.sort,
-                                        s,
-                                        s.label(),
-                                    );
-                                }
-                            });
-                        if compact {
-                            sort.response.on_hover_text("Ordina");
-                        }
-                        if ui
-                            .add_sized(
-                                [26.0, 26.0],
-                                egui::Button::new(
-                                    egui::RichText::new("↻").size(13.0).color(theme::ACCENT_3),
-                                )
-                                .frame(false),
-                            )
-                            .on_hover_text("Aggiorna la griglia")
-                            .clicked()
-                        {
-                            self.resanitize();
-                            self.page = 1;
-                            self.dirty = Some(Instant::now());
-                        }
-                        if !compact {
-                            let count = if self.loading {
-                                "Cerco…".to_string()
-                            } else {
-                                format!("{} risultati", theme::thousands(self.total))
-                            };
-                            let label = ui.label(
-                                egui::RichText::new(count).size(10.0).color(theme::DIM),
-                            );
-                            if !self.headline.is_empty() {
-                                label.on_hover_text(&self.headline);
-                            }
-                            if self.loading {
-                                ui.spinner();
-                            }
-                        }
-                    }
-
-                    // A destra un unico gruppo: controlli finestra, impostazioni
-                    // e, in Chat, la nuova chat. I widget aggiunti dopo vincono
-                    // i clic sul fondo trascinabile.
                     ui.with_layout(
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            ui.spacing_mut().item_spacing.x = 2.0;
-                            ui.spacing_mut().button_padding = egui::vec2(2.0, 3.0);
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            let cap = 38.0;
                             if window_caption(ui, CaptionIcon::Close, "Chiudi (Alt+F4)", cap)
                                 .clicked()
                             {
@@ -2681,86 +2533,324 @@ impl App {
                                     egui::viewport::ViewportCommand::Minimized(true),
                                 );
                             }
-                            ui.add_space(6.0);
-                            let update_ready = self.update.available.is_some();
-                            let gear = ui
-                                .add_sized(
-                                    [28.0, 28.0],
-                                    egui::Button::new(
-                                        egui::RichText::new("⚙").size(14.0),
-                                    )
-                                    .frame(false),
-                                )
-                                .on_hover_text(if update_ready {
-                                    "Impostazioni · aggiornamento disponibile"
-                                } else {
-                                    "Impostazioni"
-                                });
-                            if update_ready {
-                                let dot = gear.rect.right_top() + egui::vec2(-3.0, 3.0);
-                                ui.painter().circle_filled(dot, 3.2, theme::ACCENT_2);
-                                ui.painter().circle_stroke(
-                                    dot,
-                                    3.2,
-                                    egui::Stroke::new(1.0_f32, theme::PANEL_SOFT),
-                                );
-                            }
-                            if gear.clicked() {
-                                self.show_settings = true;
-                            }
-                            if !griglia {
-                                ui.spacing_mut().item_spacing.x = 8.0;
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new("Nuova chat").size(11.0),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
-                                        .rounding(egui::Rounding::same(9.0))
-                                        .min_size(egui::vec2(0.0, 26.0)),
-                                    )
-                                    .on_hover_text("Svuota la conversazione")
-                                    .clicked()
-                                {
-                                    new_chat = true;
-                                }
-                                if self.chat_busy {
-                                    ui.add_space(2.0);
-                                    let now = ui.ctx().input(|i| i.time);
-                                    fx::dot(ui, theme::ACCENT, theme::pulse(now, 5.0));
-                                }
-                            }
                         },
                     );
                 });
 
-                // Filo di luce sul bordo inferiore: separa senza pesare.
-                let r = ui.min_rect();
-                let y = r.bottom() + 4.0;
                 ui.painter().line_segment(
-                    [
-                        egui::pos2(ctx.screen_rect().left(), y),
-                        egui::pos2(ctx.screen_rect().right(), y),
-                    ],
-                    egui::Stroke::new(1.0_f32, theme::alpha(theme::BORDER, 160)),
+                    [r.left_bottom(), r.right_bottom()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
                 );
+            });
+    }
+
+    /// Rail LUMEN: Chat, Griglia, Nuova chat, Impostazioni.
+    fn rail(&mut self, ctx: &egui::Context) {
+        let mut switch = None;
+        let mut new_chat = false;
+        let mut settings = false;
+        egui::SidePanel::left("rail")
+            .exact_width(72.0)
+            .resizable(false)
+            .frame(egui::Frame::none().fill(lumen::DEEP))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.right_top(), r.right_bottom()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
+                ui.add_space(12.0);
+                if lumen::nav_item(
+                    ui,
+                    lumen::Icon::Home,
+                    "Chat",
+                    self.mode == ViewMode::Chat && !self.show_settings,
+                )
+                .clicked()
+                {
+                    switch = Some(ViewMode::Chat);
+                }
+                if lumen::nav_item(
+                    ui,
+                    lumen::Icon::Grid,
+                    "Griglia",
+                    self.mode == ViewMode::Griglia && !self.show_settings,
+                )
+                .clicked()
+                {
+                    switch = Some(ViewMode::Griglia);
+                }
+                if lumen::nav_item(ui, lumen::Icon::New, "Nuova", false).clicked() {
+                    new_chat = true;
+                    switch = Some(ViewMode::Chat);
+                }
+                let settings_resp = lumen::nav_item(
+                    ui,
+                    lumen::Icon::Settings,
+                    "Setup",
+                    self.show_settings,
+                );
+                if self.update.available.is_some() {
+                    let dot = settings_resp.rect.right_top() + egui::vec2(-10.0, 10.0);
+                    ui.painter().circle_filled(dot, 3.0, lumen::EMBER);
+                }
+                if settings_resp.clicked() {
+                    settings = true;
+                }
+                ui.with_layout(
+                    egui::Layout::bottom_up(egui::Align::LEFT),
+                    |ui| {
+                        ui.add_space(14.0);
+                        ui.horizontal(|ui| {
+                            ui.add_space(12.0);
+                            ui.label(
+                                lumen::mono(
+                                    9.0,
+                                    format!("v{}", update::current_version()),
+                                )
+                                .color(lumen::FAINT),
+                            );
+                        });
+                    },
+                );
+            });
+        if let Some(mode) = switch {
+            self.show_settings = false;
+            self.switch_mode(mode);
+        }
+        if new_chat {
+            self.show_settings = false;
+            self.switch_mode(ViewMode::Chat);
+            self.new_chat();
+        }
+        if settings {
+            self.show_settings = true;
+        }
+    }
+
+    /// Toolbar della griglia, dentro il contenuto a destra della rail.
+    fn grid_toolbar(&mut self, ctx: &egui::Context) {
+        if self.mode != ViewMode::Griglia || self.show_settings {
+            return;
+        }
+        let compact = ctx.screen_rect().width() < 1000.0;
+        let want_focus = self.focus == Some(ViewMode::Griglia);
+        let sort_before = self.facets.sort;
+        let mut do_search = false;
+        let mut toggle_filters = false;
+        let mut refresh = false;
+
+        egui::TopBottomPanel::top("grid-toolbar")
+            .exact_height(52.0)
+            .frame(egui::Frame::none().fill(lumen::INK))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.left_bottom(), r.right_bottom()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(lumen::mono(11.0, "CATALOGO").color(lumen::IVORY));
+                    if !compact {
+                        ui.add_space(8.0);
+                        let count = if self.loading {
+                            "CERCO…".to_string()
+                        } else {
+                            format!("{} FILM", theme::thousands(self.total))
+                        };
+                        ui.label(lumen::mono(9.0, count).color(lumen::FAINT));
+                    }
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            ui.add_space(14.0);
+                            if lumen::icon_button(
+                                ui,
+                                lumen::Icon::Refresh,
+                                34.0,
+                                "Aggiorna la griglia",
+                            )
+                            .clicked()
+                            {
+                                refresh = true;
+                            }
+                            egui::ComboBox::from_id_salt("grid-sort")
+                                .selected_text(
+                                    egui::RichText::new(self.facets.sort.label()).size(11.0),
+                                )
+                                .width(if compact { 120.0 } else { 150.0 })
+                                .icon(|ui, rect, _visuals, _open, _above| {
+                                    let c = rect.center();
+                                    let stroke = egui::Stroke::new(1.2_f32, lumen::MUTED);
+                                    ui.painter().line_segment(
+                                        [c + egui::vec2(-4.0, -2.0), c],
+                                        stroke,
+                                    );
+                                    ui.painter().line_segment(
+                                        [c + egui::vec2(4.0, -2.0), c],
+                                        stroke,
+                                    );
+                                })
+                                .show_ui(ui, |ui| {
+                                    for s in Sort::ALL {
+                                        ui.selectable_value(
+                                            &mut self.facets.sort,
+                                            s,
+                                            s.label(),
+                                        );
+                                    }
+                                });
+                            let active = self.facets.active_count();
+                            let label = if active > 0 {
+                                format!("Filtri {active}")
+                            } else {
+                                "Filtri".to_string()
+                            };
+                            if lumen::button_sized(ui, &label, false, 92.0).clicked() {
+                                toggle_filters = true;
+                            }
+                            if lumen::button_sized(ui, "Cerca", true, 80.0).clicked() {
+                                do_search = true;
+                            }
+                            let w = ui.available_width().clamp(140.0, 380.0);
+                            let hint = if compact {
+                                "Cerca o descrivi…"
+                            } else if self.provider.is_llm() {
+                                "Descrivi cosa vuoi vedere…"
+                            } else {
+                                "Titolo, corrente, tema…"
+                            };
+                            let field_id = egui::Id::new("grid-query");
+                            let focused = ui.memory(|m| m.has_focus(field_id));
+                            let frame = egui::Frame::none()
+                                .fill(lumen::DEEP)
+                                .stroke(egui::Stroke::new(
+                                    1.0_f32,
+                                    if focused { lumen::EMBER } else { lumen::BORDER },
+                                ))
+                                .rounding(egui::Rounding::same(lumen::RADIUS_SM))
+                                .inner_margin(egui::Margin::symmetric(10.0, 7.0));
+                            let resp = frame
+                                .show(ui, |ui| {
+                                    ui.add_sized(
+                                        [(w - 20.0).max(80.0), 20.0],
+                                        egui::TextEdit::singleline(&mut self.grid_query)
+                                            .id(field_id)
+                                            .frame(false)
+                                            .hint_text(hint)
+                                            .font(egui::TextStyle::Body),
+                                    )
+                                })
+                                .inner;
+                            if want_focus {
+                                resp.request_focus();
+                            }
+                            if resp.changed() && !self.provider.is_llm() {
+                                self.dirty = Some(Instant::now());
+                            }
+                            if resp.lost_focus()
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                            {
+                                do_search = true;
+                            }
+                        },
+                    );
+                });
             });
 
         if want_focus {
             self.focus = None;
         }
+        if self.facets.sort != sort_before {
+            self.page = 1;
+            self.dirty = Some(Instant::now());
+        }
         if toggle_filters {
             self.toggle_filters();
+        }
+        if refresh {
+            self.resanitize();
+            self.page = 1;
+            self.dirty = Some(Instant::now());
         }
         if do_search {
             self.page = 1;
             self.launch_search(true);
         }
-        if new_chat {
-            self.new_chat();
-        }
     }
+
+    /// Barra di stato LUMEN.
+    fn status_bar(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::bottom("status")
+            .exact_height(28.0)
+            .frame(egui::Frame::none().fill(lumen::INK))
+            .show(ctx, |ui| {
+                let r = ui.max_rect();
+                ui.painter().line_segment(
+                    [r.left_top(), r.right_top()],
+                    egui::Stroke::new(1.0_f32, lumen::BORDER),
+                );
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    ui.add_space(14.0);
+                    let busy = self.loading
+                        || self.detail_loading
+                        || self.summarizing
+                        || self.chat_busy
+                        || self.update.checking
+                        || self.detecting
+                        || self.ai_checking
+                        || self.imdb_busy;
+                    let (color, state) = if busy {
+                        (lumen::EMBER, "LAVORO")
+                    } else {
+                        (lumen::CELADON, "PRONTO")
+                    };
+                    let (dot, _) = ui.allocate_exact_size(
+                        egui::vec2(6.0, 6.0),
+                        egui::Sense::hover(),
+                    );
+                    ui.painter().circle_filled(dot.center(), 2.5, color);
+                    ui.label(lumen::mono(9.0, state).color(lumen::MUTED));
+                    ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
+                    ui.label(
+                        lumen::mono(
+                            9.0,
+                            if self.tmdb.is_some() {
+                                "TMDB"
+                            } else {
+                                "TMDB NON CONFIGURATO"
+                            },
+                        )
+                        .color(lumen::FAINT),
+                    );
+                    ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
+                    ui.label(lumen::mono(9.0, self.provider_short()).color(lumen::FAINT));
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.add_space(14.0);
+                            ui.label(
+                                lumen::mono(
+                                    9.0,
+                                    format!("v{}", update::current_version()),
+                                )
+                                .color(lumen::MUTED),
+                            );
+                            if self.update.available.is_some() {
+                                ui.label(
+                                    lumen::mono(9.0, "AGGIORNAMENTO")
+                                        .color(lumen::EMBER),
+                                );
+                            }
+                        },
+                    );
+                });
+            });
+    }
+
 
     fn left_panel(&mut self, ctx: &egui::Context) {
         // Il pannello e uno strumento della griglia: in chat sparisce del
@@ -3088,7 +3178,7 @@ impl App {
                     .order(egui::Order::Foreground)
                     .anchor(
                         egui::Align2::CENTER_BOTTOM,
-                        egui::vec2(0.0, -8.0),
+                        egui::vec2(0.0, -36.0),
                     )
                     .show(ctx, |ui| {
                         ui.set_width(area_w);
@@ -3805,10 +3895,10 @@ impl App {
             if self.chat_composer_collapsed {
                 62.0
             } else {
-                120.0
+                148.0
             }
         } else {
-            46.0
+            74.0
         };
         let y = -lift + (1.0 - enter) * 20.0;
         egui::Area::new(egui::Id::new("toast"))
@@ -3891,6 +3981,9 @@ impl eframe::App for App {
         }
         self.maybe_check_updates();
         self.header(ctx);
+        self.status_bar(ctx);
+        self.rail(ctx);
+        self.grid_toolbar(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
         self.central(ctx);
@@ -4810,72 +4903,6 @@ fn candidate_of(
     }
 }
 
-/// Selettore Chat/Griglia nell'header: due segmenti, quello attivo acceso.
-fn mode_switch(ui: &mut egui::Ui, mode: ViewMode) -> Option<ViewMode> {
-    let mut clicked = None;
-    egui::Frame::none()
-        .fill(theme::alpha(theme::PANEL, 190))
-        .stroke(egui::Stroke::new(1.0_f32, theme::BORDER))
-        .rounding(egui::Rounding::same(12.0))
-        .inner_margin(egui::Margin::same(3.0))
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.x = 2.0;
-            ui.horizontal(|ui| {
-                for (m, label, key) in [
-                    (ViewMode::Chat, "Chat", "1"),
-                    (ViewMode::Griglia, "Griglia", "2"),
-                ] {
-                    let active = mode == m;
-                    let (rect, resp) =
-                        ui.allocate_exact_size(egui::vec2(66.0, 24.0), egui::Sense::click());
-                    let hover = ui.ctx().animate_bool_with_time(
-                        resp.id,
-                        resp.hovered() && !active,
-                        0.12,
-                    );
-                    let painter = ui.painter();
-                    if active {
-                        painter.rect_filled(
-                            rect,
-                            egui::Rounding::same(8.0),
-                            theme::alpha(theme::ACCENT_DIM, 225),
-                        );
-                        painter.rect_stroke(
-                            rect,
-                            egui::Rounding::same(8.0),
-                            egui::Stroke::new(1.0_f32, theme::alpha(theme::ACCENT, 150)),
-                        );
-                    } else if hover > 0.01 {
-                        painter.rect_filled(
-                            rect,
-                            egui::Rounding::same(8.0),
-                            theme::mix(theme::CARD, theme::CARD_HOVER, hover),
-                        );
-                    }
-                    painter.text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        label,
-                        egui::FontId::proportional(if active { 12.0 } else { 11.5 }),
-                        if active {
-                            theme::TEXT
-                        } else {
-                            theme::mix(theme::DIM, theme::TEXT, hover)
-                        },
-                    );
-                    theme::focus_ring(ui, &resp, 8.0);
-                    let response = resp
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(format!("Vai a {label} (Ctrl+{key})"));
-                    if response.clicked() && !active {
-                        clicked = Some(m);
-                    }
-                }
-            });
-        });
-    clicked
-}
-
 fn describe(tax: &Taxonomy, f: &Facets, year: Option<(u16, u16)>) -> String {
     let mut parts: Vec<String> = Vec::new();
     for id in &f.movements {
@@ -5048,18 +5075,19 @@ fn window_caption(
     let resp = ui.add(
         egui::Button::new("")
             .frame(false)
-            .min_size(egui::vec2(cap, 24.0)),
+            .min_size(egui::vec2(cap, 40.0)),
     );
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
     if hover > 0.01 {
-        let fill = match icon {
-            CaptionIcon::Close => theme::alpha(theme::DANGER, (210.0 * hover) as u8),
-            _ => theme::alpha(theme::ACCENT, (28.0 * hover) as u8),
+        let fill = if matches!(icon, CaptionIcon::Close) {
+            theme::mix(lumen::SURFACE, theme::DANGER, hover)
+        } else {
+            theme::mix(lumen::INK, lumen::RAISED, hover)
         };
         ui.painter()
-            .rect_filled(resp.rect.shrink(1.0), egui::Rounding::same(4.0), fill);
+            .rect_filled(resp.rect, egui::Rounding::ZERO, fill);
     }
     let color = if matches!(icon, CaptionIcon::Close) {
         theme::mix(theme::DIM, egui::Color32::WHITE, hover)
@@ -5112,44 +5140,6 @@ fn window_caption(
     theme::focus_ring(ui, &resp, 4.0);
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(tip)
-}
-
-/// A finestra stretta il pulsante testuale «Cerca» diventa una lente da 26 px:
-/// il campo resta, il comando pure, e i controlli finestra entrano nella riga.
-fn compact_search(ui: &mut egui::Ui) -> egui::Response {
-    let (rect, resp) =
-        ui.allocate_exact_size(egui::vec2(26.0, 26.0), egui::Sense::click());
-    let hover = ui
-        .ctx()
-        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    let ink = theme::mix(theme::ACCENT_3, theme::TEXT, hover);
-    let p = ui.painter();
-    p.rect_filled(
-        rect,
-        egui::Rounding::same(8.0),
-        theme::mix(theme::CARD, theme::ACCENT_DIM, hover * 0.7),
-    );
-    p.rect_stroke(
-        rect,
-        egui::Rounding::same(8.0),
-        egui::Stroke::new(
-            1.0_f32,
-            theme::mix(theme::BORDER, theme::ACCENT, hover * 0.6),
-        ),
-    );
-    let c = rect.center();
-    p.circle_stroke(
-        c + egui::vec2(-1.5, -1.5),
-        4.6,
-        egui::Stroke::new(1.5_f32, ink),
-    );
-    p.line_segment(
-        [c + egui::vec2(1.7, 1.7), c + egui::vec2(5.0, 5.0)],
-        egui::Stroke::new(1.5_f32, ink),
-    );
-    theme::focus_ring(ui, &resp, 8.0);
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text("Cerca")
 }
 
 fn allowed_url(url: &str) -> bool {
