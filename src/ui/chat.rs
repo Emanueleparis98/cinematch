@@ -6,6 +6,7 @@ use egui::{Align2, Color32, FontFamily, FontId, Rect, Rounding, Sense, Stroke};
 use crate::domain::model::{Facets, ImdbRating, Movie};
 use crate::domain::suggestions::Suggestion;
 use crate::domain::taxonomy::Taxonomy;
+use crate::tmdb::poster_url;
 use crate::ui::fonts;
 use crate::ui::images::ImageStore;
 
@@ -154,6 +155,12 @@ fn hairline(ui: &mut egui::Ui) {
         egui::vec2(ui.available_width(), 1.0),
         Sense::hover(),
     );
+    ui.painter()
+        .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
+}
+
+fn hairline_width(ui: &mut egui::Ui, width: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 1.0), Sense::hover());
     ui.painter()
         .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
 }
@@ -367,6 +374,7 @@ pub fn home(
                                 actions.suggestions_hovered |= resp.hovered();
                                 if resp.clicked() {
                                     actions.prefill = Some(pista.prompt.clone());
+                                    actions.send = true;
                                 }
                             }
                         });
@@ -813,7 +821,7 @@ fn suggestion_card(
     p.text(
         egui::pos2(rect.left() + 14.0, rect.bottom() - 16.0),
         Align2::LEFT_BOTTOM,
-        "APRI IN CHAT",
+        "AVVIA LA RICERCA",
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         footer,
     );
@@ -870,10 +878,10 @@ pub fn view(
                         for (index, entry) in entries.iter().enumerate() {
                             user_message(ui, &entry.user);
                             ui.add_space(18.0);
-                            answer_view(ui, images, tax, entry, index, now, &mut actions);
+                            answer_view(ui, images, tax, entry, index, now, &mut actions, width);
                             if index + 1 < entries.len() {
                                 ui.add_space(24.0);
-                                hairline(ui);
+                                hairline_width(ui, width);
                                 ui.add_space(24.0);
                             }
                         }
@@ -936,8 +944,10 @@ fn answer_view(
     index: usize,
     now: f64,
     actions: &mut Actions,
+    width: f32,
 ) {
     let a = &entry.answer;
+    ui.set_max_width(width);
     let meta = match a.state {
         State::Busy => "IN CORSO".to_string(),
         State::Done if a.error.is_some() => "ERRORE".to_string(),
@@ -952,7 +962,7 @@ fn answer_view(
         });
     });
     ui.add_space(8.0);
-    hairline(ui);
+    hairline_width(ui, width);
     ui.add_space(12.0);
 
     if a.state == State::Busy {
@@ -989,7 +999,7 @@ fn answer_view(
 
     if !a.intro.is_empty() {
         ui.scope(|ui| {
-            ui.set_max_width(900.0_f32.min(ui.available_width()));
+            ui.set_max_width(900.0_f32.min(width));
             ui.label(lumen::body(14.0, &a.intro));
         });
     }
@@ -1044,10 +1054,9 @@ fn answer_view(
     hero_card(ui, images, tax, &a.cards[0], actions);
     if a.cards.len() > 1 {
         ui.add_space(10.0);
-        let cols = result_columns(ui.available_width());
+        let cols = result_columns(width);
         let gap = 10.0;
-        let card_w = ((ui.available_width() - gap * (cols - 1) as f32) / cols as f32)
-            .floor();
+        let card_w = ((width - gap * (cols - 1) as f32) / cols as f32).floor();
         for row in a.cards[1..].chunks(cols) {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
@@ -1055,7 +1064,7 @@ fn answer_view(
                     ui.allocate_ui_with_layout(
                         egui::vec2(card_w, 0.0),
                         egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| compact_card(ui, images, tax, card, actions, cols > 1),
+                        |ui| compact_card(ui, images, tax, card, actions, card_w),
                     );
                 }
             });
@@ -1069,7 +1078,7 @@ fn answer_view(
         a.cards.len() as u32
     };
     ui.add_space(4.0);
-    hairline(ui);
+    hairline_width(ui, width);
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         if a.grid_ready && total > 0 && !a.facets.is_empty() {
@@ -1108,6 +1117,7 @@ fn hero_card(
     frame.show(ui, |ui| {
         let available = ui.available_width();
         ui.set_min_width(available);
+        ui.set_max_width(available);
         let poster_w = if available < 760.0 { 110.0 } else { 150.0 };
         ui.horizontal_top(|ui| {
             let resp = lumen::poster(
@@ -1178,104 +1188,188 @@ fn compact_card(
     tax: &Taxonomy,
     card: &Card,
     actions: &mut Actions,
-    aligned: bool,
+    width: f32,
 ) {
-    let frame = egui::Frame::none()
-        .fill(lumen::SURFACE)
-        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .rounding(Rounding::same(lumen::RADIUS))
-        .inner_margin(egui::Margin::same(10.0));
-    frame.show(ui, |ui| {
-        let content_w = ui.available_width();
-        ui.set_min_width(content_w);
-        ui.horizontal_top(|ui| {
-            let resp = lumen::poster(ui, images, Some(&card.movie), 64.0, 96.0, false);
-            if resp.clicked() {
-                actions.open_detail = Some(card.movie.id);
-            }
-            ui.add_space(10.0);
-            ui.vertical(|ui| {
-                ui.add(
-                    egui::Label::new(lumen::bold(15.0, &card.movie.title)).truncate(),
-                );
-                ui.add(
-                    egui::Label::new(
-                        lumen::mono(9.0, movie_meta(card, tax)).color(lumen::FAINT),
-                    )
-                    .truncate(),
-                );
-                ui.add_space(4.0);
-                let perche = |ui: &mut egui::Ui| {
-                    ui.add(egui::Label::new(wrapped(
-                        &card.perche,
-                        11.0,
-                        lumen::MUTED,
-                        ui.available_width(),
-                        2,
-                    )));
-                };
-                if aligned {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), 32.0),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        perche,
-                    );
-                } else {
-                    perche(ui);
-                }
-                if !card.consiglio.is_empty() {
-                    ui.add_space(4.0);
-                    if aligned {
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), 30.0),
-                            egui::Layout::top_down(egui::Align::LEFT),
-                            |ui| consiglio(ui, &card.consiglio, 10.0),
-                        );
-                    } else {
-                        consiglio(ui, &card.consiglio, 10.0);
-                    }
-                } else if aligned {
-                    ui.add_space(4.0 + 30.0);
-                }
-                if aligned {
-                    ui.add_space(4.0);
-                    let av = availability(card);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), 11.0),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            if let Some(av) = &av {
-                                ui.add(
-                                    egui::Label::new(
-                                        lumen::mono(8.5, av).color(lumen::CELADON),
-                                    )
-                                    .truncate(),
-                                );
-                            }
-                        },
-                    );
-                } else if let Some(av) = availability(card) {
-                    ui.add_space(4.0);
-                    ui.add(
-                        egui::Label::new(
-                            lumen::mono(8.5, av).color(lumen::CELADON),
-                        )
-                        .truncate(),
-                    );
-                }
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 12.0;
-                    if link(ui, "Apri scheda", lumen::EMBER).clicked() {
-                        actions.open_detail = Some(card.movie.id);
-                    }
-                    if link(ui, "Film simili", lumen::MUTED).clicked() {
-                        actions.similar_to = Some(card.movie.title.clone());
-                    }
-                });
-            });
-        });
-    });
+    const CARD_H: f32 = 172.0;
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::hover());
+    let id = ui.id().with(("chat-card", card.movie.id));
+    let resp = ui.interact(rect, id, Sense::hover());
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
+    ui.painter().rect_filled(
+        rect,
+        Rounding::same(lumen::RADIUS),
+        if hover > 0.01 {
+            lumen::RAISED
+        } else {
+            lumen::SURFACE
+        },
+    );
+    ui.painter().rect_stroke(
+        rect,
+        Rounding::same(lumen::RADIUS),
+        Stroke::new(
+            1.0_f32,
+            if hover > 0.01 {
+                lumen::EMBER
+            } else {
+                lumen::BORDER
+            },
+        ),
+    );
+
+    let poster_rect = Rect::from_min_size(
+        rect.min + egui::vec2(10.0, 10.0),
+        egui::vec2(64.0, 96.0),
+    );
+    ui.painter()
+        .rect_filled(poster_rect, Rounding::ZERO, lumen::RAISED);
+    let mut loaded = false;
+    if let Some(path) = &card.movie.poster_path {
+        let uri = poster_url(path, "w342");
+        if let Some(tex) = images.texture(ui.ctx(), &uri) {
+            let sized = egui::load::SizedTexture::new(tex.id(), poster_rect.size());
+            ui.put(poster_rect, egui::Image::new(sized));
+            loaded = true;
+        }
+    }
+    let poster_resp = ui.interact(poster_rect, id.with("poster"), Sense::click());
+    if !loaded {
+        ui.painter().text(
+            poster_rect.center(),
+            Align2::CENTER_CENTER,
+            theme::truncate(&card.movie.title, 18),
+            FontId::new(10.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
+            lumen::IVORY,
+        );
+    }
+    ui.painter().rect_stroke(
+        poster_rect,
+        Rounding::ZERO,
+        Stroke::new(
+            1.0_f32,
+            if poster_resp.hovered() {
+                lumen::BORDER_HI
+            } else {
+                lumen::BORDER
+            },
+        ),
+    );
+    if poster_resp.clicked() {
+        actions.open_detail = Some(card.movie.id);
+    }
+
+    let text_x = poster_rect.right() + 10.0;
+    let text_w = (rect.right() - 10.0 - text_x).max(80.0);
+    let p = ui.painter();
+    let title = p.layout_job(wrapped_font(
+        &card.movie.title,
+        FontId::new(15.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
+        lumen::IVORY,
+        text_w,
+        1,
+    ));
+    p.galley(rect.min + egui::vec2(84.0, 10.0), title, lumen::IVORY);
+    let meta = p.layout_job(wrapped_font(
+        &movie_meta(card, tax),
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
+        text_w,
+        1,
+    ));
+    p.galley(rect.min + egui::vec2(84.0, 30.0), meta, lumen::FAINT);
+    let desc = p.layout_job(wrapped_font(
+        &card.perche,
+        FontId::proportional(11.0),
+        lumen::MUTED,
+        text_w,
+        2,
+    ));
+    p.galley(rect.min + egui::vec2(84.0, 46.0), desc, lumen::MUTED);
+    if !card.consiglio.is_empty() {
+        p.rect_filled(
+            Rect::from_min_size(rect.min + egui::vec2(84.0, 78.0), egui::vec2(2.0, 26.0)),
+            Rounding::ZERO,
+            lumen::EMBER,
+        );
+        let cons = p.layout_job(wrapped_font(
+            &format!("Consiglio · {}", card.consiglio),
+            FontId::proportional(10.0),
+            lumen::MUTED,
+            text_w - 10.0,
+            2,
+        ));
+        p.galley(rect.min + egui::vec2(94.0, 78.0), cons, lumen::MUTED);
+    }
+    if let Some(av) = availability(card) {
+        let av = p.layout_job(wrapped_font(
+            &av,
+            FontId::new(8.5, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            lumen::CELADON,
+            text_w,
+            1,
+        ));
+        p.galley(rect.min + egui::vec2(84.0, 110.0), av, lumen::CELADON);
+    }
+    let (x, opened) = card_link(
+        ui,
+        id.with("open"),
+        egui::pos2(text_x, rect.top() + 134.0),
+        "Apri scheda",
+        lumen::EMBER,
+    );
+    if opened {
+        actions.open_detail = Some(card.movie.id);
+    }
+    let (_, similar) = card_link(
+        ui,
+        id.with("similar"),
+        egui::pos2(x + 12.0, rect.top() + 134.0),
+        "Film simili",
+        lumen::MUTED,
+    );
+    if similar {
+        actions.similar_to = Some(card.movie.title.clone());
+    }
+}
+
+fn card_link(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    pos: egui::Pos2,
+    text: &str,
+    color: Color32,
+) -> (f32, bool) {
+    let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
+    let label = text.to_uppercase();
+    let width = ui.fonts(|f| {
+        f.layout_no_wrap(label.clone(), font.clone(), color)
+            .size()
+            .x
+    }) + 2.0;
+    let rect = Rect::from_min_size(pos, egui::vec2(width, 20.0));
+    let resp = ui.interact(rect, id, Sense::click());
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
+    let ink = if hover > 0.01 {
+        if color == lumen::MUTED {
+            lumen::IVORY
+        } else {
+            lumen::EMBER_HI
+        }
+    } else {
+        color
+    };
+    ui.painter()
+        .text(rect.left_center(), Align2::LEFT_CENTER, label, font, ink);
+    lumen::focus(ui, &resp, 0.0);
+    (
+        rect.right(),
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked(),
+    )
 }
 
 fn consiglio(ui: &mut egui::Ui, text: &str, size: f32) {
