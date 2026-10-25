@@ -3015,6 +3015,7 @@ impl App {
                     summary.as_deref(),
                     self.summarizing,
                     ai_available,
+                    false,
                 );
                 self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
             });
@@ -3034,8 +3035,8 @@ impl App {
             egui::pos2(screen.left() + 72.0, screen.top() + 48.0),
             egui::pos2(screen.right(), screen.bottom() - 28.0),
         );
-        let modal_w = (area_rect.width() - 48.0).clamp(320.0, 760.0);
-        let modal_h = (area_rect.height() - 48.0).clamp(320.0, 620.0);
+        let modal_w = (area_rect.width() - 48.0).clamp(300.0, 440.0);
+        let modal_h = (area_rect.height() - 24.0).clamp(280.0, 520.0);
         let modal = egui::Rect::from_center_size(
             area_rect.center(),
             egui::vec2(modal_w, modal_h),
@@ -3084,6 +3085,7 @@ impl App {
                                 summary.as_deref(),
                                 summarizing,
                                 ai,
+                                true,
                             );
                         },
                     );

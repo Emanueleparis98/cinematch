@@ -89,6 +89,7 @@ pub fn panel(
     summary: Option<&str>,
     summarizing: bool,
     ai_available: bool,
+    compact: bool,
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
@@ -110,13 +111,13 @@ pub fn panel(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let width = ui.available_width();
-            if d.movie.backdrop_path.is_some() {
+            if d.movie.backdrop_path.is_some() && !compact {
                 let h = (width * 9.0 / 16.0).clamp(120.0, 210.0);
                 lumen::backdrop(ui, images, Some(&d.movie), width, h);
                 ui.add_space(12.0);
             }
 
-            let poster_w = 104.0_f32.min(width * 0.34);
+            let poster_w = (if compact { 92.0_f32 } else { 104.0 }).min(width * 0.34);
             ui.horizontal_top(|ui| {
                 let _ = lumen::poster(
                     ui,
