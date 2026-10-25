@@ -2034,9 +2034,8 @@ impl App {
 
     fn apply_chat_actions(&mut self, a: chat::Actions) {
         if let Some(id) = a.open_detail {
-            // La scheda vive nella griglia: il click su una card della chat
-            // deve portare l'utente dove la scheda viene davvero mostrata.
-            self.switch_mode(ViewMode::Griglia);
+            // In chat la scheda è un'anteprima centrale: la conversazione
+            // resta al suo posto e non si salta alla griglia.
             self.open_detail(id);
         }
         if let Some(title) = a.similar_to {
@@ -2056,6 +2055,42 @@ impl App {
         }
         if a.new_chat {
             self.new_chat();
+        }
+    }
+
+    fn apply_detail_actions(
+        &mut self,
+        actions: Vec<detail::DetailAction>,
+        current_id: u64,
+        title: &str,
+        from_chat: bool,
+    ) {
+        for action in actions {
+            match action {
+                detail::DetailAction::Open(id) => {
+                    if id == current_id {
+                        if from_chat {
+                            self.switch_mode(ViewMode::Griglia);
+                        }
+                        if self.detail.is_some() {
+                            self.page = 1;
+                            self.grid_query = title.to_string();
+                            self.facets = Facets {
+                                sort: self.facets.sort,
+                                ..Default::default()
+                            };
+                            self.facet_query.clear();
+                            self.resanitize();
+                            self.launch_search(false);
+                        }
+                    } else {
+                        self.open_detail(id);
+                    }
+                }
+                detail::DetailAction::Summarize => self.spawn_summary(),
+                detail::DetailAction::OpenUrl(url) => open_url(&url),
+                detail::DetailAction::Close => self.close_detail(),
+            }
         }
     }
 
@@ -2981,37 +3016,93 @@ impl App {
                     self.summarizing,
                     ai_available,
                 );
-                for action in actions {
-                    match action {
-                        detail::DetailAction::Open(id) => {
-                            if id == d.movie.id {
-                                if self.detail.is_some() {
-                                    self.page = 1;
-                                    self.grid_query = d.movie.title.clone();
-                                    self.facets = Facets {
-                                        sort: self.facets.sort,
-                                        ..Default::default()
-                                    };
-                                    self.facet_query.clear();
-                                    self.resanitize();
-                                    self.launch_search(false);
-                                }
-                            } else {
-                                self.open_detail(id);
-                            }
-                        }
-                        detail::DetailAction::Summarize => self.spawn_summary(),
-                        detail::DetailAction::OpenUrl(url) => open_url(&url),
-                        detail::DetailAction::Close => {
-                            self.close_detail();
-                        }
-                    }
-                }
+                self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
             });
     }
 
-    fn central(&mut self, ctx: &egui::Context) {
-        let chat = self.mode == ViewMode::Chat && !self.show_settings;
+    /// Anteprima centrale della scheda in chat: un dialogo sopra la
+    /// conversazione, senza cambiare vista.
+    fn chat_detail_preview(&mut self, ctx: &egui::Context) {
+        if self.mode != ViewMode::Chat || self.show_settings || self.guide_open {
+            return;
+        }
+        if self.detail.is_none() && !self.detail_loading {
+            return;
+        }
+        let screen = ctx.screen_rect();
+        let area_rect = egui::Rect::from_min_max(
+            egui::pos2(screen.left() + 72.0, screen.top() + 48.0),
+            egui::pos2(screen.right(), screen.bottom() - 28.0),
+        );
+        let modal_w = (area_rect.width() - 48.0).clamp(320.0, 760.0);
+        let modal_h = (area_rect.height() - 48.0).clamp(320.0, 620.0);
+        let modal = egui::Rect::from_center_size(
+            area_rect.center(),
+            egui::vec2(modal_w, modal_h),
+        );
+        let d = self.detail.clone();
+        let summary = self.summary.clone();
+        let summarizing = self.summarizing;
+        let ai = self.provider.is_llm();
+        let mut actions = Vec::new();
+        egui::Area::new(egui::Id::new("chat-detail-preview"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(area_rect.min)
+            .show(ctx, |ui| {
+                ui.set_clip_rect(area_rect);
+                ui.painter().rect_filled(
+                    area_rect,
+                    egui::Rounding::ZERO,
+                    lumen::alpha(lumen::INK, 205),
+                );
+                // Blocca la chat sotto il velo.
+                let _ = ui.interact(
+                    area_rect,
+                    egui::Id::new("chat-detail-scrim"),
+                    egui::Sense::click(),
+                );
+                ui.painter().rect_filled(
+                    modal,
+                    egui::Rounding::same(lumen::RADIUS),
+                    lumen::INK,
+                );
+                ui.painter().rect_stroke(
+                    modal,
+                    egui::Rounding::same(lumen::RADIUS),
+                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI),
+                );
+                let inner = modal.shrink(16.0);
+                if let Some(d) = &d {
+                    ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(inner),
+                        |ui| {
+                            ui.set_min_height(inner.height());
+                            actions = detail::panel(
+                                ui,
+                                &self.images,
+                                d,
+                                summary.as_deref(),
+                                summarizing,
+                                ai,
+                            );
+                        },
+                    );
+                } else {
+                    ui.painter().text(
+                        modal.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "Carico la scheda…",
+                        egui::FontId::new(9.0, egui::FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
+                        lumen::FAINT,
+                    );
+                }
+            });
+        if let Some(d) = &d {
+            self.apply_detail_actions(actions, d.movie.id, &d.movie.title, true);
+        }
+    }
+
+    fn central(&mut self, ctx: &egui::Context) {        let chat = self.mode == ViewMode::Chat && !self.show_settings;
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::none()
@@ -3964,6 +4055,7 @@ impl eframe::App for App {
         self.right_panel(ctx);
         self.grid_pager(ctx);
         self.central(ctx);
+        self.chat_detail_preview(ctx);
         if self.guide_open {
             let actions = facets::guide_window(ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {

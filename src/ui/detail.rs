@@ -118,7 +118,7 @@ pub fn panel(
 
             let poster_w = 104.0_f32.min(width * 0.34);
             ui.horizontal_top(|ui| {
-                let resp = lumen::poster(
+                let _ = lumen::poster(
                     ui,
                     images,
                     Some(&d.movie),
@@ -126,9 +126,6 @@ pub fn panel(
                     poster_w * 1.5,
                     true,
                 );
-                if resp.clicked() {
-                    actions.push(DetailAction::Open(d.movie.id));
-                }
                 ui.add_space(12.0);
                 ui.vertical(|ui| {
                     ui.label(lumen::display(24.0, &d.movie.title));
