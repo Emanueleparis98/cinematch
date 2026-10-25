@@ -539,27 +539,70 @@ fn preferred_model(provider: &str, current: &str, models: &[ModelInfo]) -> Optio
         .map(|m| m.id.clone())
 }
 
-fn effort_picker(ui: &mut egui::Ui, effort: &mut String) {
+fn effort_picker(ui: &mut egui::Ui, effort: &mut String, model: Option<&ModelInfo>) {
+    const LEVELS: [(&str, &str); 7] = [
+        ("max", "Massimo"),
+        ("xhigh", "Molto alto"),
+        ("high", "Alto"),
+        ("medium", "Medio"),
+        ("low", "Basso"),
+        ("minimal", "Minimo"),
+        ("none", "Disattivato"),
+    ];
+    let support = model.and_then(|m| m.reasoning.as_ref());
+    if model.is_some() && support.is_none() {
+        ui.label(
+            egui::RichText::new(
+                "Questo modello non espone lo sforzo di ragionamento: usa il suo comportamento predefinito.",
+            )
+            .size(10.0)
+            .color(theme::DIM),
+        );
+        return;
+    }
+    let allowed = |id: &str| match support {
+        // DeepSeek diretto: i cinque livelli storici.
+        None => matches!(id, "max" | "high" | "medium" | "low" | "none"),
+        Some(s) => {
+            (s.efforts.is_empty() || s.efforts.iter().any(|e| e == id))
+                && !(id == "none" && s.mandatory)
+        }
+    };
+    if let Some(s) = support {
+        // Il livello salvato potrebbe non esistere per questo modello.
+        if !allowed(effort) {
+            let next = s
+                .default_effort
+                .as_deref()
+                .filter(|d| allowed(d))
+                .or_else(|| LEVELS.iter().map(|(id, _)| *id).find(|id| allowed(id)));
+            if let Some(next) = next {
+                *effort = next.to_string();
+            }
+        }
+    }
     ui.horizontal_wrapped(|ui| {
         ui.label(
             egui::RichText::new("Sforzo di ragionamento")
                 .size(11.0)
                 .color(theme::DIM),
         );
-        for (id, label) in [
-            ("max", "Massimo"),
-            ("high", "Alto"),
-            ("medium", "Medio"),
-            ("low", "Basso"),
-            ("none", "Disattivato"),
-        ] {
-            ui.selectable_value(effort, id.to_string(), egui::RichText::new(label).size(11.0));
+        for (id, label) in LEVELS {
+            if allowed(id) {
+                ui.selectable_value(
+                    effort,
+                    id.to_string(),
+                    egui::RichText::new(label).size(11.0),
+                );
+            }
         }
     });
     ui.label(
-        egui::RichText::new(
-            "Massimo ragiona di più: risposte più curate, ma più lente e più token. Vale per i modelli che lo supportano.",
-        )
+        egui::RichText::new(if support.is_some() {
+            "Il modello dichiara solo i livelli qui sopra. Massimo costa più token ed è più lento."
+        } else {
+            "Massimo ragiona di più: risposte più curate, ma più lente e più token."
+        })
         .size(10.0)
         .color(theme::DIM),
     );
@@ -3743,9 +3786,17 @@ impl App {
                     );
                 }
 
-                if self.settings.provider == "deepseek" || self.settings.provider == "openrouter" {
+                if self.settings.provider == "deepseek" {
                     ui.add_space(6.0);
-                    effort_picker(ui, &mut self.settings.effort);
+                    effort_picker(ui, &mut self.settings.effort, None);
+                } else if self.settings.provider == "openrouter" {
+                    ui.add_space(6.0);
+                    let model = self
+                        .models
+                        .iter()
+                        .find(|m| m.id == self.settings.openrouter_model)
+                        .cloned();
+                    effort_picker(ui, &mut self.settings.effort, model.as_ref());
                 }
 
                 if self.settings.provider != "rules" {

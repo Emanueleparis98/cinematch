@@ -1161,6 +1161,16 @@ pub enum LlmKind {
     Ollama,
 }
 
+/// Sforzo di ragionamento dichiarato da OpenRouter per un modello.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReasoningSupport {
+    /// Livelli accettati. Vuoto = il modello accetta tutti i livelli.
+    pub efforts: Vec<String>,
+    /// Il modello rifiuta "none".
+    pub mandatory: bool,
+    pub default_effort: Option<String>,
+}
+
 /// Un modello scoperto interrogando il servizio.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelInfo {
@@ -1169,6 +1179,8 @@ pub struct ModelInfo {
     pub company: String,
     pub context: Option<u64>,
     pub multiplier: Option<f64>,
+    /// None = il modello non espone lo sforzo (il servizio non lo dichiara).
+    pub reasoning: Option<ReasoningSupport>,
 }
 
 impl ModelInfo {
@@ -1239,6 +1251,30 @@ pub fn normalize_base(raw: &str) -> String {
 
 /// Chiede al servizio l'elenco dei modelli utilizzabili con questa credenziale.
 /// Supporta lo standard OpenAI (`GET /models`) e Ollama (`GET /api/tags`).
+/// Legge il blocco `reasoning` dell'elenco modelli OpenRouter.
+fn reasoning_support(item: &serde_json::Value) -> Option<ReasoningSupport> {
+    let r = item.get("reasoning").filter(|v| v.is_object())?;
+    Some(ReasoningSupport {
+        efforts: r
+            .get("supported_efforts")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        mandatory: r
+            .get("mandatory")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        default_effort: r
+            .get("default_effort")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+    })
+}
+
 pub fn list_models(kind: LlmKind, base_url: &str, api_key: &str) -> Result<Vec<ModelInfo>, String> {
     let base = normalize_base(base_url);
     let (url, bearer) = match kind {
@@ -1352,6 +1388,7 @@ pub fn list_models(kind: LlmKind, base_url: &str, api_key: &str) -> Result<Vec<M
             company,
             context,
             multiplier,
+            reasoning: reasoning_support(item),
         });
     }
     if out.is_empty() {
@@ -2662,6 +2699,33 @@ mod tests {
         });
         let body = spento.openai_body("system", "user", false, 600);
         assert_eq!(body["reasoning"]["effort"].as_str(), Some("none"));
+    }
+
+    #[test]
+    fn openrouter_dichiara_i_livelli_di_sforzo() {
+        let item = serde_json::json!({
+            "id": "deepseek/deepseek-v4.1-flash-1017",
+            "reasoning": {
+                "mandatory": false,
+                "supported_efforts": ["max", "high", "low", "none"],
+                "default_effort": "high"
+            }
+        });
+        let r = reasoning_support(&item).expect("reasoning presente");
+        assert_eq!(r.efforts.join(","), "max,high,low,none");
+        assert!(!r.mandatory);
+        assert_eq!(r.default_effort.as_deref(), Some("high"));
+
+        let senza = serde_json::json!({ "id": "x/y" });
+        assert!(reasoning_support(&senza).is_none());
+
+        let tutti = serde_json::json!({
+            "id": "x/y",
+            "reasoning": { "supported_efforts": null, "mandatory": true }
+        });
+        let r = reasoning_support(&tutti).expect("reasoning presente");
+        assert!(r.efforts.is_empty());
+        assert!(r.mandatory);
     }
 
     #[test]
