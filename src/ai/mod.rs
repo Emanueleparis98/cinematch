@@ -329,24 +329,26 @@ pub fn llm_config(cfg: &AiCfg) -> Option<LlmConfig> {
             raw.trim().to_string()
         }
     };
+    // Vale per i servizi OpenAI-compatibili che accettano lo sforzo.
+    let effort = if cfg.effort.trim().is_empty() {
+        "max".to_string()
+    } else {
+        cfg.effort.trim().to_string()
+    };
     match cfg.provider.as_str() {
         "deepseek" => Some(LlmConfig {
             kind: LlmKind::OpenAi,
             base_url: DEEPSEEK_BASE.to_string(),
             model: model(&cfg.model, DEEPSEEK_MODEL),
             api_key: cfg.api_key.clone(),
-            effort: if cfg.effort.trim().is_empty() {
-                "max".to_string()
-            } else {
-                cfg.effort.trim().to_string()
-            },
+            effort: effort.clone(),
         }),
         "openrouter" => Some(LlmConfig {
             kind: LlmKind::OpenAi,
             base_url: OPENROUTER_BASE.to_string(),
             model: model(&cfg.openrouter_model, OPENROUTER_MODEL),
             api_key: cfg.openrouter_api_key.clone(),
-            effort: String::new(),
+            effort,
         }),
         "ollama" => Some(LlmConfig {
             kind: LlmKind::Ollama,
@@ -1537,7 +1539,7 @@ pub struct LlmConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: String,
-    /// "max" per DeepSeek; vuoto per gli altri servizi.
+    /// "max" per DeepSeek/OpenRouter; vuoto per i servizi locali.
     pub effort: String,
 }
 
@@ -1838,13 +1840,18 @@ impl LlmProvider {
                 { "role": "user", "content": user }
             ]
         });
-        if self.cfg.effort.trim().is_empty() {
+        let effort = self.cfg.effort.trim();
+        if self.cfg.base_url.trim_end_matches('/') == OPENROUTER_BASE {
+            // OpenRouter vuole l'oggetto unificato; "none" spegne il ragionamento.
+            body["reasoning"] =
+                serde_json::json!({ "effort": if effort.is_empty() { "none" } else { effort } });
+        } else if effort.is_empty() {
             // Dialetti per i servizi che non vogliono ragionamento: se non li
             // conoscono, `openai_send` riprova senza.
             body["reasoning_effort"] = serde_json::json!("none");
             body["chat_template_kwargs"] = serde_json::json!({ "enable_thinking": false });
         } else {
-            body["reasoning_effort"] = serde_json::json!(self.cfg.effort.trim());
+            body["reasoning_effort"] = serde_json::json!(effort);
         }
         if stream {
             body["stream"] = serde_json::json!(true);
@@ -1899,6 +1906,7 @@ impl LlmProvider {
             // l'errore arriva al chiamante con il corpo del servizio.
             if let Some(obj) = body.as_object_mut() {
                 obj.remove("reasoning_effort");
+                obj.remove("reasoning");
                 obj.remove("chat_template_kwargs");
                 obj.remove("max_tokens");
             }
@@ -2630,6 +2638,30 @@ mod tests {
         assert_eq!(body["reasoning_effort"].as_str(), Some("max"));
         assert!(body.get("chat_template_kwargs").is_none());
         assert_eq!(body["max_tokens"].as_u64(), Some(2400));
+    }
+
+    #[test]
+    fn openrouter_usa_loggetto_reasoning() {
+        let provider = LlmProvider::new(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: OPENROUTER_BASE.into(),
+            model: "deepseek/deepseek-v4.1-flash-1017".into(),
+            api_key: String::new(),
+            effort: "low".into(),
+        });
+        let body = provider.openai_body("system", "user", false, 600);
+        assert_eq!(body["reasoning"]["effort"].as_str(), Some("low"));
+        assert!(body.get("reasoning_effort").is_none());
+
+        let spento = LlmProvider::new(LlmConfig {
+            kind: LlmKind::OpenAi,
+            base_url: OPENROUTER_BASE.into(),
+            model: "deepseek/deepseek-v4.1-flash-1017".into(),
+            api_key: String::new(),
+            effort: String::new(),
+        });
+        let body = spento.openai_body("system", "user", false, 600);
+        assert_eq!(body["reasoning"]["effort"].as_str(), Some("none"));
     }
 
     #[test]

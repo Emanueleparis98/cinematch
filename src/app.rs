@@ -539,6 +539,32 @@ fn preferred_model(provider: &str, current: &str, models: &[ModelInfo]) -> Optio
         .map(|m| m.id.clone())
 }
 
+fn effort_picker(ui: &mut egui::Ui, effort: &mut String) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            egui::RichText::new("Sforzo di ragionamento")
+                .size(11.0)
+                .color(theme::DIM),
+        );
+        for (id, label) in [
+            ("max", "Massimo"),
+            ("high", "Alto"),
+            ("medium", "Medio"),
+            ("low", "Basso"),
+            ("none", "Disattivato"),
+        ] {
+            ui.selectable_value(effort, id.to_string(), egui::RichText::new(label).size(11.0));
+        }
+    });
+    ui.label(
+        egui::RichText::new(
+            "Massimo ragiona di più: risposte più curate, ma più lente e più token. Vale per i modelli che lo supportano.",
+        )
+        .size(10.0)
+        .color(theme::DIM),
+    );
+}
+
 fn model_picker(ui: &mut egui::Ui, field: &mut String, models: &[ModelInfo], hint: &str) {
     if models.is_empty() {
         ui.add(
@@ -3649,34 +3675,6 @@ impl App {
                         open_deepseek_page = true;
                     }
                     ui.add_space(4.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(
-                            egui::RichText::new("Sforzo di ragionamento")
-                                .size(11.0)
-                                .color(theme::DIM),
-                        );
-                        for (id, label) in [
-                            ("max", "Massimo"),
-                            ("high", "Alto"),
-                            ("medium", "Medio"),
-                            ("low", "Basso"),
-                            ("none", "Disattivato"),
-                        ] {
-                            ui.selectable_value(
-                                &mut self.settings.effort,
-                                id.to_string(),
-                                egui::RichText::new(label).size(11.0),
-                            );
-                        }
-                    });
-                    ui.label(
-                        egui::RichText::new(
-                            "Massimo ragiona di più: risposte più curate, ma più lente e più token.",
-                        )
-                        .size(10.0)
-                        .color(theme::DIM),
-                    );
-                    ui.add_space(4.0);
                     ui.label(egui::RichText::new("Modello DeepSeek").size(11.0).color(theme::DIM));
                     model_picker(
                         ui,
@@ -3743,6 +3741,11 @@ impl App {
                         &self.models,
                         "qwen2.5:3b",
                     );
+                }
+
+                if self.settings.provider == "deepseek" || self.settings.provider == "openrouter" {
+                    ui.add_space(6.0);
+                    effort_picker(ui, &mut self.settings.effort);
                 }
 
                 if self.settings.provider != "rules" {
