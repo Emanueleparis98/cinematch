@@ -795,7 +795,6 @@ fn answer_view(
         let gap = 10.0;
         let card_w = ((ui.available_width() - gap * (cols - 1) as f32) / cols as f32)
             .floor();
-        let min_h = if cols > 1 { 184.0 } else { 0.0 };
         for row in a.cards[1..].chunks(cols) {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
@@ -803,7 +802,7 @@ fn answer_view(
                     ui.allocate_ui_with_layout(
                         egui::vec2(card_w, 0.0),
                         egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| compact_card(ui, images, tax, card, actions, min_h),
+                        |ui| compact_card(ui, images, tax, card, actions, cols > 1),
                     );
                 }
             });
@@ -926,7 +925,7 @@ fn compact_card(
     tax: &Taxonomy,
     card: &Card,
     actions: &mut Actions,
-    min_h: f32,
+    aligned: bool,
 ) {
     let frame = egui::Frame::none()
         .fill(lumen::SURFACE)
@@ -934,9 +933,6 @@ fn compact_card(
         .rounding(Rounding::same(lumen::RADIUS))
         .inner_margin(egui::Margin::same(10.0));
     frame.show(ui, |ui| {
-        if min_h > 0.0 {
-            ui.set_min_height((min_h - 20.0).max(0.0));
-        }
         let content_w = ui.available_width();
         ui.set_min_width(content_w);
         ui.horizontal_top(|ui| {
@@ -956,18 +952,56 @@ fn compact_card(
                     .truncate(),
                 );
                 ui.add_space(4.0);
-                ui.add(egui::Label::new(wrapped(
-                    &card.perche,
-                    11.0,
-                    lumen::MUTED,
-                    ui.available_width(),
-                    2,
-                )));
+                let perche = |ui: &mut egui::Ui| {
+                    ui.add(egui::Label::new(wrapped(
+                        &card.perche,
+                        11.0,
+                        lumen::MUTED,
+                        ui.available_width(),
+                        2,
+                    )));
+                };
+                if aligned {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), 32.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        perche,
+                    );
+                } else {
+                    perche(ui);
+                }
                 if !card.consiglio.is_empty() {
                     ui.add_space(4.0);
-                    consiglio(ui, &card.consiglio, 10.0);
+                    if aligned {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), 30.0),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| consiglio(ui, &card.consiglio, 10.0),
+                        );
+                    } else {
+                        consiglio(ui, &card.consiglio, 10.0);
+                    }
+                } else if aligned {
+                    ui.add_space(4.0 + 30.0);
                 }
-                if let Some(av) = availability(card) {
+                if aligned {
+                    ui.add_space(4.0);
+                    let av = availability(card);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), 11.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            if let Some(av) = &av {
+                                ui.add(
+                                    egui::Label::new(
+                                        lumen::mono(8.5, av).color(lumen::CELADON),
+                                    )
+                                    .truncate(),
+                                );
+                            }
+                        },
+                    );
+                } else if let Some(av) = availability(card) {
                     ui.add_space(4.0);
                     ui.add(
                         egui::Label::new(
