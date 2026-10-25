@@ -258,6 +258,7 @@ pub fn home(
     busy: bool,
     ai: bool,
     focus: bool,
+    tax: &Taxonomy,
     suggestions: &[Suggestion],
 ) -> HomeActions {
     let mut actions = HomeActions::default();
@@ -332,7 +333,7 @@ pub fn home(
                                 }
                                 ui.add_space(12.0);
                                 ui.label(
-                                    lumen::mono(9.0, "04 SPUNTI LOCALI")
+                                    lumen::mono(9.0, "04 PISTE")
                                         .color(lumen::FAINT),
                                 );
                             },
@@ -343,26 +344,30 @@ pub fn home(
                     ui.add_space(12.0);
 
                     let gap = 10.0;
-                    let card_w = ((width - gap) / 2.0).floor();
-                    for row in 0..2 {
+                    let cols = if width >= 1000.0 { 4 } else { 2 };
+                    let card_w =
+                        ((width - gap * (cols - 1) as f32) / cols as f32).floor();
+                    let rows = 4usize.div_ceil(cols);
+                    for row in 0..rows {
                         ui.horizontal_top(|ui| {
                             ui.spacing_mut().item_spacing.x = gap;
-                            for col in 0..2 {
-                                let i = row * 2 + col;
-                                let (tag, title, desc) = suggestion_text(suggestions, i);
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(card_w, 0.0),
-                                    egui::Layout::top_down(egui::Align::LEFT),
-                                    |ui| {
-                                        let resp = suggestion_card(
-                                            ui, card_w, i, tag, title, desc,
-                                        );
-                                        actions.suggestions_hovered |= resp.hovered();
-                                        if resp.clicked() {
-                                            actions.prefill = Some(title.to_string());
-                                        }
-                                    },
-                                );
+                            for col in 0..cols {
+                                let i = row * cols + col;
+                                if i >= 4 {
+                                    break;
+                                }
+                                let pista = pista(tax, suggestions.get(i), i);
+                                let resp = ui
+                                    .allocate_ui_with_layout(
+                                        egui::vec2(card_w, 0.0),
+                                        egui::Layout::top_down(egui::Align::LEFT),
+                                        |ui| suggestion_card(ui, card_w, i, &pista),
+                                    )
+                                    .inner;
+                                actions.suggestions_hovered |= resp.hovered();
+                                if resp.clicked() {
+                                    actions.prefill = Some(pista.prompt.clone());
+                                }
                             }
                         });
                         ui.add_space(gap);
@@ -513,26 +518,193 @@ fn poster_strip(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width:
     });
 }
 
-fn suggestion_text<'a>(
-    suggestions: &'a [Suggestion],
-    i: usize,
-) -> (&'a str, &'a str, &'a str) {
-    const TAGS: [&str; 4] = ["CORRENTE", "ATMOSFERA", "PERIODO", "DURATA"];
-    const TITLES: [&str; 4] = [
-        "Nouvelle Vague, senza museo",
-        "Un noir che non spiega tutto",
-        "Italia anni ’70, fuori dai soliti nomi",
-        "Un film sotto i 100 minuti",
-    ];
-    const DESC: [&str; 4] = [
-        "La Parigi che si muove, tra strade, jazz e macchina da presa a spalla.",
-        "Notte, pioggia, una città che sembra complice.",
-        "Poliziottesco, commedia amara e cinema civile da riscoprire.",
-        "Serata piena, tempo stretto, nessun minuto di troppo.",
-    ];
-    match suggestions.get(i) {
-        Some(s) => (s.tag.as_str(), s.prompt.as_str(), s.desc.as_str()),
-        None => (TAGS[i % 4], TITLES[i % 4], DESC[i % 4]),
+struct Pista {
+    kicker: &'static str,
+    title: String,
+    combination: String,
+    desc: String,
+    prompt: String,
+}
+
+fn pista_fallback(i: usize) -> Pista {
+    match i {
+        0 => Pista {
+            kicker: "CORRENTE",
+            title: "Neorealismo".to_string(),
+            combination: "1943–1954 · Italia · Dramma".to_string(),
+            desc: "Racconto del reale, attori non professionisti, post-guerra.".to_string(),
+            prompt: "Neorealismo: un film da recuperare".to_string(),
+        },
+        1 => Pista {
+            kicker: "CORRENTE",
+            title: "New Hollywood".to_string(),
+            combination: "1967–1976 · Stati Uniti · Dramma".to_string(),
+            desc: "Autori contro il sistema, finali amari, cinema che cambia.".to_string(),
+            prompt: "New Hollywood: un film da recuperare".to_string(),
+        },
+        2 => Pista {
+            kicker: "PERIODO",
+            title: "Italia anni ’70".to_string(),
+            combination: "1970–1979 · Italia".to_string(),
+            desc: "Poliziottesco, commedia amara e cinema civile.".to_string(),
+            prompt: "Un film italiano degli anni ’70".to_string(),
+        },
+        _ => Pista {
+            kicker: "SERATA",
+            title: "Corto e intenso".to_string(),
+            combination: "durata < 100 min · voto ≥ 7".to_string(),
+            desc: "Nessun minuto di troppo.".to_string(),
+            prompt: "Un film sotto i 100 minuti con voto almeno 7".to_string(),
+        },
+    }
+}
+
+fn capitalize_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+fn shadow_title(prompt: &str) -> String {
+    let text = prompt.trim();
+    for prefix in ["Un film di ", "Un film d'", "Un film ", "Una ", "Un "] {
+        if let Some(rest) = text.strip_prefix(prefix) {
+            return capitalize_first(rest);
+        }
+    }
+    capitalize_first(text)
+}
+
+fn serata_title(tag: &str, facets: &Facets) -> String {
+    match tag {
+        "serata" => "Corto e intenso".to_string(),
+        "capolavoro" => "Da capolavoro".to_string(),
+        "breve" => match facets.runtime {
+            Some((_, 90)) => "Sotto i 90 minuti".to_string(),
+            _ => "Sotto i 100 minuti".to_string(),
+        },
+        "recente" => "Recenti e ben votati".to_string(),
+        "voti" => "Molti voti".to_string(),
+        "commedia" => "Commedia ben votata".to_string(),
+        "azione" => "Azione sotto i 110".to_string(),
+        "fantascienza" => "Fantascienza con voto alto".to_string(),
+        "italia" => "Cinema italiano".to_string(),
+        "nippon" => "Giappone sotto i 120".to_string(),
+        "gemme" => "Gemme nascoste".to_string(),
+        "voto" => {
+            if facets.max_rating.is_some() {
+                "Tra 7 e 8".to_string()
+            } else if facets.min_rating.map(|r| r >= 8.0).unwrap_or(false) {
+                "Da capolavoro".to_string()
+            } else {
+                "Voto alto".to_string()
+            }
+        }
+        _ => "Scoperta".to_string(),
+    }
+}
+
+fn serata_combination(tax: &Taxonomy, facets: &Facets) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some((_, hi)) = facets.runtime {
+        parts.push(format!("durata < {hi} min"));
+    }
+    if let Some(min) = facets.min_rating {
+        if let Some(max) = facets.max_rating {
+            parts.push(format!("voto {min:.0}–{max:.0}"));
+        } else {
+            parts.push(format!("voto ≥ {min:.0}"));
+        }
+    }
+    if let Some(votes) = facets.min_votes {
+        parts.push(format!("≥ {} voti", theme::thousands(votes)));
+    }
+    if let Some(code) = facets.countries.first() {
+        parts.push(tax.country_label(code));
+    }
+    if let Some(genre) = facets.genres.first().and_then(|g| tax.genre_name(*g)) {
+        parts.push(genre);
+    }
+    if parts.is_empty() {
+        parts.push("scoperta".to_string());
+    }
+    parts.into_iter().take(3).collect::<Vec<_>>().join(" · ")
+}
+
+fn pista(tax: &Taxonomy, suggestion: Option<&Suggestion>, i: usize) -> Pista {
+    let Some(s) = suggestion else {
+        return pista_fallback(i);
+    };
+    let kicker = s.kind_label();
+    let desc = s.desc.clone();
+    let prompt = s.prompt.clone();
+
+    if kicker == "CORRENTE" {
+        if let Some(m) = s.facets.movements.first().and_then(|id| tax.movement(id)) {
+            let mut parts = vec![format!("{}–{}", m.period[0], m.period[1])];
+            if let Some(code) = m.countries.first() {
+                parts.push(tax.country_label(code));
+            }
+            if let Some(genre) = m.genres_core.first().and_then(|g| tax.genre_name(*g)) {
+                parts.push(genre);
+            }
+            return Pista {
+                kicker,
+                title: m.label.clone(),
+                combination: parts.join(" · "),
+                desc,
+                prompt,
+            };
+        }
+    }
+
+    if kicker == "PERIODO" {
+        let decade = s.facets.decades.first().and_then(|d| tax.decade(d));
+        let genre = s.facets.genres.first().and_then(|g| tax.genre_name(*g));
+        let country = s.facets.countries.first().map(|c| tax.country_label(c));
+        let title = match (&country, decade) {
+            (Some(c), Some(d)) => format!("{} {}", c, d.label.to_lowercase()),
+            _ => shadow_title(&s.prompt),
+        };
+        let mut parts = Vec::new();
+        if let Some(d) = decade {
+            parts.push(format!("{}–{}", d.from, d.to));
+        }
+        if let Some(c) = &country {
+            parts.push(c.clone());
+        }
+        if let Some(g) = &genre {
+            parts.push(g.clone());
+        }
+        if !parts.is_empty() {
+            return Pista {
+                kicker,
+                title,
+                combination: parts.join(" · "),
+                desc,
+                prompt,
+            };
+        }
+    }
+
+    if kicker == "SERATA" {
+        return Pista {
+            kicker,
+            title: serata_title(&s.tag, &s.facets),
+            combination: serata_combination(tax, &s.facets),
+            desc,
+            prompt,
+        };
+    }
+
+    Pista {
+        kicker,
+        title: shadow_title(&s.prompt),
+        combination: String::new(),
+        desc,
+        prompt,
     }
 }
 
@@ -540,14 +712,11 @@ fn suggestion_card(
     ui: &mut egui::Ui,
     width: f32,
     index: usize,
-    tag: &str,
-    title: &str,
-    desc: &str,
+    pista: &Pista,
 ) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(
-        egui::vec2(width, 126.0),
-        Sense::click(),
-    );
+    const CARD_H: f32 = 150.0;
+    let (rect, resp) =
+        ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::click());
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -576,42 +745,86 @@ fn suggestion_card(
     p.text(
         rect.min + egui::vec2(14.0, 12.0),
         Align2::LEFT_TOP,
-        format!("{:02} / {}", index + 1, tag.to_uppercase()),
+        format!("{:02} / {}", index + 1, pista.kicker),
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::EMBER,
     );
+    let max_title_w = width - 28.0;
+    let mut title_size = 20.0_f32;
+    while title_size > 16.0 {
+        let font = FontId::new(
+            title_size,
+            FontFamily::Name(fonts::LUMEN_DISPLAY.into()),
+        );
+        let measured = ui.fonts(|f| {
+            f.layout_no_wrap(pista.title.clone(), font, lumen::IVORY)
+                .size()
+                .x
+        });
+        if measured <= max_title_w {
+            break;
+        }
+        title_size -= 1.0;
+    }
     let title_galley = p.layout_job(wrapped_font(
-        title,
-        FontId::new(18.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
+        &pista.title,
+        FontId::new(
+            title_size,
+            FontFamily::Name(fonts::LUMEN_DISPLAY.into()),
+        ),
         lumen::IVORY,
+        max_title_w,
+        1,
+    ));
+    p.galley(rect.min + egui::vec2(14.0, 30.0), title_galley, lumen::IVORY);
+    let combo_galley = p.layout_job(wrapped_font(
+        &pista.combination,
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
+        width - 28.0,
+        1,
+    ));
+    p.galley(
+        rect.min + egui::vec2(14.0, 62.0),
+        combo_galley,
+        lumen::FAINT,
+    );
+    let desc_galley = p.layout_job(wrapped_font(
+        &pista.desc,
+        FontId::proportional(11.5),
+        lumen::MUTED,
         width - 28.0,
         2,
     ));
-    let title_pos = rect.min + egui::vec2(14.0, 32.0);
-    let title_h = title_galley.size().y;
-    p.galley(title_pos, title_galley, lumen::IVORY);
-    let desc_galley = p.layout_job(wrapped_font(
-        desc,
-        FontId::proportional(11.0),
-        lumen::MUTED,
-        width - 56.0,
-        2,
-    ));
-    p.galley(
-        title_pos + egui::vec2(0.0, title_h + 6.0),
-        desc_galley,
-        lumen::MUTED,
+    p.galley(rect.min + egui::vec2(14.0, 79.0), desc_galley, lumen::MUTED);
+    p.rect_filled(
+        Rect::from_min_size(
+            egui::pos2(rect.left() + 14.0, rect.bottom() - 34.0),
+            egui::vec2(width - 28.0, 1.0),
+        ),
+        Rounding::ZERO,
+        lumen::BORDER,
     );
+    let footer = if hover > 0.01 {
+        lumen::EMBER_HI
+    } else {
+        lumen::EMBER
+    };
     p.text(
-        rect.right_bottom() + egui::vec2(-14.0, -12.0),
-        Align2::RIGHT_BOTTOM,
-        "↗",
-        FontId::proportional(13.0),
-        if hover > 0.01 {
-            lumen::EMBER
-        } else {
-            lumen::FAINT
-        },
+        egui::pos2(rect.left() + 14.0, rect.bottom() - 16.0),
+        Align2::LEFT_BOTTOM,
+        "APRI IN CHAT",
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        footer,
+    );
+    lumen::icon(
+        p,
+        Rect::from_center_size(
+            egui::pos2(rect.right() - 22.0, rect.bottom() - 20.0),
+            egui::vec2(12.0, 12.0),
+        ),
+        lumen::Icon::ArrowRight,
+        footer,
     );
     lumen::focus(ui, &resp, lumen::RADIUS);
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)

@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 
 use crate::domain::constraints;
 use crate::domain::model::{Facets, Sort};
-use crate::domain::taxonomy::Taxonomy;
+use crate::domain::taxonomy::{Movement, Taxonomy};
 
 /// Ogni quanto cambiare le quattro card della casa, in secondi.
 pub const ROTATION_SECS: f64 = 7.0;
@@ -52,6 +52,16 @@ impl Suggestion {
             facets,
         }
     }
+
+    /// Etichetta breve della categoria, usata come kicker nella casa.
+    pub fn kind_label(&self) -> &'static str {
+        match self.kind {
+            Kind::Corrente => "CORRENTE",
+            Kind::Atmosfera => "ATMOSFERA",
+            Kind::Periodo => "PERIODO",
+            Kind::Scopri => "SERATA",
+        }
+    }
 }
 
 /// Costruisce il catalogo valido per lo stato dei filtri della griglia.
@@ -78,7 +88,7 @@ pub fn pick(pool: &[Suggestion], cycle: u64, avoid: &[String], count: usize) -> 
     let mut taken: BTreeSet<String> = BTreeSet::new();
     let order = [
         Kind::Corrente,
-        Kind::Atmosfera,
+        Kind::Corrente,
         Kind::Periodo,
         Kind::Scopri,
     ];
@@ -161,12 +171,29 @@ fn add_movements(
     tax: &Taxonomy,
     base: &Facets,
 ) {
-    for (i, m) in tax.movements.iter().enumerate() {
-        let prompt = match i % 3 {
-            0 => format!("{}: un film da recuperare", m.label),
-            1 => format!("{}, ma senza il peso del museo", m.label),
-            _ => format!("{}: qualcosa che non ho ancora visto", m.label),
-        };
+    // Le prime correnti della casa: un inizio editoriale, non l'ordine grezzo
+    // del file di tassonomia. Il resto segue per non perdere il catalogo.
+    const PRIORITY: [&str; 6] = [
+        "neorealismo",
+        "new_hollywood",
+        "nouvelle_vague",
+        "giallo_italiano",
+        "hk_action",
+        "italian_political",
+    ];
+    let mut order: Vec<&Movement> = Vec::new();
+    for id in PRIORITY {
+        if let Some(m) = tax.movement(id) {
+            order.push(m);
+        }
+    }
+    for m in &tax.movements {
+        if !PRIORITY.contains(&m.id.as_str()) {
+            order.push(m);
+        }
+    }
+    for m in order {
+        let prompt = format!("{}: un film da recuperare", m.label);
         let desc = if m.note.trim().is_empty() {
             "Una corrente da attraversare, un film alla volta.".to_string()
         } else {
@@ -354,6 +381,20 @@ fn add_periods(
     tax: &Taxonomy,
     base: &Facets,
 ) {
+    let mut extra = Facets::default();
+    extra.decades.push("1970s".into());
+    extra.countries.push("IT".into());
+    push(
+        out,
+        seen,
+        tax,
+        base,
+        Kind::Periodo,
+        "periodo",
+        "Un film italiano degli anni '70".into(),
+        "Poliziottesco, commedia amara e cinema civile da riscoprire.".into(),
+        extra,
+    );
     for (decade, genre, prompt, desc) in PERIODS {
         if tax.decade(decade).is_none() || tax.genre_name(genre).is_none() {
             continue;
@@ -381,6 +422,21 @@ fn add_discoveries(
     tax: &Taxonomy,
     base: &Facets,
 ) {
+    let mut extra = Facets::default();
+    extra.runtime = Some((0, 100));
+    extra.min_rating = Some(7.0);
+    push(
+        out,
+        seen,
+        tax,
+        base,
+        Kind::Scopri,
+        "serata",
+        "Un film sotto i 100 minuti con voto almeno 7".into(),
+        "Nessun minuto di troppo.".into(),
+        extra,
+    );
+
     let mut extra = Facets::default();
     extra.min_votes = Some(1000);
     extra.sort = Sort::Rating;

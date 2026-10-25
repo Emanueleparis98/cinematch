@@ -3094,6 +3094,7 @@ impl App {
                 self.chat_busy,
                 self.provider.is_llm(),
                 want_focus,
+                &self.tax,
                 &self.suggestions,
             );
             if want_focus {
