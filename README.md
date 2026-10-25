@@ -164,8 +164,9 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
   riprova e Â«Vedi tutti in grigliaÂ» restano dove erano.
 - **Griglia**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
-  card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza
-  filtri, quattro a 1220 px. Il pager sta in basso, fuori dallo scroll.
+  card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza;
+  a 1220 px quattro con i filtri e cinque senza. Il pager sta in basso, fuori
+  dallo scroll.
 - **Filtri**: pannello a fisarmonica su fondo ink, testata ferma (titolo,
   conteggio, azzera, aiuto, ricerca interna), pill dei filtri attivi, sezioni in
   mono maiuscolo e chip piatte con bordo ember quando attive.
@@ -174,8 +175,8 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 - **Impostazioni**: pagina intera con colonna centrata: TMDB, interprete, lingua,
   dati IMDb, aggiornamenti e salvataggio. Â«ChiudiÂ» o `Esc` tornano alla vista.
 - **Ridimensionamento**: minimo 800x600; i testi vanno a capo e i pannelli non si
-  sovrappongono. A 1220x660 la griglia passa a quattro colonne e la scheda resta
-  leggibile.
+  sovrappongono. A 1220x660 la griglia passa a cinque colonne senza filtri
+  (quattro con i filtri) e la scheda resta leggibile.
 - **Da tastiera**: il fuoco e sempre visibile (filo ember) su card, chip e
   pulsanti; Tab naviga, Invio/Spazio attivano, `/` porta al campo di ricerca,
   `Esc` chiude scheda, filtri, guida o impostazioni. I toast entrano scivolando ed
