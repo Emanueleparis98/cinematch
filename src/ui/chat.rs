@@ -423,51 +423,102 @@ fn hero_left(
 }
 
 fn collage(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
-    ui.label(lumen::label("In sala"));
-    ui.add_space(8.0);
     let big_w = (width * 0.55).min(220.0);
-    let small_w = (width - big_w - 12.0).min(100.0);
-    let group_w = big_w + 12.0 + small_w;
+    let gap = 8.0;
+    let mut small_w = ((width - big_w - 12.0 - gap) / 2.0).min(100.0);
+    let grid = small_w >= 72.0;
+    if !grid {
+        small_w = (width - big_w - 12.0).min(100.0);
+    }
+    let grid_w = if grid {
+        small_w * 2.0 + gap
+    } else {
+        small_w
+    };
+    let group_w = big_w + 12.0 + grid_w;
+    let offset = ((width - group_w) * 0.5).max(0.0);
+    ui.horizontal(|ui| {
+        ui.add_space(offset);
+        ui.label(lumen::label("In sala"));
+    });
+    ui.add_space(8.0);
+    let big_h = big_w * 1.5;
+    let grid_h = small_w * 3.0 + gap;
     ui.horizontal_top(|ui| {
-        ui.add_space(((width - group_w) * 0.5).max(0.0));
-        lumen::poster(
-            ui,
-            images,
-            movies.get(0),
-            big_w,
-            big_w * 1.5,
-            true,
-        );
+        ui.add_space(offset);
+        lumen::poster(ui, images, movies.get(0), big_w, big_h, true);
         ui.add_space(12.0);
         ui.vertical(|ui| {
-            ui.add_space(18.0);
-            lumen::poster(
-                ui,
-                images,
-                movies.get(1),
-                small_w,
-                small_w * 1.5,
-                false,
-            );
-            ui.add_space(12.0);
-            lumen::poster(
-                ui,
-                images,
-                movies.get(2),
-                small_w,
-                small_w * 1.5,
-                false,
-            );
+            ui.add_space(((big_h - grid_h) * 0.5).max(0.0));
+            if grid {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    lumen::poster(
+                        ui,
+                        images,
+                        movies.get(1),
+                        small_w,
+                        small_w * 1.5,
+                        false,
+                    );
+                    lumen::poster(
+                        ui,
+                        images,
+                        movies.get(2),
+                        small_w,
+                        small_w * 1.5,
+                        false,
+                    );
+                });
+                ui.add_space(gap);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    lumen::poster(
+                        ui,
+                        images,
+                        movies.get(3),
+                        small_w,
+                        small_w * 1.5,
+                        false,
+                    );
+                    lumen::poster(
+                        ui,
+                        images,
+                        movies.get(4),
+                        small_w,
+                        small_w * 1.5,
+                        false,
+                    );
+                });
+            } else {
+                lumen::poster(
+                    ui,
+                    images,
+                    movies.get(1),
+                    small_w,
+                    small_w * 1.5,
+                    false,
+                );
+                ui.add_space(gap);
+                lumen::poster(
+                    ui,
+                    images,
+                    movies.get(2),
+                    small_w,
+                    small_w * 1.5,
+                    false,
+                );
+            }
         });
     });
 }
 
 fn poster_strip(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
     let gap = 8.0;
-    let w = ((width - gap * 2.0) / 3.0).floor();
+    let w = ((width - gap * 5.0) / 6.0).floor();
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
-        for i in 0..3 {
+        for i in 0..6 {
             lumen::poster(ui, images, movies.get(i), w, w * 1.5, i == 0);
         }
     });
