@@ -158,17 +158,6 @@ fn hairline(ui: &mut egui::Ui) {
         .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
 }
 
-fn key_hint(ui: &mut egui::Ui, text: &str) {
-    egui::Frame::none()
-        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .inner_margin(egui::Margin::symmetric(5.0, 2.0))
-        .show(ui, |ui| {
-            ui.label(
-                lumen::mono(8.0, text).color(lumen::FAINT),
-            );
-        });
-}
-
 fn wrapped_font(
     text: &str,
     font: FontId,
@@ -417,7 +406,7 @@ fn hero_left(
     } else {
         "Un film intenso, ben diretto, non troppo lungo…"
     };
-    if composer_inner(ui, draft, busy, focus, width, hint, true, compact) {
+    if composer_inner(ui, draft, busy, focus, width, hint, true) {
         actions.send = true;
     }
 }
@@ -1159,7 +1148,6 @@ pub fn composer(
         width,
         "Scrivi cosa vuoi vedere…",
         false,
-        false,
     )
 }
 
@@ -1171,7 +1159,6 @@ fn composer_inner(
     width: f32,
     hint: &str,
     wide_send: bool,
-    compact: bool,
 ) -> bool {
     let mut send = false;
     let edit_id = egui::Id::new("chat-composer");
@@ -1180,8 +1167,7 @@ fn composer_inner(
     let button_w = if wide_send { 100.0 } else { 40.0 };
     let gap = 8.0;
     let inner_w = (width - 24.0).max(120.0);
-    let extra = if wide_send && !compact { 52.0 } else { 0.0 };
-    let text_w = (inner_w - button_w - gap - extra).max(70.0);
+    let text_w = (inner_w - button_w - gap).max(70.0);
 
     egui::Frame::none()
         .fill(lumen::DEEP)
@@ -1219,9 +1205,6 @@ fn composer_inner(
                 });
                 if enter && (focused_at_start || resp.has_focus()) {
                     send = true;
-                }
-                if wide_send && !compact {
-                    key_hint(ui, "INVIO");
                 }
                 if send_button(
                     ui,
