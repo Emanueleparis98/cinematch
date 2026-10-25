@@ -119,12 +119,14 @@ pub fn grid(
 ) -> Option<u64> {
     let mut clicked = None;
     let avail = ui.available_width();
-    let cols = if avail < 560.0 {
-        2
-    } else if avail < 900.0 {
+    let cols = if avail >= 1040.0 {
+        5
+    } else if avail >= 740.0 {
+        4
+    } else if avail >= 560.0 {
         3
     } else {
-        4
+        2
     };
     let card_w = ((avail - GAP * (cols - 1) as f32) / cols as f32).floor();
     let card_h = (card_w * 1.5).floor() + 38.0;

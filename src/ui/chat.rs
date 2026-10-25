@@ -795,6 +795,7 @@ fn answer_view(
         let gap = 10.0;
         let card_w = ((ui.available_width() - gap * (cols - 1) as f32) / cols as f32)
             .floor();
+        let min_h = if cols > 1 { 184.0 } else { 0.0 };
         for row in a.cards[1..].chunks(cols) {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
@@ -802,7 +803,7 @@ fn answer_view(
                     ui.allocate_ui_with_layout(
                         egui::vec2(card_w, 0.0),
                         egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| compact_card(ui, images, tax, card, actions),
+                        |ui| compact_card(ui, images, tax, card, actions, min_h),
                     );
                 }
             });
@@ -925,6 +926,7 @@ fn compact_card(
     tax: &Taxonomy,
     card: &Card,
     actions: &mut Actions,
+    min_h: f32,
 ) {
     let frame = egui::Frame::none()
         .fill(lumen::SURFACE)
@@ -932,6 +934,9 @@ fn compact_card(
         .rounding(Rounding::same(lumen::RADIUS))
         .inner_margin(egui::Margin::same(10.0));
     frame.show(ui, |ui| {
+        if min_h > 0.0 {
+            ui.set_min_height((min_h - 20.0).max(0.0));
+        }
         let content_w = ui.available_width();
         ui.set_min_width(content_w);
         ui.horizontal_top(|ui| {
