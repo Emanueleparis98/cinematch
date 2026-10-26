@@ -16,6 +16,7 @@ use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::infra::winclock;
+use crate::integrations::simkl;
 use crate::tmdb::client::{describe_credential, Tmdb};
 use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
@@ -63,6 +64,12 @@ enum Msg {
     UpdateProgress { done: u64, total: u64 },
     /// Setup scaricato e verificato (o errore).
     UpdateDownloaded(Result<PathBuf, String>),
+    /// Codice dispositivo SIMKL ottenuto (o errore).
+    SimklCode(Result<simkl::DeviceCode, String>),
+    /// Autorizzazione SIMKL completata (o errore).
+    SimklAuth(Result<simkl::Tokens, String>),
+    /// Sincronizzazione libreria SIMKL completata.
+    SimklSynced(Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>),
 }
 
 #[derive(Default)]
@@ -136,6 +143,7 @@ struct SettingsDraft {
     ollama_url: String,
     ollama_model: String,
     language: String,
+    simkl_client_id: String,
 }
 
 impl SettingsDraft {
@@ -151,6 +159,7 @@ impl SettingsDraft {
             ollama_url: cfg.ai.base_url.clone(),
             ollama_model: cfg.ai.ollama_model.clone(),
             language: cfg.language.clone(),
+            simkl_client_id: cfg.simkl.client_id.clone(),
         }
     }
 
@@ -747,6 +756,15 @@ pub struct App {
     lab_booted: bool,
     settings: SettingsDraft,
     settings_check: Option<String>,
+    /// Collegamento SIMKL: token (nel Credential Manager), libreria locale,
+    /// codice di autorizzazione in corso e stato dell'ultima sincronizzazione.
+    simkl_tokens: Option<simkl::Tokens>,
+    simkl_store: simkl::Store,
+    simkl_auth: Option<simkl::DeviceCode>,
+    simkl_cancel: Arc<AtomicBool>,
+    simkl_syncing: bool,
+    simkl_status: Option<String>,
+    simkl_error: Option<String>,
     update: UpdateUi,
     models: Vec<ModelInfo>,
     models_gen: u64,
@@ -774,6 +792,8 @@ impl App {
         let facets = Facets::default();
         let prune = constraints::pruning(&tax, &facets);
         let settings = SettingsDraft::from(&cfg);
+        let simkl_tokens = simkl::load_tokens().ok().flatten();
+        let simkl_store = simkl::load_store();
         let mut app = Self {
             ctx: ctx.clone(),
             tax,
@@ -832,6 +852,13 @@ impl App {
             lab_booted: false,
             settings,
             settings_check: None,
+            simkl_tokens,
+            simkl_store,
+            simkl_auth: None,
+            simkl_cancel: Arc::new(AtomicBool::new(false)),
+            simkl_syncing: false,
+            simkl_status: None,
+            simkl_error: None,
             update: UpdateUi::default(),
             models: Vec::new(),
             models_gen: 0,
@@ -851,6 +878,11 @@ impl App {
         // all'avvio: aprendo le Impostazioni lo trovi pronto.
         if app.settings.can_detect() {
             app.detect_models();
+        }
+        // La libreria SIMKL si aggiorna all'avvio, ma non più di una volta
+        // ogni 15 minuti: niente polling in background.
+        if app.simkl_tokens.is_some() && simkl::sync_due(app.simkl_store.last_sync) {
+            app.start_simkl_sync(false);
         }
         app
     }
@@ -1055,6 +1087,75 @@ impl App {
                             self.update.error = Some(e.clone());
                             self.update.status = None;
                             self.toast(e);
+                        }
+                    }
+                }
+                Msg::SimklCode(res) => {
+                    match res {
+                        Ok(code) => {
+                            self.simkl_auth = Some(code);
+                            self.simkl_status = None;
+                            self.simkl_error = None;
+                        }
+                        Err(e) => {
+                            self.simkl_auth = None;
+                            self.simkl_status = None;
+                            self.simkl_error = Some(e);
+                        }
+                    }
+                }
+                Msg::SimklAuth(res) => {
+                    self.simkl_auth = None;
+                    match res {
+                        Ok(tokens) => {
+                            self.simkl_tokens = Some(tokens);
+                            self.simkl_error = None;
+                            self.simkl_status =
+                                Some("SIMKL collegato. Sincronizzo la libreria…".into());
+                            self.start_simkl_sync(true);
+                        }
+                        Err(e) => {
+                            self.simkl_status = None;
+                            self.simkl_error = Some(e);
+                        }
+                    }
+                }
+                Msg::SimklSynced(res) => {
+                    self.simkl_syncing = false;
+                    match res {
+                        Ok((store, tokens, report)) => {
+                            let changed = self
+                                .simkl_tokens
+                                .as_ref()
+                                .map(|t| {
+                                    t.access_token != tokens.access_token
+                                        || t.refresh_token != tokens.refresh_token
+                                })
+                                .unwrap_or(true);
+                            if changed {
+                                if let Err(e) = simkl::save_tokens(&tokens) {
+                                    self.simkl_error = Some(e);
+                                }
+                            }
+                            self.simkl_tokens = Some(tokens);
+                            if let Err(e) = simkl::save_store(&store) {
+                                self.simkl_error = Some(e);
+                            }
+                            self.simkl_store = store;
+                            self.simkl_status = Some(format!(
+                                "SIMKL · {} visti · {} da vedere · {}",
+                                report.watched,
+                                report.watchlist,
+                                ago_label(report.last_sync)
+                            ));
+                        }
+                        Err(e) => {
+                            self.simkl_status = None;
+                            if e.contains("ricollega") || e.contains("rifiutato") {
+                                self.simkl_tokens = None;
+                                let _ = simkl::clear_tokens();
+                            }
+                            self.simkl_error = Some(e);
                         }
                     }
                 }
@@ -2127,6 +2228,150 @@ impl App {
         }
     }
 
+    // ------------------------------------------------------------ simkl ----
+
+    fn simkl_client_id(&self) -> String {
+        let typed = self.settings.simkl_client_id.trim();
+        if typed.is_empty() {
+            self.cfg.simkl.client_id.trim().to_string()
+        } else {
+            typed.to_string()
+        }
+    }
+
+    fn start_simkl_auth(&mut self) {
+        if self.simkl_auth.is_some() {
+            return;
+        }
+        let client_id = self.simkl_client_id();
+        if client_id.is_empty() {
+            self.simkl_error = Some(
+                "Inserisci il Client ID dell'app SIMKL (lo trovi nelle impostazioni sviluppatore)."
+                    .into(),
+            );
+            return;
+        }
+        if self.cfg.simkl.client_id != client_id {
+            self.cfg.simkl.client_id = client_id.clone();
+            let _ = self.cfg.save();
+        }
+        self.simkl_cancel.store(false, Ordering::Relaxed);
+        self.simkl_error = None;
+        self.simkl_status = Some("Apro il collegamento SIMKL…".into());
+        let cancel = self.simkl_cancel.clone();
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let code = match simkl::device_start(&client_id) {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = tx.send(Msg::SimklCode(Err(e)));
+                    ctx.request_repaint();
+                    return;
+                }
+            };
+            let deadline = Instant::now() + Duration::from_secs(code.expires_in.min(900));
+            let _ = tx.send(Msg::SimklCode(Ok(code.clone())));
+            ctx.request_repaint();
+            let mut interval = code.interval.max(1);
+            loop {
+                if cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs(interval));
+                if cancel.load(Ordering::Relaxed) {
+                    return;
+                }
+                match simkl::device_poll(&client_id, &code.device_code) {
+                    Ok(simkl::Poll::Tokens(tokens)) => {
+                        if let Err(e) = simkl::save_tokens(&tokens) {
+                            let _ = tx.send(Msg::SimklAuth(Err(e)));
+                        } else {
+                            let _ = tx.send(Msg::SimklAuth(Ok(tokens)));
+                        }
+                        ctx.request_repaint();
+                        return;
+                    }
+                    Ok(simkl::Poll::Pending) => {}
+                    Ok(simkl::Poll::SlowDown) => interval += 5,
+                    Ok(simkl::Poll::Expired) => {
+                        let _ = tx.send(Msg::SimklAuth(Err(
+                            "Codice scaduto: riprova il collegamento.".into(),
+                        )));
+                        ctx.request_repaint();
+                        return;
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Msg::SimklAuth(Err(e)));
+                        ctx.request_repaint();
+                        return;
+                    }
+                }
+            }
+            if !cancel.load(Ordering::Relaxed) {
+                let _ = tx.send(Msg::SimklAuth(Err(
+                    "Tempo scaduto: riprova il collegamento.".into(),
+                )));
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    fn cancel_simkl_auth(&mut self) {
+        self.simkl_cancel.store(true, Ordering::Relaxed);
+        self.simkl_auth = None;
+        self.simkl_status = Some("Collegamento SIMKL annullato.".into());
+    }
+
+    fn start_simkl_sync(&mut self, force: bool) {
+        if self.simkl_syncing {
+            return;
+        }
+        let Some(tokens) = self.simkl_tokens.clone() else {
+            self.simkl_error = Some("Collega prima SIMKL dalle Impostazioni.".into());
+            return;
+        };
+        let client_id = self.simkl_client_id();
+        if client_id.is_empty() {
+            self.simkl_error = Some("Manca il Client ID SIMKL.".into());
+            return;
+        }
+        self.simkl_syncing = true;
+        self.simkl_error = None;
+        self.simkl_status = Some("Sincronizzo la libreria SIMKL…".into());
+        let store = self.simkl_store.clone();
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let res = simkl::sync(&client_id, tokens, store, force);
+            let _ = tx.send(Msg::SimklSynced(res));
+            ctx.request_repaint();
+        });
+    }
+
+    fn disconnect_simkl(&mut self) {
+        self.simkl_cancel.store(true, Ordering::Relaxed);
+        if let Err(e) = simkl::clear_tokens() {
+            self.simkl_error = Some(e);
+        }
+        self.simkl_tokens = None;
+        self.simkl_auth = None;
+        self.simkl_store = simkl::Store::default();
+        let _ = simkl::save_store(&self.simkl_store);
+        self.simkl_status = Some("SIMKL scollegato: la copia locale è stata rimossa.".into());
+    }
+
+    fn simkl_track(&self, movie: &Movie) -> detail::TrackInfo {
+        match self.simkl_store.get(movie.id) {
+            Some(tracked) => detail::TrackInfo {
+                status: Some(tracked.status.clone()),
+                rating: tracked.rating,
+                url: Some(simkl::link_to(tracked)),
+            },
+            None => detail::TrackInfo::default(),
+        }
+    }
+
     fn apply_detail_actions(
         &mut self,
         actions: Vec<detail::DetailAction>,
@@ -2519,6 +2764,9 @@ impl App {
             tmdb_api_key: self.settings.tmdb_key.trim().to_string(),
             language: self.settings.language.clone(),
             ai: self.settings.ai_cfg(),
+            simkl: crate::infra::config::SimklCfg {
+                client_id: self.settings.simkl_client_id.trim().to_string(),
+            },
         };
         match cfg.save() {
             Ok(()) => {
@@ -3077,6 +3325,7 @@ impl App {
                 );
                 let ai_available = self.provider.is_llm();
                 let summary = self.summary.clone();
+                let track = self.simkl_track(&d.movie);
                 let actions = detail::panel(
                     ui,
                     &self.images,
@@ -3085,6 +3334,7 @@ impl App {
                     self.summarizing,
                     ai_available,
                     false,
+                    &track,
                 );
                 self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
             });
@@ -3143,6 +3393,7 @@ impl App {
                 );
                 let inner = modal.shrink(16.0);
                 if let Some(d) = &d {
+                    let track = self.simkl_track(&d.movie);
                     ui.allocate_new_ui(
                         egui::UiBuilder::new().max_rect(inner),
                         |ui| {
@@ -3155,6 +3406,7 @@ impl App {
                                 summarizing,
                                 ai,
                                 true,
+                                &track,
                             );
                         },
                     );
@@ -3449,6 +3701,11 @@ impl App {
         let mut update_check = false;
         let mut update_download = false;
         let mut update_install = false;
+        let mut simkl_connect = false;
+        let mut simkl_sync = false;
+        let mut simkl_disconnect = false;
+        let mut simkl_cancel = false;
+        let mut open_simkl_dev = false;
         egui::ScrollArea::vertical()
             .id_salt("settings-scroll")
             .auto_shrink([false, false])
@@ -3484,13 +3741,146 @@ impl App {
                             ui.label(
                                 lumen::body(
                                     11.5,
-                                    "Chiavi, interprete e aggiornamenti restano su questo PC.",
+                                    "Chiavi, interprete, tracciamento e aggiornamenti restano su questo PC.",
                                 )
                                 .color(lumen::MUTED),
                             );
                             ui.add_space(14.0);
                             lumen::hairline(ui);
                             ui.add_space(14.0);
+                let connected = self.simkl_tokens.is_some();
+                ui.horizontal(|ui| {
+                    ui.label(lumen::mono(10.0, "TRACCIAMENTO").color(lumen::IVORY));
+                    if connected {
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if lumen::button_sized(
+                                    ui,
+                                    "Sincronizza ora",
+                                    !self.simkl_syncing,
+                                    132.0,
+                                )
+                                .clicked()
+                                {
+                                    simkl_sync = true;
+                                }
+                            },
+                        );
+                    }
+                });
+                ui.label(
+                    lumen::body(
+                        11.5,
+                        "CineMatch legge visti, lista e voti da SIMKL. Nuvio li aggiorna mentre guardi.",
+                    )
+                    .color(lumen::MUTED),
+                );
+                ui.add_space(6.0);
+                if let Some(status) = &self.simkl_status {
+                    ui.label(lumen::mono(10.0, status).color(lumen::CELADON));
+                }
+                if let Some(err) = &self.simkl_error {
+                    ui.label(lumen::body(11.0, err).color(lumen::DANGER));
+                }
+                if self.simkl_syncing {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(
+                            egui::RichText::new("Sincronizzo la libreria…")
+                                .size(10.5)
+                                .color(theme::DIM),
+                        );
+                    });
+                }
+                if let Some(code) = &self.simkl_auth {
+                    ui.add_space(6.0);
+                    ui.label(lumen::display(20.0, "Collega SIMKL"));
+                    ui.label(
+                        lumen::body(
+                            11.5,
+                            "Apri simkl.com/pin e inserisci questo codice:",
+                        )
+                        .color(lumen::MUTED),
+                    );
+                    ui.add_space(2.0);
+                    ui.label(lumen::mono(24.0, &code.user_code).color(lumen::EMBER));
+                    let link = if code.verification_uri_complete.is_empty() {
+                        code.verification_uri.clone()
+                    } else {
+                        code.verification_uri_complete.clone()
+                    };
+                    if lumen::link(ui, "Apri la pagina di SIMKL", lumen::EMBER).clicked() {
+                        open_url(&link);
+                    }
+                    if lumen::link(ui, "Annulla", lumen::MUTED).clicked() {
+                        simkl_cancel = true;
+                    }
+                } else if connected {
+                    ui.label(
+                        lumen::mono(
+                            10.0,
+                            format!(
+                                "{} VISTI · {} DA VEDERE · {}",
+                                self.simkl_store.watched(),
+                                self.simkl_store.watchlist(),
+                                ago_label(self.simkl_store.last_sync)
+                            ),
+                        )
+                        .color(lumen::FAINT),
+                    );
+                    ui.add_space(2.0);
+                    if lumen::link(ui, "Scollega SIMKL", lumen::MUTED).clicked() {
+                        simkl_disconnect = true;
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new("Client ID SIMKL (una volta sola)")
+                            .size(11.0)
+                            .color(theme::DIM),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.settings.simkl_client_id)
+                            .hint_text("Client ID pubblico dell'app")
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "Registra CineMatch su simkl.com/settings/developer (tipo TV/devices). Il Client ID è pubblico; il token resta nel Windows Credential Manager.",
+                        )
+                        .size(10.0)
+                        .color(theme::DIM),
+                    );
+                    ui.add_space(4.0);
+                    if lumen::button_sized(ui, "Connetti SIMKL", true, 168.0).clicked() {
+                        simkl_connect = true;
+                    }
+                    if lumen::link(
+                        ui,
+                        "Crea l'app su simkl.com/settings/developer",
+                        lumen::MUTED,
+                    )
+                    .clicked()
+                    {
+                        open_simkl_dev = true;
+                    }
+                    if !self.simkl_store.movies.is_empty() {
+                        ui.add_space(2.0);
+                        ui.label(
+                            lumen::mono(
+                                9.5,
+                                format!(
+                                    "Copia locale: {} film (in attesa di ricollegare SIMKL)",
+                                    self.simkl_store.movies.len()
+                                ),
+                            )
+                            .color(lumen::FAINT),
+                        );
+                    }
+                }
+                ui.add_space(14.0);
+                lumen::hairline(ui);
+                ui.add_space(14.0);
                 if update::enabled() {
                     ui.horizontal(|ui| {
                         ui.label(lumen::mono(10.0, "AGGIORNAMENTI").color(lumen::IVORY));
@@ -3994,6 +4384,21 @@ impl App {
         }
         if save {
             self.save_settings();
+        }
+        if simkl_connect {
+            self.start_simkl_auth();
+        }
+        if simkl_sync {
+            self.start_simkl_sync(false);
+        }
+        if simkl_disconnect {
+            self.disconnect_simkl();
+        }
+        if simkl_cancel {
+            self.cancel_simkl_auth();
+        }
+        if open_simkl_dev {
+            open_url("https://simkl.com/settings/developer/");
         }
         if close {
             self.show_settings = false;
@@ -5285,8 +5690,21 @@ fn window_caption(
         .on_hover_text(tip)
 }
 
-fn allowed_url(url: &str) -> bool {
-    let trimmed = url.trim();
+fn ago_label(ts: i64) -> String {
+    if ts <= 0 {
+        return "mai".into();
+    }
+    let mins = (simkl::now_secs() - ts).max(0) / 60;
+    if mins < 1 {
+        "adesso".into()
+    } else if mins < 60 {
+        format!("{mins} min fa")
+    } else {
+        format!("{} h fa", mins / 60)
+    }
+}
+
+fn allowed_url(url: &str) -> bool {    let trimmed = url.trim();
     if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
         return false;
     }

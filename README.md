@@ -75,6 +75,26 @@ salvare nulla.
 La chiave viene salvata in `%APPDATA%\CineMatch\config.json` (uso personale: resta
 sulla tua macchina).
 
+## SIMKL (facoltativo)
+
+CineMatch puo leggere da SIMKL i film visti, la lista "Da vedere" e i voti
+personali: nella scheda compaiono `VISTO SU SIMKL`, `DA VEDERE SU SIMKL` e
+`IL TUO VOTO`. La sincronizzazione e incrementale e parte solo all'avvio, su
+richiesta o dopo un'azione; nessun polling in background.
+
+Per collegarlo serve il **Client ID pubblico** di un'app SIMKL:
+
+1. Accedi a <https://simkl.com/settings/developer/> e crea un'app.
+2. Scegli il tipo *TV, devices & command line* (basta il device flow, senza
+   secret).
+3. Copia il Client ID.
+4. In CineMatch: **Impostazioni -> Tracciamento**, incolla il Client ID e premi
+   **Connetti SIMKL**. Apri il link, inserisci il codice a 8 caratteri e
+   conferma.
+
+Il token di accesso viene salvato nel **Windows Credential Manager**, non in
+`config.json`; "Scollega SIMKL" cancella token e copia locale.
+
 ## Chat dei consigli (la casa)
 
 CineMatch si apre sulla **Chat**: scrivi in liberta, anche a modo tuo, e la
@@ -392,10 +412,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.3.11 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.4.0 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.3.11.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.4.0.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 

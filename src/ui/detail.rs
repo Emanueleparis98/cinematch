@@ -11,6 +11,14 @@ pub enum DetailAction {
     Close,
 }
 
+/// Stato SIMKL di un film, calcolato dall'app e passato alla scheda.
+#[derive(Clone, Default)]
+pub struct TrackInfo {
+    pub status: Option<String>,
+    pub rating: Option<u8>,
+    pub url: Option<String>,
+}
+
 fn label_list(items: &[String]) -> String {
     items.join(" · ")
 }
@@ -90,6 +98,7 @@ pub fn panel(
     summarizing: bool,
     ai_available: bool,
     compact: bool,
+    track: &TrackInfo,
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
@@ -174,6 +183,28 @@ pub fn panel(
                         ui.label(
                             lumen::mono(9.0, votes.join(" · ")).color(lumen::MUTED),
                         );
+                    }
+                    if let Some(status) = track.status.as_deref().filter(|s| !s.is_empty()) {
+                        ui.add_space(4.0);
+                        let (label, color) = match status {
+                            "completed" => ("VISTO SU SIMKL", lumen::CELADON),
+                            "plantowatch" => ("DA VEDERE SU SIMKL", lumen::EMBER),
+                            _ => ("SU SIMKL", lumen::MUTED),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(lumen::mono(9.0, label).color(color));
+                            if let Some(rating) = track.rating {
+                                ui.label(
+                                    lumen::mono(9.0, format!("IL TUO VOTO {rating}/10"))
+                                        .color(lumen::MUTED),
+                                );
+                            }
+                        });
+                        if let Some(url) = &track.url {
+                            if lumen::link(ui, "Apri su SIMKL", lumen::MUTED).clicked() {
+                                actions.push(DetailAction::OpenUrl(url.clone()));
+                            }
+                        }
                     }
                 });
             });

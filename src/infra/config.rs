@@ -119,6 +119,13 @@ impl AiCfg {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct SimklCfg {
+    /// Client ID pubblico dell'app registrata su Simkl.
+    #[serde(default)]
+    pub client_id: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     #[serde(default)]
@@ -127,6 +134,8 @@ pub struct Config {
     pub language: String,
     #[serde(default)]
     pub ai: AiCfg,
+    #[serde(default)]
+    pub simkl: SimklCfg,
 }
 
 impl Default for Config {
@@ -135,6 +144,7 @@ impl Default for Config {
             tmdb_api_key: String::new(),
             language: default_language(),
             ai: AiCfg::default(),
+            simkl: SimklCfg::default(),
         }
     }
 }
