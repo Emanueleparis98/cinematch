@@ -173,11 +173,14 @@ fn add_movements(
 ) {
     // Le prime correnti della casa: un inizio editoriale, non l'ordine grezzo
     // del file di tassonomia. Il resto segue per non perdere il catalogo.
-    const PRIORITY: [&str; 6] = [
+    const PRIORITY: [&str; 9] = [
         "neorealismo",
+        "spaghetti_western",
+        "giallo_italiano",
+        "poliziottesco",
+        "peplum",
         "new_hollywood",
         "nouvelle_vague",
-        "giallo_italiano",
         "hk_action",
         "italian_political",
     ];

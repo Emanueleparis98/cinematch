@@ -66,7 +66,13 @@
     { "id": "critica_sociale", "label": "Critica sociale", "keyword": "social commentary", "incompatible_movements": [] },
     { "id": "claustrofobia", "label": "Claustrofobia", "keyword": "claustrophobia", "incompatible_movements": [] },
     { "id": "horror_psicologico", "label": "Horror psicologico", "keyword": "psychological horror", "incompatible_movements": ["neorealismo", "mumblecore", "dogme95"] },
-    { "id": "soprannaturale", "label": "Soprannaturale", "keyword": "supernatural", "incompatible_movements": ["neorealismo", "dogme95", "mumblecore", "slow_cinema", "soviet_montage"] }
+    { "id": "soprannaturale", "label": "Soprannaturale", "keyword": "supernatural", "incompatible_movements": ["neorealismo", "dogme95", "mumblecore", "slow_cinema", "soviet_montage"] },
+    { "id": "body_horror", "label": "Body horror", "keyword": "body horror", "incompatible_movements": [] },
+    { "id": "found_footage", "label": "Found footage", "keyword": "found footage", "incompatible_movements": [] },
+    { "id": "cyberpunk", "label": "Cyberpunk", "keyword": "cyberpunk", "incompatible_movements": [] },
+    { "id": "heist", "label": "Rapine", "keyword": "heist", "incompatible_movements": [] },
+    { "id": "coming_of_age", "label": "Coming of age", "keyword": "coming of age", "incompatible_movements": [] },
+    { "id": "post_apocalittico", "label": "Post-apocalittico", "keyword": "post-apocalyptic", "incompatible_movements": [] }
   ],
   "movements": [
     {
@@ -239,6 +245,105 @@
       "genres_allowed": [99],
       "genres_forbidden": [28, 27, 878, 14, 16, 12, 10752, 37, 10770, 10402, 36],
       "note": "Dialoghi improvvisati, ventenni indecisi, budget minimo."
+    },
+    {
+      "id": "spaghetti_western",
+      "label": "Spaghetti Western",
+      "period": [1964, 1978],
+      "countries": ["IT", "ES", "FR"],
+      "keyword": "spaghetti western",
+      "genres_core": [37],
+      "genres_allowed": [12, 18, 28, 35, 36, 10752],
+      "genres_forbidden": [14, 16, 27, 53, 99, 878, 9648, 10402, 10751, 10770],
+      "note": "Pistoleri italiani, silenzi lunghi, Morricone e il deserto di Almería."
+    },
+    {
+      "id": "poliziottesco",
+      "label": "Poliziottesco",
+      "period": [1968, 1982],
+      "countries": ["IT"],
+      "keyword": "poliziottesco",
+      "genres_core": [80, 53, 28],
+      "genres_allowed": [18, 35, 36, 9648, 10752],
+      "genres_forbidden": [12, 14, 16, 27, 99, 878, 10402, 10751, 10770, 37],
+      "note": "Milano violenta, inseguimenti, commissari contro il sistema."
+    },
+    {
+      "id": "peplum",
+      "label": "Peplum",
+      "period": [1957, 1965],
+      "countries": ["IT", "FR", "ES"],
+      "keyword": "peplum",
+      "genres_core": [12, 36],
+      "genres_allowed": [14, 18, 28, 35, 10749, 10752],
+      "genres_forbidden": [16, 27, 53, 80, 99, 878, 9648, 10402, 10751, 10770, 37],
+      "note": "Ercole, gladiatori e mitologia girati a Cinecittà."
+    },
+    {
+      "id": "film_noir",
+      "label": "Film Noir",
+      "period": [1940, 1959],
+      "countries": ["US"],
+      "keyword": "film noir",
+      "genres_core": [80, 53, 9648],
+      "genres_allowed": [18, 35, 36, 10749, 10752],
+      "genres_forbidden": [12, 14, 16, 27, 28, 99, 878, 10402, 10751, 10770, 37],
+      "note": "Fumo, cappelli a tesa larga, morale ambigua."
+    },
+    {
+      "id": "blaxploitation",
+      "label": "Blaxploitation",
+      "period": [1971, 1979],
+      "countries": ["US"],
+      "keyword": "blaxploitation cinema",
+      "genres_core": [28, 80, 53],
+      "genres_allowed": [18, 35, 9648, 10402, 10749],
+      "genres_forbidden": [12, 14, 16, 27, 36, 99, 878, 10751, 10770, 10752, 37],
+      "note": "Cinema nero americano: funk, vendetta, strada."
+    },
+    {
+      "id": "eurospy",
+      "label": "Eurospy",
+      "period": [1962, 1970],
+      "countries": ["IT", "FR", "DE", "ES", "GB"],
+      "keyword": "eurospy",
+      "genres_core": [28, 12, 53],
+      "genres_allowed": [35, 36, 9648, 10749],
+      "genres_forbidden": [14, 16, 27, 99, 878, 10402, 10751, 10770, 10752, 37],
+      "note": "Agenti segreti europei, gadget e psichedelia."
+    },
+    {
+      "id": "wuxia",
+      "label": "Wuxia",
+      "period": [1960, 1990],
+      "countries": ["HK", "TW", "CN"],
+      "keyword": "wuxia",
+      "genres_core": [28, 12],
+      "genres_allowed": [14, 18, 35, 36, 10749, 10752, 9648],
+      "genres_forbidden": [16, 27, 53, 80, 99, 878, 10402, 10751, 10770, 37],
+      "note": "Spade volanti, maestri, vendette e codice cavalleresco."
+    },
+    {
+      "id": "kaiju",
+      "label": "Kaiju",
+      "period": [1954, 1985],
+      "countries": ["JP"],
+      "keyword": "kaiju",
+      "genres_core": [878, 28],
+      "genres_allowed": [12, 14, 18, 35, 53, 10751, 10752],
+      "genres_forbidden": [16, 27, 36, 37, 80, 99, 9648, 10402, 10749, 10770],
+      "note": "Mostri giganti, modellini, città in fiamme."
+    },
+    {
+      "id": "tokusatsu",
+      "label": "Tokusatsu",
+      "period": [1954, 1995],
+      "countries": ["JP"],
+      "keyword": "tokusatsu",
+      "genres_core": [28, 878, 14],
+      "genres_allowed": [12, 16, 18, 35, 10751],
+      "genres_forbidden": [27, 36, 37, 53, 80, 99, 9648, 10402, 10749, 10770, 10752],
+      "note": "Eroi in tuta, mostri di gomma, effetti speciali artigianali."
     }
   ]
 }

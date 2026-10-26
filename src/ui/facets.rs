@@ -311,7 +311,7 @@ pub fn sections(
                     let label = if show_all {
                         "Meno generi".to_string()
                     } else {
-                        format!("Tutti i generi ({total})")
+                        format!("Altri generi ({})", total - primary.len())
                     };
                     if ghost(ui, &label, true).clicked() {
                         ui.data_mut(|d| d.insert_temp(open_id, !show_all));
@@ -446,6 +446,15 @@ pub fn sections(
         out.extend(acts);
     }
 
+    // ---- correnti ----
+    if !filtering {
+        ui.add_space(6.0);
+        let label = format!("Correnti del cinema ({})", tax.movements.len());
+        if ghost(ui, &label, true).clicked() {
+            open_guide(ui, guide_open);
+        }
+    }
+
     // ---- metriche ----
     let title_hit = wanted(&q, "Metriche", METRIC_ALIASES);
     if !filtering || title_hit {
@@ -469,7 +478,29 @@ pub fn sections(
     // ---- nessun risultato ----
     if filtering && drawn == 0 {
         ui.add_space(22.0);
+        let current = tax
+            .movements
+            .iter()
+            .find(|m| norm(&format!("{} {}", m.label, m.keyword)).contains(&q));
         ui.vertical_centered(|ui| {
+            if let Some(m) = current {
+                ui.label(
+                    RichText::new("Corrente del cinema")
+                        .size(11.0)
+                        .strong()
+                        .color(theme::DIM),
+                );
+                ui.add_space(2.0);
+                if ghost(ui, &format!("{} →", m.label), true).clicked() {
+                    open_guide(ui, guide_open);
+                    let label = m.label.clone();
+                    ui.data_mut(|d| {
+                        d.insert_temp(Id::new("cinematch_guide_query"), label);
+                    });
+                    query.clear();
+                }
+                return;
+            }
             ui.label(
                 RichText::new("Nessun filtro trovato")
                     .size(12.5)
@@ -489,14 +520,7 @@ pub fn sections(
         });
     }
 
-    // ---- guida ----
-    if !filtering {
-        ui.add_space(6.0);
-        let label = format!("Guida alle correnti ({})", tax.movements.len());
-        if ghost(ui, &label, true).clicked() {
-            open_guide(ui, guide_open);
-        }
-    }
+    // ---- fine ----
 
     // ---- spiegazioni ----
     if !messages.is_empty() || !info.is_empty() || !ai_notes.is_empty() {
@@ -611,7 +635,7 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if lumen::button_sized(ui, "Applica", false, 82.0)
                                     .on_hover_text(
-                                        "Accende periodo, paesi e corrente; i generi restano da scegliere",
+                                        "Accende periodo, paesi e corrente; i generi restano disponibili",
                                     )
                                     .clicked()
                                 {
@@ -1397,7 +1421,7 @@ fn runtime_label(r: Option<(u32, u32)>) -> String {
 
 /// Generi mostrati nella sezione chiusa: i dodici piu' usati. Gli altri
 /// (documentari, guerra, western…) restano a un clic da «Tutti i generi».
-const PRIMARY_GENRES: &[u32] = &[28, 12, 16, 35, 80, 18, 14, 27, 9648, 10749, 878, 53];
+const PRIMARY_GENRES: &[u32] = &[28, 12, 16, 35, 80, 18, 14, 27, 37, 9648, 10749, 878, 53];
 
 const PERIOD_ALIASES: &[&str] = &["anni", "anno", "decennio", "decenni", "epoca"];
 const GENRE_ALIASES: &[&str] = &["generi", "genere"];
@@ -1545,5 +1569,10 @@ mod tests {
         assert!(wanted("paesi", "Paese e lingua", COUNTRY_ALIASES));
         assert!(wanted("horror", "Genere", GENRE_ALIASES) == false);
         assert!(wanted("generi", "Genere", GENRE_ALIASES));
+    }
+
+    #[test]
+    fn il_western_e_tra_i_generi_visibili() {
+        assert!(PRIMARY_GENRES.contains(&37));
     }
 }

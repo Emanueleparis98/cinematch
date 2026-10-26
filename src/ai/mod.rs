@@ -425,6 +425,16 @@ const MOVEMENT_WORDS: &[(&str, &str)] = &[
     ("nouvelle vague", "nouvelle_vague"),
     ("espressionis", "espressionismo"),
     ("giallo", "giallo_italiano"),
+    ("spaghetti", "spaghetti_western"),
+    ("poliziottesc", "poliziottesco"),
+    ("peplum", "peplum"),
+    ("film noir", "film_noir"),
+    ("noir", "film_noir"),
+    ("blaxploitation", "blaxploitation"),
+    ("eurospy", "eurospy"),
+    ("wuxia", "wuxia"),
+    ("kaiju", "kaiju"),
+    ("tokusatsu", "tokusatsu"),
     ("slasher", "slasher_era"),
     ("new hollywood", "new_hollywood"),
     ("dogma 95", "dogme95"),
@@ -2592,6 +2602,21 @@ mod tests {
             .curate_cancellable(&req, &cancel, &mut |_| {})
             .unwrap_err();
         assert_eq!(err, CANCELLED);
+    }
+
+    #[test]
+    fn spaghetti_western_e_una_corrente_non_un_titolo() {
+        let tax = Taxonomy::load();
+        let it = RuleParser.parse_rules("spaghetti western con Clint Eastwood", &tax);
+        assert!(it
+            .facets
+            .movements
+            .contains(&"spaghetti_western".to_string()));
+        assert!(it.facets.genres.contains(&37));
+        assert!(it.free_text.is_none(), "{:?}", it.free_text);
+
+        let noir = RuleParser.parse_rules("un film noir americano", &tax);
+        assert!(noir.facets.movements.contains(&"film_noir".to_string()));
     }
 
     #[test]
