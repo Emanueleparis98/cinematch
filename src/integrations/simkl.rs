@@ -594,7 +594,7 @@ pub struct WriteOutcome {
 
 fn movie_json(movie: &WriteMovie) -> serde_json::Value {
     let mut ids = serde_json::Map::new();
-    ids.insert("tmdb".into(), serde_json::json!(movie.tmdb));
+    ids.insert("tmdb".into(), serde_json::json!(movie.tmdb.to_string()));
     if let Some(imdb) = &movie.imdb {
         if !imdb.trim().is_empty() {
             ids.insert("imdb".into(), serde_json::json!(imdb));
@@ -1021,7 +1021,7 @@ mod tests {
         assert_eq!(outcome.status.as_deref(), Some("completed"));
         let raw = seen.lock().unwrap().join("\n").to_lowercase();
         assert!(raw.starts_with("post /sync/history?client_id=client"));
-        assert!(raw.contains("\"tmdb\":429"));
+        assert!(raw.contains("\"tmdb\":\"429\""));
         assert!(raw.contains("\"imdb\":\"tt0060196\""));
         assert!(raw.contains("authorization: bearer a"));
     }

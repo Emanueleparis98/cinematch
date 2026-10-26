@@ -1155,7 +1155,7 @@ impl App {
                 Msg::SimklSynced(res) => {
                     self.simkl_syncing = false;
                     match res {
-                        Ok((store, tokens, report)) => {
+                        Ok((store, tokens, _report)) => {
                             let changed = self
                                 .simkl_tokens
                                 .as_ref()
@@ -1174,12 +1174,7 @@ impl App {
                                 self.simkl_error = Some(e);
                             }
                             self.simkl_store = store;
-                            self.simkl_status = Some(format!(
-                                "SIMKL · {} visti · {} da vedere · {}",
-                                report.watched,
-                                report.watchlist,
-                                ago_label(report.last_sync)
-                            ));
+                            self.simkl_status = None;
                         }
                         Err(e) => {
                             self.simkl_status = None;
@@ -4066,7 +4061,7 @@ impl App {
                 ui.label(
                     lumen::body(
                         11.5,
-                        "CineMatch legge visti, lista e voti da SIMKL. Nuvio li aggiorna mentre guardi.",
+                        "CineMatch legge e aggiorna visti, lista e voti. Nuvio li tiene allineati mentre guardi.",
                     )
                     .color(lumen::MUTED),
                 );
