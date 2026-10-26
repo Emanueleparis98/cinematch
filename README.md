@@ -98,6 +98,9 @@ Su Windows Nuvio non registra ancora lo schema: CineMatch mostra un QR per
 telefono/tablet e il pulsante **Da vedere**, cosi il film compare nella
 libreria Nuvio della TV.
 
+Se Nuvio lascia un film a metà, la home mostra **Riprendi** con la percentuale;
+sotto le piste compare **Dalla tua lista** con i film da vedere.
+
 ## Chat dei consigli (la casa)
 
 CineMatch si apre sulla **Chat**: scrivi in liberta, anche a modo tuo, e la
@@ -415,10 +418,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.4.2 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.4.3 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.4.2.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.4.3.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 

@@ -54,6 +54,8 @@ pub struct DeviceCode {
 pub struct TrackedMovie {
     pub simkl_id: u64,
     #[serde(default)]
+    pub tmdb: u64,
+    #[serde(default)]
     pub slug: String,
     /// "completed" | "plantowatch" | "dropped"
     #[serde(default)]
@@ -63,9 +65,29 @@ pub struct TrackedMovie {
     #[serde(default)]
     pub watched_at: Option<String>,
     #[serde(default)]
+    pub added_at: Option<String>,
+    #[serde(default)]
+    pub imdb: Option<String>,
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub year: Option<u16>,
+}
+
+/// Un film iniziato e messo in pausa su un'altra app (Nuvio).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Playback {
+    pub tmdb: u64,
+    #[serde(default)]
+    pub imdb: Option<String>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub year: Option<u16>,
+    #[serde(default)]
+    pub progress: f32,
+    #[serde(default)]
+    pub paused_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -76,6 +98,12 @@ pub struct Store {
     /// Chiave: id TMDB del film.
     #[serde(default)]
     pub movies: HashMap<String, TrackedMovie>,
+    /// Film in pausa, per la riga "Riprendi".
+    #[serde(default)]
+    pub playbacks: Vec<Playback>,
+    /// Anche una lista vuota e' un dato: evita di richiederla a ogni sync.
+    #[serde(default)]
+    pub playbacks_loaded: bool,
     #[serde(default)]
     pub last_sync: i64,
 }
@@ -97,6 +125,41 @@ impl Store {
             .values()
             .filter(|m| m.status == "plantowatch")
             .count()
+    }
+
+    /// Fino a `count` film da vedere, i più recenti prima.
+    pub fn watchlist_picks(&self, count: usize) -> Vec<&TrackedMovie> {
+        let mut list: Vec<&TrackedMovie> = self
+            .movies
+            .values()
+            .filter(|m| m.status == "plantowatch")
+            .collect();
+        list.sort_by(|a, b| {
+            b.added_at
+                .as_deref()
+                .unwrap_or("")
+                .cmp(a.added_at.as_deref().unwrap_or(""))
+                .then_with(|| a.title.cmp(&b.title))
+        });
+        list.truncate(count);
+        list
+    }
+
+    /// Fino a `count` film in pausa, i più recenti prima.
+    pub fn resume_picks(&self, count: usize) -> Vec<&Playback> {
+        let mut list: Vec<&Playback> = self
+            .playbacks
+            .iter()
+            .filter(|p| p.progress < 98.0)
+            .collect();
+        list.sort_by(|a, b| {
+            b.paused_at
+                .as_deref()
+                .unwrap_or("")
+                .cmp(a.paused_at.as_deref().unwrap_or(""))
+        });
+        list.truncate(count);
+        list
     }
 }
 
@@ -123,10 +186,20 @@ fn store_path() -> std::path::PathBuf {
 
 pub fn load_store() -> Store {
     let path = store_path();
-    std::fs::read_to_string(path)
+    let mut store: Store = std::fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str(raw.trim_start_matches('\u{feff}')).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Le cache scritte prima della 0.4.3 non hanno il TMDB dentro la voce:
+    // la chiave della mappa lo contiene gia'.
+    for (key, movie) in store.movies.iter_mut() {
+        if movie.tmdb == 0 {
+            if let Ok(id) = key.parse() {
+                movie.tmdb = id;
+            }
+        }
+    }
+    store
 }
 
 pub fn save_store(store: &Store) -> Result<(), String> {
@@ -365,6 +438,7 @@ fn tracked_from(item: &serde_json::Value) -> Option<(String, TrackedMovie)> {
     let movie = item.get("movie")?;
     let ids = movie.get("ids")?;
     let tmdb = id_string(ids.get("tmdb"))?;
+    let tmdb_num = tmdb.parse::<u64>().ok()?;
     let simkl_id = ids
         .get("simkl")
         .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))?;
@@ -376,6 +450,7 @@ fn tracked_from(item: &serde_json::Value) -> Option<(String, TrackedMovie)> {
         tmdb,
         TrackedMovie {
             simkl_id,
+            tmdb: tmdb_num,
             slug: ids
                 .get("slug")
                 .and_then(|v| v.as_str())
@@ -389,6 +464,14 @@ fn tracked_from(item: &serde_json::Value) -> Option<(String, TrackedMovie)> {
             rating,
             watched_at: item
                 .get("last_watched_at")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            added_at: item
+                .get("added_to_watchlist_at")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            imdb: ids
+                .get("imdb")
                 .and_then(|v| v.as_str())
                 .map(str::to_string),
             title: movie
@@ -412,6 +495,47 @@ fn merge_items(store: &mut Store, value: &serde_json::Value) {
             }
         }
     }
+}
+
+fn playback_from(item: &serde_json::Value) -> Option<Playback> {
+    let movie = item.get("movie")?;
+    let ids = movie.get("ids")?;
+    let tmdb = id_string(ids.get("tmdb"))?.parse::<u64>().ok()?;
+    Some(Playback {
+        tmdb,
+        imdb: ids
+            .get("imdb")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        title: movie
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        year: movie
+            .get("year")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u16),
+        progress: item
+            .get("progress")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32,
+        paused_at: item
+            .get("paused_at")
+            .or_else(|| item.get("watched_at"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+    })
+}
+
+fn parse_playbacks(value: &serde_json::Value) -> Vec<Playback> {
+    let items = value
+        .as_array()
+        .or_else(|| value.get("movies").and_then(|v| v.as_array()))
+        .or_else(|| value.get("playback").and_then(|v| v.as_array()));
+    items
+        .map(|items| items.iter().filter_map(playback_from).collect())
+        .unwrap_or_default()
 }
 
 /// Sincronizza la libreria film. Ritorna lo store aggiornato e i token
@@ -529,6 +653,29 @@ fn sync_at(
             &tokens.access_token,
         )?;
         merge_items(&mut store, &ratings);
+    }
+
+    let playback_moved = old
+        .as_ref()
+        .map(|a| {
+            a.get("movies")
+                .and_then(|m| m.get("playback"))
+                .and_then(|v| v.as_str())
+        })
+        .unwrap_or(None)
+        != activities
+            .get("movies")
+            .and_then(|m| m.get("playback"))
+            .and_then(|v| v.as_str());
+    if first || playback_moved || !store.playbacks_loaded {
+        let playbacks = get_json(
+            base,
+            "/sync/playback/movies",
+            client_id,
+            &tokens.access_token,
+        )?;
+        store.playbacks = parse_playbacks(&playbacks);
+        store.playbacks_loaded = true;
     }
 
     store.activities = Some(activities);
@@ -962,9 +1109,19 @@ mod tests {
                 "removed_from_list": null
             }
         });
+        let playbacks = serde_json::json!([{
+            "progress": 42.5,
+            "paused_at": "2026-01-03T20:00:00Z",
+            "movie": {
+                "title": "Il buono, il brutto, il cattivo",
+                "year": 1966,
+                "ids": { "simkl": 123, "tmdb": "429", "imdb": "tt0060196" }
+            }
+        }]);
         let (base, seen, handle) = mock_server(vec![
             (200, activities.to_string()),
             (200, sample().to_string()),
+            (200, playbacks.to_string()),
         ]);
         let tokens = Tokens {
             access_token: "a".into(),
@@ -984,6 +1141,9 @@ mod tests {
         assert_eq!(report.watched, 1);
         assert_eq!(report.watchlist, 1);
         assert_eq!(store.movies.len(), 2);
+        assert_eq!(store.playbacks.len(), 1);
+        assert!((store.playbacks[0].progress - 42.5).abs() < 0.01);
+        assert_eq!(store.playbacks[0].tmdb, 429);
         assert_eq!(
             store.activities.as_ref().unwrap()["all"],
             "2026-01-01T00:00:00Z"
@@ -1125,17 +1285,52 @@ mod tests {
     }
 
     #[test]
-    fn il_delta_rimuove_i_film_spariti_e_aggiorna_i_voti() {        let mut store = Store::default();
+    fn la_lista_da_vedere_parte_dalla_piu_recente() {
+        let movie = |title: &str, status: &str, added_at: &str| TrackedMovie {
+            simkl_id: 1,
+            tmdb: 1,
+            slug: String::new(),
+            status: status.into(),
+            rating: None,
+            watched_at: None,
+            added_at: Some(added_at.into()),
+            imdb: None,
+            title: title.into(),
+            year: None,
+        };
+        let mut store = Store::default();
+        store
+            .movies
+            .insert("1".into(), movie("vecchio", "plantowatch", "2026-01-01T00:00:00Z"));
+        store.movies.insert(
+            "2".into(),
+            movie("nuovo", "plantowatch", "2026-02-01T00:00:00Z"),
+        );
+        store
+            .movies
+            .insert("3".into(), movie("visto", "completed", "2026-03-01T00:00:00Z"));
+        let picks = store.watchlist_picks(4);
+        assert_eq!(picks.len(), 2);
+        assert_eq!(picks[0].title, "nuovo");
+        assert_eq!(picks[1].title, "vecchio");
+    }
+
+    #[test]
+    fn il_delta_rimuove_i_film_spariti_e_aggiorna_i_voti() {
+        let mut store = Store::default();
         store.activities = Some(serde_json::json!({
             "all": "2026-01-01T00:00:00Z",
             "movies": { "removed_from_list": "r1", "rated_at": "q1" }
         }));
         let tracked = |simkl_id: u64| TrackedMovie {
             simkl_id,
+            tmdb: 0,
             slug: String::new(),
             status: "completed".into(),
             rating: None,
             watched_at: None,
+            added_at: None,
+            imdb: None,
             title: String::new(),
             year: None,
         };
@@ -1160,6 +1355,7 @@ mod tests {
             (200, "{}".into()),
             (200, ids.to_string()),
             (200, ratings.to_string()),
+            (200, "[]".into()),
         ]);
         let tokens = Tokens {
             access_token: "a".into(),

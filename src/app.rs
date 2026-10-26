@@ -2620,6 +2620,49 @@ impl App {
         self.simkl_status = Some("SIMKL scollegato: la copia locale è stata rimossa.".into());
     }
 
+    fn simkl_resume_cards(&self) -> Vec<chat::PersonalCard> {
+        self.simkl_store
+            .resume_picks(4)
+            .into_iter()
+            .map(|playback| {
+                let percent = playback.progress.round() as u32;
+                chat::PersonalCard {
+                    title: if playback.title.is_empty() {
+                        "Film".into()
+                    } else {
+                        playback.title.clone()
+                    },
+                    meta: match playback.year {
+                        Some(year) => format!("{percent}% · {year}"),
+                        None => format!("{percent}%"),
+                    },
+                    movie_id: playback.tmdb,
+                    progress: Some((playback.progress / 100.0).clamp(0.0, 1.0)),
+                }
+            })
+            .collect()
+    }
+
+    fn simkl_watchlist_cards(&self) -> Vec<chat::PersonalCard> {
+        self.simkl_store
+            .watchlist_picks(4)
+            .into_iter()
+            .map(|movie| chat::PersonalCard {
+                title: if movie.title.is_empty() {
+                    "Film".into()
+                } else {
+                    movie.title.clone()
+                },
+                meta: match movie.year {
+                    Some(year) => format!("DA VEDERE · {year}"),
+                    None => "DA VEDERE".into(),
+                },
+                movie_id: movie.tmdb,
+                progress: None,
+            })
+            .collect()
+    }
+
     fn simkl_track(&self, movie: &Movie) -> detail::TrackInfo {
         match self.simkl_store.get(movie.id) {
             Some(tracked) => detail::TrackInfo {
@@ -3790,6 +3833,8 @@ impl App {
         if self.chat.is_empty() {
             self.refresh_home_suggestions(now);
             let want_focus = self.focus == Some(ViewMode::Chat);
+            let resume_cards = self.simkl_resume_cards();
+            let watchlist_cards = self.simkl_watchlist_cards();
             let actions = chat::home(
                 ui,
                 &self.images,
@@ -3800,9 +3845,14 @@ impl App {
                 want_focus,
                 &self.tax,
                 &self.suggestions,
+                &resume_cards,
+                &watchlist_cards,
             );
             if want_focus {
                 self.focus = None;
+            }
+            if let Some(id) = actions.open_detail {
+                self.open_detail(id);
             }
             self.suggestion_hovered = actions.suggestions_hovered;
             if let Some(text) = actions.prefill {

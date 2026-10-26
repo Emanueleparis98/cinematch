@@ -96,6 +96,17 @@ pub struct HomeActions {
     pub surprise: bool,
     pub send: bool,
     pub suggestions_hovered: bool,
+    /// Film scelto da una riga personale (Riprendi / Dalla tua lista).
+    pub open_detail: Option<u64>,
+}
+
+/// Una card compatta della home costruita dai dati SIMKL.
+#[derive(Clone)]
+pub struct PersonalCard {
+    pub title: String,
+    pub meta: String,
+    pub movie_id: u64,
+    pub progress: Option<f32>,
 }
 
 // ------------------------------------------------------------- misure ------
@@ -267,6 +278,8 @@ pub fn home(
     focus: bool,
     tax: &Taxonomy,
     suggestions: &[Suggestion],
+    resume: &[PersonalCard],
+    watchlist: &[PersonalCard],
 ) -> HomeActions {
     let mut actions = HomeActions::default();
     egui::ScrollArea::vertical()
@@ -380,11 +393,127 @@ pub fn home(
                         });
                         ui.add_space(gap);
                     }
+
+                    if !resume.is_empty() {
+                        ui.add_space(4.0);
+                        personal_strip(
+                            ui,
+                            "Riprendi",
+                            "DAL TUO SIMKL",
+                            resume,
+                            width,
+                            &mut actions,
+                        );
+                        ui.add_space(20.0);
+                    }
+                    if !watchlist.is_empty() {
+                        personal_strip(
+                            ui,
+                            "Dalla tua lista",
+                            "DA VEDERE SU SIMKL",
+                            watchlist,
+                            width,
+                            &mut actions,
+                        );
+                    }
                     ui.add_space(20.0);
                 });
             });
         });
     actions
+}
+
+fn personal_strip(
+    ui: &mut egui::Ui,
+    title: &str,
+    kicker: &str,
+    cards: &[PersonalCard],
+    width: f32,
+    actions: &mut HomeActions,
+) {
+    ui.horizontal(|ui| {
+        ui.label(lumen::label(title));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(lumen::mono(9.0, kicker).color(lumen::FAINT));
+        });
+    });
+    ui.add_space(8.0);
+    let gap = 10.0;
+    let cols = if width >= 900.0 { 4 } else { 2 };
+    let card_w = (((width - gap * (cols - 1) as f32) / cols as f32).floor()).min(300.0);
+    for row in cards.chunks(cols) {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for card in row {
+                personal_card(ui, card_w, card, actions);
+            }
+        });
+        ui.add_space(gap);
+    }
+}
+
+fn personal_card(
+    ui: &mut egui::Ui,
+    width: f32,
+    card: &PersonalCard,
+    actions: &mut HomeActions,
+) {
+    let id = ui
+        .id()
+        .with(("personal-card", card.movie_id, card.title.clone()));
+    let frame = egui::Frame::none()
+        .fill(lumen::SURFACE)
+        .stroke(egui::Stroke::new(1.0_f32, lumen::BORDER))
+        .rounding(Rounding::same(lumen::RADIUS))
+        .inner_margin(egui::Margin::symmetric(10.0, 9.0));
+    let inner = ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        egui::Layout::top_down(egui::Align::LEFT),
+        |ui| {
+            ui.set_width(width);
+            frame
+                .show(ui, |ui| {
+                    ui.set_min_height(52.0);
+                    ui.add(
+                        egui::Label::new(lumen::bold(13.0, &card.title))
+                            .truncate(),
+                    );
+                    ui.add_space(3.0);
+                    ui.add(
+                        egui::Label::new(
+                            lumen::mono(8.5, &card.meta).color(lumen::FAINT),
+                        )
+                        .truncate(),
+                    );
+                    if let Some(progress) = card.progress {
+                        ui.add_space(6.0);
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 3.0),
+                            Sense::hover(),
+                        );
+                        ui.painter().rect_filled(rect, Rounding::ZERO, lumen::DEEP);
+                        let filled = egui::Rect::from_min_size(
+                            rect.min,
+                            egui::vec2(rect.width() * progress.clamp(0.0, 1.0), 3.0),
+                        );
+                        ui.painter().rect_filled(filled, Rounding::ZERO, lumen::EMBER);
+                    }
+                })
+                .response
+        },
+    );
+    let resp = ui.interact(inner.inner.rect, id, Sense::click());
+    if resp.hovered() {
+        ui.painter().rect_stroke(
+            inner.inner.rect,
+            Rounding::same(lumen::RADIUS),
+            egui::Stroke::new(1.0_f32, lumen::EMBER),
+        );
+    }
+    if resp.clicked() {
+        actions.open_detail = Some(card.movie_id);
+    }
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand);
 }
 
 fn hero_left(
