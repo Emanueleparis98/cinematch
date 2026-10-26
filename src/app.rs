@@ -16,6 +16,7 @@ use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::infra::winclock;
+use crate::integrations::nuvio;
 use crate::integrations::simkl;
 use crate::tmdb::client::{describe_credential, Tmdb};
 use crate::tmdb::models::{PagedMovies, Person};
@@ -70,6 +71,8 @@ enum Msg {
     SimklAuth(Result<simkl::Tokens, String>),
     /// Sincronizzazione libreria SIMKL completata.
     SimklSynced(Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>),
+    /// Scrittura su SIMKL completata.
+    SimklWritten(Result<(simkl::Tokens, simkl::WriteOutcome), String>),
 }
 
 #[derive(Default)]
@@ -131,6 +134,15 @@ struct PersonPool {
     person: String,
 }
 
+/// Fallback quando Nuvio non accetta il deep link su Windows.
+#[derive(Clone)]
+struct NuvioHelp {
+    title: String,
+    link: String,
+    movie: Movie,
+    qr: Option<egui::TextureHandle>,
+}
+
 #[derive(Clone)]
 struct SettingsDraft {
     tmdb_key: String,
@@ -144,6 +156,7 @@ struct SettingsDraft {
     ollama_model: String,
     language: String,
     simkl_client_id: String,
+    simkl_hide_watched: bool,
 }
 
 impl SettingsDraft {
@@ -160,6 +173,7 @@ impl SettingsDraft {
             ollama_model: cfg.ai.ollama_model.clone(),
             language: cfg.language.clone(),
             simkl_client_id: cfg.simkl.client_id.clone(),
+            simkl_hide_watched: cfg.simkl.hide_watched,
         }
     }
 
@@ -763,8 +777,10 @@ pub struct App {
     simkl_auth: Option<simkl::DeviceCode>,
     simkl_cancel: Arc<AtomicBool>,
     simkl_syncing: bool,
+    simkl_busy: bool,
     simkl_status: Option<String>,
     simkl_error: Option<String>,
+    nuvio_help: Option<NuvioHelp>,
     update: UpdateUi,
     models: Vec<ModelInfo>,
     models_gen: u64,
@@ -857,8 +873,10 @@ impl App {
             simkl_auth: None,
             simkl_cancel: Arc::new(AtomicBool::new(false)),
             simkl_syncing: false,
+            simkl_busy: false,
             simkl_status: None,
             simkl_error: None,
+            nuvio_help: None,
             update: UpdateUi::default(),
             models: Vec::new(),
             models_gen: 0,
@@ -908,7 +926,21 @@ impl App {
                         continue;
                     }
                     self.loading = false;
-                    let p = *payload;
+                    let mut p = *payload;
+                    if self.cfg.simkl.hide_watched {
+                        let before = p.movies.len();
+                        p.movies.retain(|m| {
+                            self.simkl_store
+                                .get(m.id)
+                                .map(|t| t.status != "completed")
+                                .unwrap_or(true)
+                        });
+                        let hidden = before - p.movies.len();
+                        if hidden > 0 {
+                            p.info
+                                .push(format!("{hidden} film già visti nascosti."));
+                        }
+                    }
                     self.facets = p.facets;
                     self.prune = constraints::pruning(&self.tax, &self.facets);
                     self.messages = p.removed;
@@ -1159,6 +1191,38 @@ impl App {
                         }
                     }
                 }
+                Msg::SimklWritten(res) => {
+                    self.simkl_busy = false;
+                    match res {
+                        Ok((tokens, _outcome)) => {
+                            let changed = self
+                                .simkl_tokens
+                                .as_ref()
+                                .map(|t| {
+                                    t.access_token != tokens.access_token
+                                        || t.refresh_token != tokens.refresh_token
+                                })
+                                .unwrap_or(true);
+                            if changed {
+                                if let Err(e) = simkl::save_tokens(&tokens) {
+                                    self.simkl_error = Some(e);
+                                }
+                            }
+                            self.simkl_tokens = Some(tokens);
+                            self.simkl_error = None;
+                            self.simkl_status = Some("Salvato su SIMKL.".into());
+                            self.start_simkl_sync(false);
+                        }
+                        Err(e) => {
+                            self.simkl_status = None;
+                            if e.contains("ricollega") || e.contains("rifiutato") {
+                                self.simkl_tokens = None;
+                                let _ = simkl::clear_tokens();
+                            }
+                            self.simkl_error = Some(e);
+                        }
+                    }
+                }
                 Msg::ChatStream { gen, index, chunk } => {
                     if gen != self.chat_gen {
                         continue;
@@ -1184,7 +1248,21 @@ impl App {
                         continue;
                     }
                     self.chat_busy = false;
-                    let p = *payload;
+                    let mut p = *payload;
+                    if self.cfg.simkl.hide_watched {
+                        let before = p.cards.len();
+                        p.cards.retain(|c| {
+                            self.simkl_store
+                                .get(c.movie.id)
+                                .map(|t| t.status != "completed")
+                                .unwrap_or(true)
+                        });
+                        let hidden = before - p.cards.len();
+                        if hidden > 0 {
+                            p.notes
+                                .push(format!("{hidden} film già visti nascosti."));
+                        }
+                    }
                     // La chat non tocca la griglia: l'unico passaggio esplicito
                     // e «Vedi tutti in griglia». Qui si aggiorna solo il
                     // contesto interno dei seguiti.
@@ -2232,11 +2310,14 @@ impl App {
 
     fn simkl_client_id(&self) -> String {
         let typed = self.settings.simkl_client_id.trim();
-        if typed.is_empty() {
-            self.cfg.simkl.client_id.trim().to_string()
-        } else {
-            typed.to_string()
+        if !typed.is_empty() {
+            return typed.to_string();
         }
+        let configured = self.cfg.simkl.client_id.trim();
+        if !configured.is_empty() {
+            return configured.to_string();
+        }
+        simkl::CLIENT_ID.to_string()
     }
 
     fn start_simkl_auth(&mut self) {
@@ -2349,6 +2430,189 @@ impl App {
         });
     }
 
+    fn start_simkl_write(&mut self, movie: &Movie, op: simkl::WriteOp) {
+        if self.simkl_busy {
+            return;
+        }
+        let Some(tokens) = self.simkl_tokens.clone() else {
+            self.simkl_error = Some("Collega prima SIMKL dalle Impostazioni.".into());
+            return;
+        };
+        let client_id = self.simkl_client_id();
+        if client_id.is_empty() {
+            self.simkl_error = Some("Manca il Client ID SIMKL.".into());
+            return;
+        }
+        self.simkl_busy = true;
+        self.simkl_error = None;
+        self.simkl_status = Some("Salvo su SIMKL…".into());
+        let target = simkl::WriteMovie::from_movie(movie);
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let res = simkl::write(&client_id, tokens, &target, op);
+            let _ = tx.send(Msg::SimklWritten(res));
+            ctx.request_repaint();
+        });
+    }
+
+    fn simkl_write_current(&mut self, op: simkl::WriteOp) {
+        let Some(d) = self.detail.clone() else {
+            return;
+        };
+        self.start_simkl_write(&d.movie, op);
+    }
+
+    fn open_in_nuvio(&mut self) {
+        let Some(d) = self.detail.clone() else {
+            return;
+        };
+        let Some(imdb) = d.movie.imdb_id.clone().filter(|s| !s.trim().is_empty()) else {
+            self.toast("Manca l'identificativo IMDb: non posso aprire Nuvio.");
+            return;
+        };
+        let link = match nuvio::link(&imdb) {
+            Ok(link) => link,
+            Err(e) => {
+                self.toast(e);
+                return;
+            }
+        };
+        match nuvio::open_link(&link) {
+            Ok(()) => self.toast("Apro Nuvio…"),
+            Err(_) => {
+                let qr = qr_texture(&self.ctx, &link);
+                self.nuvio_help = Some(NuvioHelp {
+                    title: d.movie.title.clone(),
+                    link,
+                    movie: d.movie.clone(),
+                    qr,
+                });
+            }
+        }
+    }
+
+    fn nuvio_help_window(&mut self, ctx: &egui::Context) {
+        let Some(help) = self.nuvio_help.clone() else {
+            return;
+        };
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.nuvio_help = None;
+            return;
+        }
+        let screen = ctx.screen_rect();
+        let modal_w = (screen.width() - 80.0).clamp(320.0, 460.0);
+        let modal_h = (screen.height() - 80.0).clamp(320.0, 560.0);
+        let modal = egui::Rect::from_center_size(
+            screen.center(),
+            egui::vec2(modal_w, modal_h),
+        );
+        let mut close = false;
+        let mut copy = false;
+        let mut add = false;
+        let mut open_app = false;
+        egui::Area::new(egui::Id::new("nuvio-help"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                ui.set_clip_rect(screen);
+                ui.painter().rect_filled(
+                    screen,
+                    egui::Rounding::ZERO,
+                    lumen::alpha(lumen::INK, 225),
+                );
+                let scrim = ui.interact(
+                    screen,
+                    egui::Id::new("nuvio-help-scrim"),
+                    egui::Sense::click(),
+                );
+                if scrim.clicked() {
+                    close = true;
+                }
+                ui.painter().rect_filled(
+                    modal,
+                    egui::Rounding::same(lumen::RADIUS),
+                    lumen::INK,
+                );
+                ui.painter().rect_stroke(
+                    modal,
+                    egui::Rounding::same(lumen::RADIUS),
+                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI),
+                );
+                let inner = modal.shrink(18.0);
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new().max_rect(inner),
+                    |ui| {
+                        ui.label(lumen::mono(9.5, "APRI IN NUVIO").color(lumen::EMBER));
+                        ui.add_space(4.0);
+                        ui.label(lumen::display(22.0, &help.title));
+                        ui.add_space(8.0);
+                        if let Some(qr) = &help.qr {
+                            ui.horizontal(|ui| {
+                                egui::Frame::none()
+                                    .fill(egui::Color32::WHITE)
+                                    .inner_margin(egui::Margin::same(8.0))
+                                    .show(ui, |ui| {
+                                        ui.add(egui::Image::new((
+                                            qr.id(),
+                                            egui::vec2(188.0, 188.0),
+                                        )));
+                                    });
+                            });
+                        }
+                        ui.add_space(6.0);
+                        ui.label(lumen::mono(8.5, &help.link).color(lumen::FAINT));
+                        ui.add_space(8.0);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            if nuvio::exe_path().is_some() {
+                                if lumen::button_sized(ui, "Apri Nuvio", true, 128.0).clicked()
+                                {
+                                    open_app = true;
+                                }
+                            }
+                            if self.simkl_tokens.is_some() && !self.simkl_busy {
+                                if lumen::button_sized(ui, "Da vedere", false, 98.0).clicked() {
+                                    add = true;
+                                }
+                            }
+                            if lumen::link(ui, "Copia link", lumen::MUTED).clicked() {
+                                copy = true;
+                            }
+                        });
+                        ui.add_space(8.0);
+                        ui.label(
+                            lumen::body(
+                                10.0,
+                                "Il QR apre il film su Nuvio per telefono e tablet. Su Windows Nuvio non accetta il link diretto: aggiungi il film a Da vedere e aprilo dalla libreria Nuvio.",
+                            )
+                            .color(lumen::MUTED),
+                        );
+                        ui.add_space(6.0);
+                        if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
+                            close = true;
+                        }
+                    },
+                );
+            });
+        if copy {
+            ctx.copy_text(help.link.clone());
+            self.toast("Link Nuvio copiato.");
+        }
+        if open_app {
+            match nuvio::open_app() {
+                Ok(()) => self.toast("Apro Nuvio…"),
+                Err(e) => self.toast(e),
+            }
+        }
+        if add {
+            self.start_simkl_write(&help.movie, simkl::WriteOp::Watchlist);
+        }
+        if close || add {
+            self.nuvio_help = None;
+        }
+    }
+
     fn disconnect_simkl(&mut self) {
         self.simkl_cancel.store(true, Ordering::Relaxed);
         if let Err(e) = simkl::clear_tokens() {
@@ -2367,8 +2631,14 @@ impl App {
                 status: Some(tracked.status.clone()),
                 rating: tracked.rating,
                 url: Some(simkl::link_to(tracked)),
+                connected: self.simkl_tokens.is_some(),
+                busy: self.simkl_busy || self.simkl_syncing,
             },
-            None => detail::TrackInfo::default(),
+            None => detail::TrackInfo {
+                connected: self.simkl_tokens.is_some(),
+                busy: self.simkl_busy || self.simkl_syncing,
+                ..Default::default()
+            },
         }
     }
 
@@ -2404,6 +2674,22 @@ impl App {
                 detail::DetailAction::Summarize => self.spawn_summary(),
                 detail::DetailAction::OpenUrl(url) => open_url(&url),
                 detail::DetailAction::Close => self.close_detail(),
+                detail::DetailAction::MarkWatched => {
+                    self.simkl_write_current(simkl::WriteOp::Watched)
+                }
+                detail::DetailAction::AddWatchlist => {
+                    self.simkl_write_current(simkl::WriteOp::Watchlist)
+                }
+                detail::DetailAction::RemoveTracking => {
+                    self.simkl_write_current(simkl::WriteOp::Remove)
+                }
+                detail::DetailAction::Rate(value) => {
+                    self.simkl_write_current(simkl::WriteOp::Rate(value))
+                }
+                detail::DetailAction::ClearRating => {
+                    self.simkl_write_current(simkl::WriteOp::ClearRating)
+                }
+                detail::DetailAction::OpenNuvio => self.open_in_nuvio(),
             }
         }
     }
@@ -2422,6 +2708,7 @@ impl App {
 
     fn close_detail(&mut self) {
         self.detail = None;
+        self.nuvio_help = None;
         self.summary = None;
         self.detail_loading = false;
         self.summarizing = false;
@@ -2765,7 +3052,15 @@ impl App {
             language: self.settings.language.clone(),
             ai: self.settings.ai_cfg(),
             simkl: crate::infra::config::SimklCfg {
-                client_id: self.settings.simkl_client_id.trim().to_string(),
+                client_id: {
+                    let typed = self.settings.simkl_client_id.trim();
+                    if typed.is_empty() {
+                        self.cfg.simkl.client_id.trim().to_string()
+                    } else {
+                        typed.to_string()
+                    }
+                },
+                hide_watched: self.settings.simkl_hide_watched,
             },
         };
         match cfg.save() {
@@ -3705,7 +4000,6 @@ impl App {
         let mut simkl_sync = false;
         let mut simkl_disconnect = false;
         let mut simkl_cancel = false;
-        let mut open_simkl_dev = false;
         egui::ScrollArea::vertical()
             .id_salt("settings-scroll")
             .auto_shrink([false, false])
@@ -3835,34 +4129,15 @@ impl App {
                     }
                 } else {
                     ui.label(
-                        egui::RichText::new("Client ID SIMKL (una volta sola)")
-                            .size(11.0)
-                            .color(theme::DIM),
-                    );
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.settings.simkl_client_id)
-                            .hint_text("Client ID pubblico dell'app")
-                            .desired_width(f32::INFINITY),
-                    );
-                    ui.label(
-                        egui::RichText::new(
-                            "Registra CineMatch su simkl.com/settings/developer (tipo TV/devices). Il Client ID è pubblico; il token resta nel Windows Credential Manager.",
+                        lumen::body(
+                            11.5,
+                            "Collega il tuo account con un codice. CineMatch legge visti, lista e voti; il token resta nel Windows Credential Manager.",
                         )
-                        .size(10.0)
-                        .color(theme::DIM),
+                        .color(lumen::MUTED),
                     );
                     ui.add_space(4.0);
                     if lumen::button_sized(ui, "Connetti SIMKL", true, 168.0).clicked() {
                         simkl_connect = true;
-                    }
-                    if lumen::link(
-                        ui,
-                        "Crea l'app su simkl.com/settings/developer",
-                        lumen::MUTED,
-                    )
-                    .clicked()
-                    {
-                        open_simkl_dev = true;
                     }
                     if !self.simkl_store.movies.is_empty() {
                         ui.add_space(2.0);
@@ -3878,6 +4153,13 @@ impl App {
                         );
                     }
                 }
+                ui.add_space(6.0);
+                ui.checkbox(
+                    &mut self.settings.simkl_hide_watched,
+                    egui::RichText::new("Nascondi i film già visti in griglia e chat")
+                        .size(11.0)
+                        .color(theme::DIM),
+                );
                 ui.add_space(14.0);
                 lumen::hairline(ui);
                 ui.add_space(14.0);
@@ -4397,9 +4679,6 @@ impl App {
         if simkl_cancel {
             self.cancel_simkl_auth();
         }
-        if open_simkl_dev {
-            open_url("https://simkl.com/settings/developer/");
-        }
         if close {
             self.show_settings = false;
         }
@@ -4517,6 +4796,7 @@ impl eframe::App for App {
         self.grid_pager(ctx);
         self.central(ctx);
         self.chat_detail_preview(ctx);
+        self.nuvio_help_window(ctx);
         if self.guide_open {
             let actions = facets::guide_window(ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {
@@ -5690,6 +5970,34 @@ fn window_caption(
         .on_hover_text(tip)
 }
 
+fn qr_texture(ctx: &egui::Context, text: &str) -> Option<egui::TextureHandle> {
+    let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
+    let image = code
+        .render::<image::Luma<u8>>()
+        .min_dimensions(200, 200)
+        .quiet_zone(true)
+        .build();
+    let (width, height) = image.dimensions();
+    let pixels = image
+        .pixels()
+        .map(|p| {
+            if p[0] < 128 {
+                egui::Color32::BLACK
+            } else {
+                egui::Color32::WHITE
+            }
+        })
+        .collect();
+    Some(ctx.load_texture(
+        format!("nuvio-qr-{text}"),
+        egui::ColorImage {
+            size: [width as usize, height as usize],
+            pixels,
+        },
+        egui::TextureOptions::NEAREST,
+    ))
+}
+
 fn ago_label(ts: i64) -> String {
     if ts <= 0 {
         return "mai".into();
@@ -5737,11 +6045,17 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, describe, has_word, looks_like_question, merge_facets, resize_edge,
-        side_panel_widths, Facets,
+        allowed_url, describe, has_word, looks_like_question, merge_facets, qr_texture,
+        resize_edge, side_panel_widths, Facets,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn il_qr_di_nuvio_si_genera() {
+        let ctx = egui::Context::default();
+        assert!(qr_texture(&ctx, "nuvio://movie/tt0060196").is_some());
+    }
 
     #[test]
     fn la_durata_compare_nei_criteri() {

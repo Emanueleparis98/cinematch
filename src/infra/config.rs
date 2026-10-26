@@ -124,6 +124,9 @@ pub struct SimklCfg {
     /// Client ID pubblico dell'app registrata su Simkl.
     #[serde(default)]
     pub client_id: String,
+    /// Nasconde i film già visti in griglia e chat.
+    #[serde(default)]
+    pub hide_watched: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

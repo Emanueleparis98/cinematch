@@ -1,4 +1,4 @@
-use egui::{Rounding, Sense, Stroke};
+use egui::{Align2, FontFamily, FontId, Rounding, Sense, Stroke};
 
 use crate::domain::model::Details;
 use crate::ui::images::ImageStore;
@@ -9,6 +9,12 @@ pub enum DetailAction {
     Summarize,
     OpenUrl(String),
     Close,
+    MarkWatched,
+    AddWatchlist,
+    RemoveTracking,
+    Rate(u8),
+    ClearRating,
+    OpenNuvio,
 }
 
 /// Stato SIMKL di un film, calcolato dall'app e passato alla scheda.
@@ -17,6 +23,8 @@ pub struct TrackInfo {
     pub status: Option<String>,
     pub rating: Option<u8>,
     pub url: Option<String>,
+    pub connected: bool,
+    pub busy: bool,
 }
 
 fn label_list(items: &[String]) -> String {
@@ -88,6 +96,52 @@ fn field(ui: &mut egui::Ui, title: &str, value: &str) {
     ui.label(lumen::label(title));
     ui.add_space(2.0);
     ui.label(lumen::body(11.5, value).color(lumen::MUTED));
+}
+
+fn rating_box(ui: &mut egui::Ui, value: u8, selected: bool) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), Sense::click());
+    let hover = ui
+        .ctx()
+        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
+    let fill = if selected {
+        lumen::EMBER
+    } else if hover > 0.01 {
+        lumen::RAISED
+    } else {
+        lumen::SURFACE
+    };
+    ui.painter()
+        .rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
+    ui.painter().rect_stroke(
+        rect,
+        Rounding::same(lumen::RADIUS_SM),
+        Stroke::new(
+            1.0_f32,
+            if selected {
+                lumen::EMBER
+            } else {
+                lumen::BORDER
+            },
+        ),
+    );
+    ui.painter().text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        value.to_string(),
+        FontId::new(9.0, FontFamily::Monospace),
+        if selected {
+            lumen::INK
+        } else {
+            lumen::MUTED
+        },
+    );
+    lumen::focus(ui, &resp, 0.0);
+    resp.on_hover_text(if selected {
+        "Togli il voto"
+    } else {
+        "Dai un voto da 1 a 10"
+    })
+    .clicked()
 }
 
 pub fn panel(
@@ -193,12 +247,6 @@ pub fn panel(
                         };
                         ui.horizontal(|ui| {
                             ui.label(lumen::mono(9.0, label).color(color));
-                            if let Some(rating) = track.rating {
-                                ui.label(
-                                    lumen::mono(9.0, format!("IL TUO VOTO {rating}/10"))
-                                        .color(lumen::MUTED),
-                                );
-                            }
                         });
                         if let Some(url) = &track.url {
                             if lumen::link(ui, "Apri su SIMKL", lumen::MUTED).clicked() {
@@ -251,6 +299,66 @@ pub fn panel(
                 ui.add_space(6.0);
                 if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
+                }
+            }
+
+            if d.movie.imdb_id.is_some() {
+                ui.add_space(8.0);
+                if lumen::button_sized(ui, "Guarda in Nuvio", false, 168.0).clicked() {
+                    actions.push(DetailAction::OpenNuvio);
+                }
+            }
+
+            if track.connected {
+                ui.add_space(10.0);
+                ui.label(lumen::mono(9.0, "SIMKL").color(lumen::FAINT));
+                if track.busy {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(lumen::mono(9.5, "Salvo su SIMKL…").color(lumen::MUTED));
+                    });
+                } else {
+                    let status = track.status.as_deref().unwrap_or("");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        if status == "completed" {
+                            if lumen::link(ui, "Rimuovi dai visti", lumen::MUTED)
+                                .on_hover_text(
+                                    "Rimuove il film dalla cronologia SIMKL e cancella il voto",
+                                )
+                                .clicked()
+                            {
+                                actions.push(DetailAction::RemoveTracking);
+                            }
+                        } else {
+                            if lumen::button_sized(ui, "Segna visto", true, 118.0).clicked() {
+                                actions.push(DetailAction::MarkWatched);
+                            }
+                            if status == "plantowatch" {
+                                if lumen::link(ui, "Togli da Da vedere", lumen::MUTED)
+                                    .on_hover_text("Rimuove il film dalla lista SIMKL")
+                                    .clicked()
+                                {
+                                    actions.push(DetailAction::RemoveTracking);
+                                }
+                            } else if lumen::button_sized(ui, "Da vedere", false, 98.0).clicked() {
+                                actions.push(DetailAction::AddWatchlist);
+                            }
+                        }
+                    });
+                    ui.add_space(4.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(lumen::mono(9.0, "IL TUO VOTO").color(lumen::FAINT));
+                        for value in 1..=10u8 {
+                            if rating_box(ui, value, track.rating == Some(value)) {
+                                if track.rating == Some(value) {
+                                    actions.push(DetailAction::ClearRating);
+                                } else {
+                                    actions.push(DetailAction::Rate(value));
+                                }
+                            }
+                        }
+                    });
                 }
             }
 

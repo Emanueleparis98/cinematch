@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::infra::config::Config;
 
 pub const API_BASE: &str = "https://api.simkl.com";
+/// Client ID pubblico dell'app CineMatch. Non è un segreto: identifica solo
+/// l'app nella pagina di approvazione SIMKL.
+pub const CLIENT_ID: &str = "9e433f82efc6a6302de302df697962b60ad79c9c934fcc5a50f1b63f3356d691";
 const APP_NAME: &str = "cinematch";
 
 fn version() -> &'static str {
@@ -555,6 +558,187 @@ pub fn link_to(tracked: &TrackedMovie) -> String {
     )
 }
 
+/// Un film abbastanza completo per una scrittura su SIMKL.
+#[derive(Clone, Debug)]
+pub struct WriteMovie {
+    pub tmdb: u64,
+    pub imdb: Option<String>,
+    pub title: String,
+    pub year: Option<u16>,
+}
+
+impl WriteMovie {
+    pub fn from_movie(movie: &crate::domain::model::Movie) -> Self {
+        Self {
+            tmdb: movie.id,
+            imdb: movie.imdb_id.clone(),
+            title: movie.title.clone(),
+            year: movie.year,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WriteOp {
+    Watched,
+    Watchlist,
+    Remove,
+    Rate(u8),
+    ClearRating,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct WriteOutcome {
+    pub status: Option<String>,
+}
+
+fn movie_json(movie: &WriteMovie) -> serde_json::Value {
+    let mut ids = serde_json::Map::new();
+    ids.insert("tmdb".into(), serde_json::json!(movie.tmdb));
+    if let Some(imdb) = &movie.imdb {
+        if !imdb.trim().is_empty() {
+            ids.insert("imdb".into(), serde_json::json!(imdb));
+        }
+    }
+    let mut item = serde_json::json!({ "ids": ids });
+    if !movie.title.trim().is_empty() {
+        item["title"] = serde_json::json!(movie.title);
+    }
+    if let Some(year) = movie.year {
+        item["year"] = serde_json::json!(year);
+    }
+    item
+}
+
+fn not_found(response: &serde_json::Value) -> bool {
+    response
+        .get("not_found")
+        .and_then(|n| n.get("movies"))
+        .and_then(|m| m.as_array())
+        .map(|items| !items.is_empty())
+        .unwrap_or(false)
+}
+
+fn response_status(response: &serde_json::Value) -> Option<String> {
+    response
+        .get("added")?
+        .get("statuses")?
+        .as_array()?
+        .first()?
+        .get("response")?
+        .get("status")?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn post_json(
+    base: &str,
+    path: &str,
+    client_id: &str,
+    token: &str,
+    body: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let resp = http()
+        .post(url(base, path, client_id))
+        .bearer_auth(token)
+        .json(body)
+        .send()
+        .map_err(|e| format!("SIMKL non raggiungibile: {e}"))?;
+    let status = resp.status().as_u16();
+    let text = resp.text().unwrap_or_default();
+    if (200..300).contains(&status) {
+        return serde_json::from_str(&text)
+            .map_err(|e| format!("Risposta SIMKL non leggibile: {e}"));
+    }
+    if status == 400 && text.contains("rate_limit") {
+        return Err("SIMKL ha chiesto di rallentare: riprova tra poco.".into());
+    }
+    Err(error_text(status, &text))
+}
+
+pub fn write(
+    client_id: &str,
+    tokens: Tokens,
+    movie: &WriteMovie,
+    op: WriteOp,
+) -> Result<(Tokens, WriteOutcome), String> {
+    write_at(API_BASE, client_id, tokens, movie, op)
+}
+
+fn write_at(
+    base: &str,
+    client_id: &str,
+    mut tokens: Tokens,
+    movie: &WriteMovie,
+    op: WriteOp,
+) -> Result<(Tokens, WriteOutcome), String> {
+    if tokens.needs_refresh() {
+        tokens = refresh_at(base, client_id, &tokens.refresh_token)?;
+    }
+    if let WriteOp::Rate(rating) = op {
+        if !(1..=10).contains(&rating) {
+            return Err("Il voto deve essere tra 1 e 10.".into());
+        }
+    }
+    let mut item = movie_json(movie);
+    let (path, body) = match op {
+        WriteOp::Watched => (
+            "/sync/history",
+            serde_json::json!({ "movies": [item] }),
+        ),
+        WriteOp::Watchlist => {
+            item["to"] = serde_json::json!("plantowatch");
+            (
+                "/sync/add-to-list",
+                serde_json::json!({ "movies": [item] }),
+            )
+        }
+        WriteOp::Remove => (
+            "/sync/history/remove",
+            serde_json::json!({ "movies": [item] }),
+        ),
+        WriteOp::Rate(rating) => {
+            item["rating"] = serde_json::json!(rating);
+            (
+                "/sync/ratings",
+                serde_json::json!({ "movies": [item] }),
+            )
+        }
+        WriteOp::ClearRating => (
+            "/sync/ratings/remove",
+            serde_json::json!({ "movies": [item] }),
+        ),
+    };
+
+    let mut retried = false;
+    loop {
+        match post_json(base, path, client_id, &tokens.access_token, &body) {
+            Ok(response) => {
+                if not_found(&response) {
+                    return Err("SIMKL non ha riconosciuto questo film.".into());
+                }
+                let status = response_status(&response);
+                let outcome = WriteOutcome {
+                    status: match op {
+                        WriteOp::Watched => Some(status.unwrap_or_else(|| "completed".into())),
+                        WriteOp::Watchlist => Some("plantowatch".into()),
+                        WriteOp::Remove | WriteOp::ClearRating => None,
+                        WriteOp::Rate(_) => status,
+                    },
+                };
+                return Ok((tokens, outcome));
+            }
+            Err(e) if !retried && e.contains("rallentare") => {
+                // SIMKL serializza le scritture per 20 secondi: un solo
+                // tentativo dopo una pausa, poi l'errore arriva all'utente.
+                retried = true;
+                std::thread::sleep(std::time::Duration::from_secs(3));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 /// La sincronizzazione automatica parte all'avvio ma non più spesso di una
 /// volta ogni 15 minuti, come chiede SIMKL.
 pub fn sync_due(last_sync: i64) -> bool {
@@ -811,9 +995,137 @@ mod tests {
         assert!(raw.contains("authorization: bearer a"));
     }
 
+    fn write_movie() -> WriteMovie {
+        WriteMovie {
+            tmdb: 429,
+            imdb: Some("tt0060196".into()),
+            title: "Il buono, il brutto, il cattivo".into(),
+            year: Some(1966),
+        }
+    }
+
     #[test]
-    fn il_delta_rimuove_i_film_spariti_e_aggiorna_i_voti() {
-        let mut store = Store::default();
+    fn segna_visto_con_gli_id_giusti() {
+        let body = r#"{"added":{"movies":1,"statuses":[{"response":{"status":"completed"}}]},"not_found":{"movies":[]}}"#;
+        let (base, seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        let (out_tokens, outcome) =
+            write_at(&base, "client", tokens.clone(), &write_movie(), WriteOp::Watched)
+                .expect("scrittura");
+        handle.join().expect("server");
+        assert_eq!(out_tokens, tokens);
+        assert_eq!(outcome.status.as_deref(), Some("completed"));
+        let raw = seen.lock().unwrap().join("\n").to_lowercase();
+        assert!(raw.starts_with("post /sync/history?client_id=client"));
+        assert!(raw.contains("\"tmdb\":429"));
+        assert!(raw.contains("\"imdb\":\"tt0060196\""));
+        assert!(raw.contains("authorization: bearer a"));
+    }
+
+    #[test]
+    fn aggiunge_a_da_vedere() {
+        let body = r#"{"added":{"movies":[{"to":"plantowatch"}]},"not_found":{"movies":[]}}"#;
+        let (base, seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        let (_, outcome) = write_at(
+            &base,
+            "client",
+            tokens,
+            &write_movie(),
+            WriteOp::Watchlist,
+        )
+        .expect("watchlist");
+        handle.join().expect("server");
+        assert_eq!(outcome.status.as_deref(), Some("plantowatch"));
+        let raw = seen.lock().unwrap().join("\n");
+        assert!(raw.starts_with("POST /sync/add-to-list?client_id=client"));
+        assert!(raw.contains("\"to\":\"plantowatch\""));
+    }
+
+    #[test]
+    fn vota_e_toglie_il_voto() {
+        let body = r#"{"added":{"movies":1,"statuses":[{"response":{"status":"completed"}}]},"not_found":{"movies":[]}}"#;
+        let (base, seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        let (_, outcome) = write_at(
+            &base,
+            "client",
+            tokens,
+            &write_movie(),
+            WriteOp::Rate(9),
+        )
+        .expect("voto");
+        handle.join().expect("server");
+        assert_eq!(outcome.status.as_deref(), Some("completed"));
+        let raw = seen.lock().unwrap().join("\n");
+        assert!(raw.starts_with("POST /sync/ratings?client_id=client"));
+        assert!(raw.contains("\"rating\":9"));
+
+        let body = r#"{"deleted":{"movies":1},"not_found":{"movies":[]}}"#;
+        let (base, seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        write_at(
+            &base,
+            "client",
+            tokens,
+            &write_movie(),
+            WriteOp::ClearRating,
+        )
+        .expect("togli voto");
+        handle.join().expect("server");
+        let raw = seen.lock().unwrap().join("\n");
+        assert!(raw.starts_with("POST /sync/ratings/remove?client_id=client"));
+    }
+
+    #[test]
+    fn rimuove_dalla_libreria_e_rifiuta_i_film_sconosciuti() {
+        let body = r#"{"deleted":{"movies":1},"not_found":{"movies":[]}}"#;
+        let (base, seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        write_at(&base, "client", tokens, &write_movie(), WriteOp::Remove)
+            .expect("rimozione");
+        handle.join().expect("server");
+        assert!(seen
+            .lock()
+            .unwrap()
+            .join("\n")
+            .starts_with("POST /sync/history/remove?client_id=client"));
+
+        let body = r#"{"added":{"movies":0},"not_found":{"movies":[{"ids":{"tmdb":"1"}}]}}"#;
+        let (base, _seen, handle) = mock_server(vec![(201, body.to_string())]);
+        let tokens = Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: now() + 3600,
+        };
+        let err = write_at(&base, "client", tokens, &write_movie(), WriteOp::Watched)
+            .unwrap_err();
+        handle.join().expect("server");
+        assert!(err.contains("non ha riconosciuto"));
+    }
+
+    #[test]
+    fn il_delta_rimuove_i_film_spariti_e_aggiorna_i_voti() {        let mut store = Store::default();
         store.activities = Some(serde_json::json!({
             "all": "2026-01-01T00:00:00Z",
             "movies": { "removed_from_list": "r1", "rated_at": "q1" }

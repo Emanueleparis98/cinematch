@@ -77,23 +77,26 @@ sulla tua macchina).
 
 ## SIMKL (facoltativo)
 
-CineMatch puo leggere da SIMKL i film visti, la lista "Da vedere" e i voti
-personali: nella scheda compaiono `VISTO SU SIMKL`, `DA VEDERE SU SIMKL` e
-`IL TUO VOTO`. La sincronizzazione e incrementale e parte solo all'avvio, su
-richiesta o dopo un'azione; nessun polling in background.
+CineMatch legge e scrive su SIMKL: film visti, lista "Da vedere" e voti
+personali da 1 a 10. Nella scheda compaiono `VISTO SU SIMKL`, `DA VEDERE SU
+SIMKL`, il voto e i pulsanti **Segna visto**, **Da vedere** e **Rimuovi**. La
+sincronizzazione e incrementale e parte solo all'avvio, su richiesta o dopo
+un'azione; nessun polling in background.
 
-Per collegarlo serve il **Client ID pubblico** di un'app SIMKL:
+Il **Client ID pubblico** dell'app CineMatch e incluso: basta collegare
+l'account.
 
-1. Accedi a <https://simkl.com/settings/developer/> e crea un'app.
-2. Scegli il tipo *TV, devices & command line* (basta il device flow, senza
-   secret).
-3. Copia il Client ID.
-4. In CineMatch: **Impostazioni -> Tracciamento**, incolla il Client ID e premi
-   **Connetti SIMKL**. Apri il link, inserisci il codice a 8 caratteri e
-   conferma.
+1. In CineMatch: **Impostazioni -> Tracciamento**.
+2. Premi **Connetti SIMKL**, apri il link e inserisci il codice a 8 caratteri.
 
 Il token di accesso viene salvato nel **Windows Credential Manager**, non in
-`config.json`; "Scollega SIMKL" cancella token e copia locale.
+`config.json`; "Scollega SIMKL" cancella token e copia locale. Il Client ID e
+pubblico (identifica solo l'app), non e un segreto.
+
+Dalla scheda **Guarda in Nuvio** apre il film con il deep link `nuvio://`.
+Su Windows Nuvio non registra ancora lo schema: CineMatch mostra un QR per
+telefono/tablet e il pulsante **Da vedere**, cosi il film compare nella
+libreria Nuvio della TV.
 
 ## Chat dei consigli (la casa)
 
@@ -412,10 +415,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.4.0 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.4.1 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.4.0.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.4.1.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
