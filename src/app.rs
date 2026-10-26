@@ -781,6 +781,8 @@ pub struct App {
     simkl_status: Option<String>,
     simkl_error: Option<String>,
     nuvio_help: Option<NuvioHelp>,
+    /// Dopo una scrittura "Da vedere" avvia Nuvio.
+    pending_nuvio_open: bool,
     update: UpdateUi,
     models: Vec<ModelInfo>,
     models_gen: u64,
@@ -877,6 +879,7 @@ impl App {
             simkl_status: None,
             simkl_error: None,
             nuvio_help: None,
+            pending_nuvio_open: false,
             update: UpdateUi::default(),
             models: Vec::new(),
             models_gen: 0,
@@ -1206,9 +1209,19 @@ impl App {
                             self.simkl_tokens = Some(tokens);
                             self.simkl_error = None;
                             self.simkl_status = Some("Salvato su SIMKL.".into());
+                            if self.pending_nuvio_open {
+                                self.pending_nuvio_open = false;
+                                match nuvio::open_app() {
+                                    Ok(()) => self.toast(
+                                        "Nuvio aperto: scegli il profilo e apri Da vedere.",
+                                    ),
+                                    Err(e) => self.toast(e),
+                                }
+                            }
                             self.start_simkl_sync(false);
                         }
                         Err(e) => {
+                            self.pending_nuvio_open = false;
                             self.simkl_status = None;
                             if e.contains("ricollega") || e.contains("rifiutato") {
                                 self.simkl_tokens = None;
@@ -2425,18 +2438,18 @@ impl App {
         });
     }
 
-    fn start_simkl_write(&mut self, movie: &Movie, op: simkl::WriteOp) {
+    fn start_simkl_write(&mut self, movie: &Movie, op: simkl::WriteOp) -> bool {
         if self.simkl_busy {
-            return;
+            return false;
         }
         let Some(tokens) = self.simkl_tokens.clone() else {
             self.simkl_error = Some("Collega prima SIMKL dalle Impostazioni.".into());
-            return;
+            return false;
         };
         let client_id = self.simkl_client_id();
         if client_id.is_empty() {
             self.simkl_error = Some("Manca il Client ID SIMKL.".into());
-            return;
+            return false;
         }
         self.simkl_busy = true;
         self.simkl_error = None;
@@ -2449,6 +2462,7 @@ impl App {
             let _ = tx.send(Msg::SimklWritten(res));
             ctx.request_repaint();
         });
+        true
     }
 
     fn simkl_write_current(&mut self, op: simkl::WriteOp) {
@@ -2491,13 +2505,19 @@ impl App {
         let Some(help) = self.nuvio_help.clone() else {
             return;
         };
+        let status = self
+            .simkl_store
+            .get(help.movie.id)
+            .map(|tracked| tracked.status.clone());
+        let completed = status.as_deref() == Some("completed");
+        let watchlist = status.as_deref() == Some("plantowatch");
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.nuvio_help = None;
             return;
         }
         let screen = ctx.screen_rect();
         let modal_w = (screen.width() - 80.0).clamp(320.0, 460.0);
-        let modal_h = (screen.height() - 80.0).clamp(320.0, 560.0);
+        let modal_h = (screen.height() - 40.0).clamp(320.0, 600.0);
         let modal = egui::Rect::from_center_size(
             screen.center(),
             egui::vec2(modal_w, modal_h),
@@ -2506,6 +2526,7 @@ impl App {
         let mut copy = false;
         let mut add = false;
         let mut open_app = false;
+        let mut open_after_write = false;
         egui::Area::new(egui::Id::new("nuvio-help"))
             .order(egui::Order::Foreground)
             .fixed_pos(screen.min)
@@ -2560,15 +2581,31 @@ impl App {
                         ui.add_space(8.0);
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
-                            if nuvio::exe_path().is_some() {
+                            let can_add = self.simkl_tokens.is_some()
+                                && !self.simkl_busy
+                                && !completed
+                                && !watchlist;
+                            if can_add {
+                                if lumen::button_sized(
+                                    ui,
+                                    "Da vedere e apri Nuvio",
+                                    true,
+                                    200.0,
+                                )
+                                .clicked()
+                                {
+                                    add = true;
+                                    open_after_write = true;
+                                }
+                            } else if nuvio::exe_path().is_some() {
                                 if lumen::button_sized(ui, "Apri Nuvio", true, 128.0).clicked()
                                 {
                                     open_app = true;
                                 }
                             }
-                            if self.simkl_tokens.is_some() && !self.simkl_busy {
-                                if lumen::button_sized(ui, "Da vedere", false, 98.0).clicked() {
-                                    add = true;
+                            if nuvio::exe_path().is_some() && can_add {
+                                if lumen::link(ui, "Apri Nuvio", lumen::MUTED).clicked() {
+                                    open_app = true;
                                 }
                             }
                             if lumen::link(ui, "Copia link", lumen::MUTED).clicked() {
@@ -2576,13 +2613,14 @@ impl App {
                             }
                         });
                         ui.add_space(8.0);
-                        ui.label(
-                            lumen::body(
-                                10.0,
-                                "Il QR apre il film su Nuvio per telefono e tablet. Su Windows Nuvio non accetta il link diretto: aggiungi il film a Da vedere e aprilo dalla libreria Nuvio.",
-                            )
-                            .color(lumen::MUTED),
-                        );
+                        let note = if completed {
+                            "Questo film è già nei visti SIMKL. Su Windows Nuvio non accetta il link diretto: cerca il titolo in Nuvio oppure usa il QR; nella TV lo trovi in Libreria → Visti."
+                        } else if watchlist {
+                            "Il film è già in Da vedere su SIMKL. Apri Nuvio e scegli il profilo collegato; se non compare subito: Impostazioni → Tracking → SIMKL → Sincronizza ora. Il QR apre il titolo su telefono e tablet."
+                        } else {
+                            "Su Windows Nuvio non accetta il link diretto: il film viene aggiunto a Da vedere su SIMKL e Nuvio viene aperto. Scegli il profilo collegato a SIMKL; se il film non compare subito, in Nuvio: Impostazioni → Tracking → SIMKL → Sincronizza ora. Il QR apre il titolo su telefono e tablet."
+                        };
+                        ui.label(lumen::body(10.0, note).color(lumen::MUTED));
                         ui.add_space(6.0);
                         if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
                             close = true;
@@ -2601,7 +2639,10 @@ impl App {
             }
         }
         if add {
-            self.start_simkl_write(&help.movie, simkl::WriteOp::Watchlist);
+            let started = self.start_simkl_write(&help.movie, simkl::WriteOp::Watchlist);
+            if started && open_after_write {
+                self.pending_nuvio_open = true;
+            }
         }
         if close || add {
             self.nuvio_help = None;

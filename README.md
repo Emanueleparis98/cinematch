@@ -418,10 +418,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.4.3 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.4.4 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.4.3.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.4.4.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
