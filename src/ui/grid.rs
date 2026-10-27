@@ -65,6 +65,9 @@ fn card(
         let now = ui.ctx().input(|i| i.time);
         fx::shimmer(ui, poster_rect, 0.0, now);
     }
+    if m.track.watched {
+        lumen::watched_overlay(ui, poster_rect, hovered);
+    }
     let border = if selected {
         lumen::EMBER
     } else if hover > 0.05 {
@@ -88,7 +91,11 @@ fn card(
     ui.painter().galley(
         egui::pos2(rect.left(), poster_rect.bottom() + 6.0),
         title,
-        lumen::IVORY,
+        if m.track.watched {
+            lumen::MUTED
+        } else {
+            lumen::IVORY
+        },
     );
     let year = m
         .year

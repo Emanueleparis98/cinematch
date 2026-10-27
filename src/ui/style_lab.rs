@@ -1300,6 +1300,7 @@ fn fallback_movies() -> Vec<Movie> {
             genre_ids: vec![],
             lang: "it".to_string(),
             imdb_id: None,
+            track: Default::default(),
         })
         .collect()
 }

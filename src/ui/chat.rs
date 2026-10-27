@@ -1260,12 +1260,22 @@ fn hero_card(
             if resp.clicked() {
                 actions.open_detail = Some(card.movie.id);
             }
+            if card.movie.track.watched {
+                lumen::watched_overlay(ui, resp.rect, resp.hovered());
+            }
             ui.add_space(14.0);
             ui.vertical(|ui| {
-                ui.label(lumen::display(
-                    if poster_w < 120.0 { 22.0 } else { 28.0 },
-                    &card.movie.title,
-                ));
+                ui.label(
+                    lumen::display(
+                        if poster_w < 120.0 { 22.0 } else { 28.0 },
+                        &card.movie.title,
+                    )
+                    .color(if card.movie.track.watched {
+                        lumen::MUTED
+                    } else {
+                        lumen::IVORY
+                    }),
+                );
                 ui.add(
                     egui::Label::new(
                         lumen::mono(10.0, movie_meta(card, tax)).color(lumen::FAINT),
@@ -1365,6 +1375,9 @@ fn compact_card(
         }
     }
     let poster_resp = ui.interact(poster_rect, id.with("poster"), Sense::click());
+    if card.movie.track.watched {
+        lumen::watched_overlay(ui, poster_rect, poster_resp.hovered());
+    }
     if !loaded {
         ui.painter().text(
             poster_rect.center(),
@@ -1400,7 +1413,15 @@ fn compact_card(
         text_w,
         1,
     ));
-    p.galley(rect.min + egui::vec2(84.0, 10.0), title, lumen::IVORY);
+    p.galley(
+        rect.min + egui::vec2(84.0, 10.0),
+        title,
+        if card.movie.track.watched {
+            lumen::MUTED
+        } else {
+            lumen::IVORY
+        },
+    );
     let meta = p.layout_job(wrapped_font(
         &movie_meta(card, tax),
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),

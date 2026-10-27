@@ -103,6 +103,13 @@ pub fn toggle<T: PartialEq>(list: &mut Vec<T>, item: T) {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TrackState {
+    pub watched: bool,
+    pub watchlist: bool,
+    pub rating: Option<u8>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Movie {
     pub id: u64,
@@ -119,6 +126,8 @@ pub struct Movie {
     pub lang: String,
     /// Identificativo IMDb (tconst), per il voto IMDb dai dati pubblici.
     pub imdb_id: Option<String>,
+    /// Stato locale SIMKL per la resa delle card.
+    pub track: TrackState,
 }
 
 /// Voto IMDb letto dai dati pubblici (title.ratings.tsv di datasets.imdbws.com).

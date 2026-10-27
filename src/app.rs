@@ -11,7 +11,7 @@ use crate::ai::{
     DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
 };
 use crate::domain::constraints::{self, Prune};
-use crate::domain::model::{toggle, Details, Facets, Movie, Sort};
+use crate::domain::model::{toggle, Details, Facets, Movie, Sort, TrackState};
 use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
@@ -768,6 +768,8 @@ pub struct App {
     simkl_cancel: Arc<AtomicBool>,
     simkl_syncing: bool,
     simkl_busy: bool,
+    /// Scrittura in corso, per aggiornare subito lo stato locale.
+    simkl_pending: Option<(u64, simkl::WriteOp)>,
     simkl_status: Option<String>,
     simkl_error: Option<String>,
     update: UpdateUi,
@@ -863,6 +865,7 @@ impl App {
             simkl_cancel: Arc::new(AtomicBool::new(false)),
             simkl_syncing: false,
             simkl_busy: false,
+            simkl_pending: None,
             simkl_status: None,
             simkl_error: None,
             update: UpdateUi::default(),
@@ -953,6 +956,7 @@ impl App {
                         self.total_pages = p.total_pages;
                         self.movies = p.movies;
                         self.ensure_fonts_for_results();
+                        self.apply_track_flags();
                         if self.movies.is_empty() {
                             self.toast("Nessun risultato: prova ad allargare i filtri.");
                         }
@@ -977,6 +981,7 @@ impl App {
                                 );
                             }
                             self.detail = Some(d);
+                            self.apply_track_flags();
                         }
                         Err(e) => self.toast(e),
                     }
@@ -1163,6 +1168,7 @@ impl App {
                             }
                             self.simkl_store = store;
                             self.simkl_status = None;
+                            self.apply_track_flags();
                         }
                         Err(e) => {
                             self.simkl_status = None;
@@ -1176,8 +1182,9 @@ impl App {
                 }
                 Msg::SimklWritten(res) => {
                     self.simkl_busy = false;
+                    let pending = self.simkl_pending.take();
                     match res {
-                        Ok((tokens, _outcome)) => {
+                        Ok((tokens, outcome)) => {
                             let changed = self
                                 .simkl_tokens
                                 .as_ref()
@@ -1194,6 +1201,9 @@ impl App {
                             self.simkl_tokens = Some(tokens);
                             self.simkl_error = None;
                             self.simkl_status = Some("Salvato su SIMKL.".into());
+                            if let Some((id, op)) = pending {
+                                self.patch_track(id, op, &outcome);
+                            }
                             self.start_simkl_sync(false);
                         }
                         Err(e) => {
@@ -1278,6 +1288,7 @@ impl App {
                         entry.answer.intent = p.intent;
                         entry.answer.done_at = self.ctx.input(|i| i.time);
                     }
+                    self.apply_track_flags();
                     self.ctx.request_repaint();
                 }
             }
@@ -2427,6 +2438,7 @@ impl App {
             return false;
         }
         self.simkl_busy = true;
+        self.simkl_pending = Some((movie.id, op));
         self.simkl_error = None;
         self.simkl_status = Some("Salvo su SIMKL…".into());
         let target = simkl::WriteMovie::from_movie(movie);
@@ -2502,12 +2514,110 @@ impl App {
             .collect()
     }
 
+    fn apply_track_flags(&mut self) {
+        let store = &self.simkl_store;
+        let flag = |id: u64| track_state(store, id);
+        for movie in &mut self.movies {
+            movie.track = flag(movie.id);
+        }
+        for entry in &mut self.chat {
+            for card in &mut entry.answer.cards {
+                card.movie.track = flag(card.movie.id);
+            }
+        }
+        if let Some(detail) = &mut self.detail {
+            detail.movie.track = flag(detail.movie.id);
+            for movie in &mut detail.recommendations {
+                movie.track = flag(movie.id);
+            }
+        }
+    }
+
+    fn patch_track(&mut self, movie_id: u64, op: simkl::WriteOp, outcome: &simkl::WriteOutcome) {
+        let key = movie_id.to_string();
+        match op {
+            simkl::WriteOp::Remove => {
+                self.simkl_store.movies.remove(&key);
+            }
+            simkl::WriteOp::Watchlist => {
+                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
+                    simkl::TrackedMovie {
+                        simkl_id: 0,
+                        tmdb: movie_id,
+                        slug: String::new(),
+                        status: String::new(),
+                        rating: None,
+                        watched_at: None,
+                        added_at: None,
+                        imdb: None,
+                        title: String::new(),
+                        year: None,
+                    }
+                });
+                entry.status = "plantowatch".into();
+            }
+            simkl::WriteOp::Watched => {
+                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
+                    simkl::TrackedMovie {
+                        simkl_id: 0,
+                        tmdb: movie_id,
+                        slug: String::new(),
+                        status: String::new(),
+                        rating: None,
+                        watched_at: None,
+                        added_at: None,
+                        imdb: None,
+                        title: String::new(),
+                        year: None,
+                    }
+                });
+                entry.status = outcome
+                    .status
+                    .clone()
+                    .unwrap_or_else(|| "completed".into());
+            }
+            simkl::WriteOp::Rate(value) => {
+                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
+                    simkl::TrackedMovie {
+                        simkl_id: 0,
+                        tmdb: movie_id,
+                        slug: String::new(),
+                        status: String::new(),
+                        rating: None,
+                        watched_at: None,
+                        added_at: None,
+                        imdb: None,
+                        title: String::new(),
+                        year: None,
+                    }
+                });
+                entry.rating = Some(value);
+                if entry.status.is_empty() {
+                    entry.status = "completed".into();
+                }
+                if let Some(status) = &outcome.status {
+                    entry.status = status.clone();
+                }
+            }
+            simkl::WriteOp::ClearRating => {
+                if let Some(entry) = self.simkl_store.movies.get_mut(&key) {
+                    entry.rating = None;
+                }
+            }
+        }
+        self.apply_track_flags();
+    }
+
     fn simkl_track(&self, movie: &Movie) -> detail::TrackInfo {
         match self.simkl_store.get(movie.id) {
             Some(tracked) => detail::TrackInfo {
                 status: Some(tracked.status.clone()),
                 rating: tracked.rating,
-                url: Some(simkl::link_to(tracked)),
+                url: if tracked.simkl_id > 0 {
+                    Some(simkl::link_to(tracked))
+                } else {
+                    None
+                },
                 connected: self.simkl_tokens.is_some(),
                 busy: self.simkl_busy || self.simkl_syncing,
             },
@@ -5851,8 +5961,18 @@ fn window_caption(
         .on_hover_text(tip)
 }
 
-fn ago_label(ts: i64) -> String {
-    if ts <= 0 {
+fn track_state(store: &simkl::Store, id: u64) -> TrackState {
+    match store.get(id) {
+        Some(tracked) => TrackState {
+            watched: tracked.status == "completed",
+            watchlist: tracked.status == "plantowatch",
+            rating: tracked.rating,
+        },
+        None => TrackState::default(),
+    }
+}
+
+fn ago_label(ts: i64) -> String {    if ts <= 0 {
         return "mai".into();
     }
     let mins = (simkl::now_secs() - ts).max(0) / 60;

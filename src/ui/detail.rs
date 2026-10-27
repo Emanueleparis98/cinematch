@@ -97,50 +97,191 @@ fn field(ui: &mut egui::Ui, title: &str, value: &str) {
     ui.label(lumen::body(11.5, value).color(lumen::MUTED));
 }
 
-fn rating_box(ui: &mut egui::Ui, value: u8, selected: bool) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), Sense::click());
-    let hover = ui
-        .ctx()
-        .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    let fill = if selected {
-        lumen::EMBER
-    } else if hover > 0.01 {
-        lumen::RAISED
-    } else {
-        lumen::SURFACE
+fn dial_value(delta: egui::Vec2) -> u8 {
+    let mut angle = delta.y.atan2(delta.x) + std::f32::consts::FRAC_PI_2;
+    if angle < 0.0 {
+        angle += std::f32::consts::TAU;
+    }
+    let value = (angle / std::f32::consts::TAU * 10.0).floor() as i32 + 1;
+    value.clamp(1, 10) as u8
+}
+
+fn rating_button(
+    ui: &mut egui::Ui,
+    movie_id: u64,
+    track: &TrackInfo,
+    actions: &mut Vec<DetailAction>,
+) {
+    let popup_id = egui::Id::new(("rating-open", movie_id));
+    let draft_id = egui::Id::new(("rating-draft", movie_id));
+    let mut open = ui.data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
+    let label = match track.rating {
+        Some(value) => format!("★ {value}/10"),
+        None => "Vota".to_string(),
     };
-    ui.painter()
-        .rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
-    ui.painter().rect_stroke(
-        rect,
-        Rounding::same(lumen::RADIUS_SM),
-        Stroke::new(
-            1.0_f32,
-            if selected {
-                lumen::EMBER
-            } else {
-                lumen::BORDER
-            },
-        ),
-    );
-    ui.painter().text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        value.to_string(),
-        FontId::new(9.0, FontFamily::Monospace),
-        if selected {
-            lumen::INK
+    let button = lumen::button_sized(ui, &label, false, 96.0);
+    if button.clicked() {
+        open = !open;
+        if open {
+            ui.data_mut(|d| {
+                d.insert_temp(draft_id, track.rating.unwrap_or(8));
+            });
+        }
+        ui.data_mut(|d| d.insert_temp(popup_id, open));
+    }
+    if !open {
+        return;
+    }
+
+    let screen = ui.ctx().screen_rect();
+    let mut x = button.rect.left();
+    if x + 216.0 > screen.right() {
+        x = screen.right() - 216.0;
+    }
+    let mut y = button.rect.bottom() + 6.0;
+    if y + 262.0 > screen.bottom() {
+        y = (button.rect.top() - 262.0).max(screen.top() + 4.0);
+    }
+    let mut draft = ui.data(|d| d.get_temp::<u8>(draft_id).unwrap_or(8));
+    let mut close = false;
+    let mut save = None;
+    let mut clear = false;
+    egui::Area::new(egui::Id::new(("rating-popup", movie_id)))
+        .order(egui::Order::Foreground)
+        .fixed_pos(egui::pos2(x, y))
+        .show(ui.ctx(), |ui| {
+            egui::Frame::none()
+                .fill(lumen::SURFACE)
+                .stroke(Stroke::new(1.0_f32, lumen::BORDER_HI))
+                .rounding(Rounding::same(lumen::RADIUS))
+                .inner_margin(egui::Margin::same(12.0))
+                .show(ui, |ui| {
+                    ui.set_width(184.0);
+                    ui.label(lumen::mono(9.0, "IL TUO VOTO").color(lumen::FAINT));
+                    let (rect, resp) = ui.allocate_exact_size(
+                        egui::vec2(184.0, 168.0),
+                        Sense::click_and_drag(),
+                    );
+                    let center = rect.center();
+                    let radius = 58.0;
+                    let painter = ui.painter();
+                    painter.circle_stroke(
+                        center,
+                        radius,
+                        Stroke::new(1.0_f32, lumen::BORDER),
+                    );
+                    for value in 1..=10u8 {
+                        let angle = -std::f32::consts::FRAC_PI_2
+                            + (value - 1) as f32 * std::f32::consts::TAU / 10.0;
+                        let dir = egui::vec2(angle.cos(), angle.sin());
+                        let selected = value == draft;
+                        painter.circle_filled(
+                            center + dir * radius,
+                            if selected { 5.0 } else { 3.0 },
+                            if selected { lumen::EMBER } else { lumen::BORDER_HI },
+                        );
+                        painter.text(
+                            center + dir * (radius + 15.0),
+                            Align2::CENTER_CENTER,
+                            value.to_string(),
+                            FontId::new(8.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
+                            if selected { lumen::EMBER } else { lumen::FAINT },
+                        );
+                    }
+                    if resp.clicked() || resp.dragged() {
+                        if let Some(pointer) = ui.ctx().pointer_interact_pos() {
+                            let next = dial_value(pointer - center);
+                            if next != draft {
+                                draft = next;
+                                ui.data_mut(|d| d.insert_temp(draft_id, draft));
+                            }
+                        }
+                    }
+                    ui.painter().text(
+                        center,
+                        Align2::CENTER_CENTER,
+                        draft.to_string(),
+                        FontId::new(
+                            30.0,
+                            FontFamily::Name(crate::ui::fonts::LUMEN_DISPLAY.into()),
+                        ),
+                        lumen::IVORY,
+                    );
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        if lumen::link(ui, "−", lumen::MUTED).clicked() {
+                            draft = draft.saturating_sub(1).max(1);
+                            ui.data_mut(|d| d.insert_temp(draft_id, draft));
+                        }
+                        ui.label(lumen::mono(10.0, format!("{draft}/10")).color(lumen::MUTED));
+                        if lumen::link(ui, "+", lumen::MUTED).clicked() {
+                            draft = (draft + 1).min(10);
+                            ui.data_mut(|d| d.insert_temp(draft_id, draft));
+                        }
+                    });
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        if lumen::button_sized(ui, "Salva", true, 86.0).clicked() {
+                            save = Some(draft);
+                        }
+                        if track.rating.is_some()
+                            && lumen::link(ui, "Togli voto", lumen::MUTED).clicked()
+                        {
+                            clear = true;
+                        }
+                    });
+                    if lumen::link(ui, "Chiudi", lumen::MUTED).clicked() {
+                        close = true;
+                    }
+                });
+        });
+    if save.is_some() || clear || close || ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
+        ui.data_mut(|d| d.insert_temp(popup_id, false));
+    }
+    if let Some(value) = save {
+        actions.push(DetailAction::Rate(value));
+    } else if clear {
+        actions.push(DetailAction::ClearRating);
+    }
+}
+
+fn simkl_actions(
+    ui: &mut egui::Ui,
+    movie_id: u64,
+    track: &TrackInfo,
+    actions: &mut Vec<DetailAction>,
+) {
+    let status = track.status.as_deref().unwrap_or("");
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        if status == "completed" {
+            if lumen::link(ui, "Rimuovi dai visti", lumen::MUTED)
+                .on_hover_text("Rimuove il film dalla cronologia SIMKL e cancella il voto")
+                .clicked()
+            {
+                actions.push(DetailAction::RemoveTracking);
+            }
+        } else if status == "plantowatch" {
+            if lumen::button_sized(ui, "✓ Da vedere", false, 118.0)
+                .on_hover_text("Rimuove il film da Da vedere")
+                .clicked()
+            {
+                actions.push(DetailAction::RemoveTracking);
+            }
+            if lumen::button_sized(ui, "Segna visto", true, 112.0).clicked() {
+                actions.push(DetailAction::MarkWatched);
+            }
         } else {
-            lumen::MUTED
-        },
-    );
-    lumen::focus(ui, &resp, 0.0);
-    resp.on_hover_text(if selected {
-        "Togli il voto"
-    } else {
-        "Dai un voto da 1 a 10"
-    })
-    .clicked()
+            if lumen::button_sized(ui, "+ Da vedere", false, 118.0).clicked() {
+                actions.push(DetailAction::AddWatchlist);
+            }
+            if lumen::button_sized(ui, "Segna visto", true, 112.0).clicked() {
+                actions.push(DetailAction::MarkWatched);
+            }
+        }
+        rating_button(ui, movie_id, track, actions);
+    });
 }
 
 pub fn panel(
@@ -253,6 +394,19 @@ pub fn panel(
                             }
                         }
                     }
+                    if track.connected {
+                        ui.add_space(6.0);
+                        if track.busy {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(
+                                    lumen::mono(9.5, "Salvo su SIMKL…").color(lumen::MUTED),
+                                );
+                            });
+                        } else {
+                            simkl_actions(ui, d.movie.id, track, &mut actions);
+                        }
+                    }
                 });
             });
 
@@ -298,59 +452,6 @@ pub fn panel(
                 ui.add_space(6.0);
                 if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
-                }
-            }
-
-            if track.connected {
-                ui.add_space(10.0);
-                ui.label(lumen::mono(9.0, "SIMKL").color(lumen::FAINT));
-                if track.busy {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(lumen::mono(9.5, "Salvo su SIMKL…").color(lumen::MUTED));
-                    });
-                } else {
-                    let status = track.status.as_deref().unwrap_or("");
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        if status == "completed" {
-                            if lumen::link(ui, "Rimuovi dai visti", lumen::MUTED)
-                                .on_hover_text(
-                                    "Rimuove il film dalla cronologia SIMKL e cancella il voto",
-                                )
-                                .clicked()
-                            {
-                                actions.push(DetailAction::RemoveTracking);
-                            }
-                        } else {
-                            if lumen::button_sized(ui, "Segna visto", true, 118.0).clicked() {
-                                actions.push(DetailAction::MarkWatched);
-                            }
-                            if status == "plantowatch" {
-                                if lumen::link(ui, "Togli da Da vedere", lumen::MUTED)
-                                    .on_hover_text("Rimuove il film dalla lista SIMKL")
-                                    .clicked()
-                                {
-                                    actions.push(DetailAction::RemoveTracking);
-                                }
-                            } else if lumen::button_sized(ui, "Da vedere", false, 98.0).clicked() {
-                                actions.push(DetailAction::AddWatchlist);
-                            }
-                        }
-                    });
-                    ui.add_space(4.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(lumen::mono(9.0, "IL TUO VOTO").color(lumen::FAINT));
-                        for value in 1..=10u8 {
-                            if rating_box(ui, value, track.rating == Some(value)) {
-                                if track.rating == Some(value) {
-                                    actions.push(DetailAction::ClearRating);
-                                } else {
-                                    actions.push(DetailAction::Rate(value));
-                                }
-                            }
-                        }
-                    });
                 }
             }
 
@@ -435,5 +536,18 @@ fn compact_votes(v: u32) -> String {
         format!("{:.1}k", v as f64 / 1_000.0)
     } else {
         v.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dial_value;
+
+    #[test]
+    fn la_ghiera_parte_dall_alto_e_gira_in_senso_orario() {
+        assert_eq!(dial_value(egui::vec2(0.0, -10.0)), 1);
+        assert_eq!(dial_value(egui::vec2(10.0, 0.0)), 3);
+        assert_eq!(dial_value(egui::vec2(0.0, 10.0)), 6);
+        assert_eq!(dial_value(egui::vec2(-10.0, 0.0)), 8);
     }
 }

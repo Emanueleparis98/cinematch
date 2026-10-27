@@ -549,6 +549,30 @@ pub fn backdrop(
     scrim(ui.painter(), rect);
 }
 
+pub fn watched_overlay(ui: &mut egui::Ui, rect: Rect, hovered: bool) {
+    let veil = if hovered { 50 } else { 170 };
+    ui.painter().rect_filled(
+        rect,
+        Rounding::ZERO,
+        alpha(Color32::from_gray(74), veil),
+    );
+    let badge = Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(44.0, 15.0));
+    ui.painter()
+        .rect_filled(badge, Rounding::same(2.0), alpha(INK, 235));
+    ui.painter().rect_stroke(
+        badge,
+        Rounding::same(2.0),
+        Stroke::new(1.0_f32, alpha(BORDER_HI, 200)),
+    );
+    ui.painter().text(
+        badge.center(),
+        Align2::CENTER_CENTER,
+        "VISTO",
+        FontId::new(8.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        CELADON,
+    );
+}
+
 pub fn warm_spill(painter: &egui::Painter, center: egui::Pos2, radius: f32) {
     for i in 0..4 {
         let r = radius * (1.0 - i as f32 * 0.18);

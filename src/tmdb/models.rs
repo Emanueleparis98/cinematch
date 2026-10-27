@@ -56,6 +56,7 @@ impl From<ApiMovie> for Movie {
             genre_ids: a.genre_ids,
             lang: a.original_language,
             imdb_id: None,
+            track: Default::default(),
         }
     }
 }
@@ -267,6 +268,7 @@ impl ApiDetails {
             genre_ids,
             lang: self.original_language.clone(),
             imdb_id: imdb_id.clone(),
+            track: Default::default(),
         };
         let mut cast = Vec::new();
         let mut director = None;
