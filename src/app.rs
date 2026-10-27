@@ -44,7 +44,6 @@ struct Results {
 enum Msg {
     Results { gen: u64, payload: Box<Results> },
     Details { gen: u64, res: Result<Details, String> },
-    Summary { gen: u64, res: Result<String, String> },
     Check { res: Result<String, String> },
     Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
     AiCheck { res: Result<String, String> },
@@ -742,12 +741,9 @@ pub struct App {
 
     detail: Option<Details>,
     detail_loading: bool,
-    /// Generazioni delle richieste scheda/sintesi: una risposta vecchia non
+    /// Generazioni delle richieste scheda: una risposta vecchia non
     /// deve sovrascrivere il film aperto dopo.
     detail_gen: u64,
-    summary_gen: u64,
-    summary: Option<String>,
-    summarizing: bool,
 
     keyword_map: Vec<(String, u64)>,
     dirty: Option<Instant>,
@@ -847,9 +843,6 @@ impl App {
             detail: None,
             detail_loading: false,
             detail_gen: 0,
-            summary_gen: 0,
-            summary: None,
-            summarizing: false,
             keyword_map: Vec::new(),
             dirty: None,
             focus: None,
@@ -983,16 +976,6 @@ impl App {
                             self.detail = Some(d);
                             self.apply_track_flags();
                         }
-                        Err(e) => self.toast(e),
-                    }
-                }
-                Msg::Summary { gen, res } => {
-                    if gen != self.summary_gen {
-                        continue;
-                    }
-                    self.summarizing = false;
-                    match res {
-                        Ok(s) => self.summary = Some(s),
                         Err(e) => self.toast(e),
                     }
                 }
@@ -2658,7 +2641,6 @@ impl App {
                         self.open_detail(id);
                     }
                 }
-                detail::DetailAction::Summarize => self.spawn_summary(),
                 detail::DetailAction::OpenUrl(url) => open_url(&url),
                 detail::DetailAction::Close => self.close_detail(),
                 detail::DetailAction::MarkWatched => {
@@ -2694,11 +2676,8 @@ impl App {
 
     fn close_detail(&mut self) {
         self.detail = None;
-        self.summary = None;
         self.detail_loading = false;
-        self.summarizing = false;
         self.detail_gen = self.detail_gen.wrapping_add(1);
-        self.summary_gen = self.summary_gen.wrapping_add(1);
     }
 
     /// Un solo pannello laterale per volta: filtri e scheda non si contendono
@@ -2723,24 +2702,6 @@ impl App {
         std::thread::spawn(move || {
             let res = tmdb.details(id);
             let _ = tx.send(Msg::Details { gen, res });
-            ctx.request_repaint();
-        });
-    }
-
-    fn spawn_summary(&mut self) {
-        let Some(d) = self.detail.clone() else { return };
-        if d.movie.overview.trim().is_empty() {
-            return;
-        }
-        self.summarizing = true;
-        self.summary_gen = self.summary_gen.wrapping_add(1);
-        let gen = self.summary_gen;
-        let provider = self.provider.clone();
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        std::thread::spawn(move || {
-            let res = provider.summarize(&d.movie.overview);
-            let _ = tx.send(Msg::Summary { gen, res });
             ctx.request_repaint();
         });
     }
@@ -3424,7 +3385,6 @@ impl App {
                     ui.add_space(14.0);
                     let busy = self.loading
                         || self.detail_loading
-                        || self.summarizing
                         || self.chat_busy
                         || self.update.checking
                         || self.detecting
@@ -3603,16 +3563,11 @@ impl App {
                     [r.left_top(), r.left_bottom()],
                     egui::Stroke::new(1.0_f32, lumen::BORDER),
                 );
-                let ai_available = self.provider.is_llm();
-                let summary = self.summary.clone();
                 let track = self.simkl_track(&d.movie);
                 let actions = detail::panel(
                     ui,
                     &self.images,
                     &d,
-                    summary.as_deref(),
-                    self.summarizing,
-                    ai_available,
                     false,
                     &track,
                 );
@@ -3641,9 +3596,6 @@ impl App {
             egui::vec2(modal_w, modal_h),
         );
         let d = self.detail.clone();
-        let summary = self.summary.clone();
-        let summarizing = self.summarizing;
-        let ai = self.provider.is_llm();
         let mut actions = Vec::new();
         egui::Area::new(egui::Id::new("chat-detail-preview"))
             .order(egui::Order::Foreground)
@@ -3682,9 +3634,6 @@ impl App {
                                 ui,
                                 &self.images,
                                 d,
-                                summary.as_deref(),
-                                summarizing,
-                                ai,
                                 true,
                                 &track,
                             );
@@ -4797,7 +4746,6 @@ impl eframe::App for App {
         self.toast_overlay(ctx);
         if self.loading
             || self.detail_loading
-            || self.summarizing
             || self.chat_busy
             || self.update.checking
             || self.update.progress.is_some()

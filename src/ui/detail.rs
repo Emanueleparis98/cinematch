@@ -6,7 +6,6 @@ use crate::ui::{grid, lumen};
 
 pub enum DetailAction {
     Open(u64),
-    Summarize,
     OpenUrl(String),
     Close,
     MarkWatched,
@@ -367,13 +366,6 @@ fn simkl_bar(
                         }
                     }
                 }
-                if let Some(url) = &track.url {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if lumen::link(ui, "SIMKL ↗", lumen::FAINT).clicked() {
-                            actions.push(DetailAction::OpenUrl(url.clone()));
-                        }
-                    });
-                }
             });
         });
 }
@@ -382,9 +374,6 @@ pub fn panel(
     ui: &mut egui::Ui,
     images: &ImageStore,
     d: &Details,
-    summary: Option<&str>,
-    summarizing: bool,
-    ai_available: bool,
     compact: bool,
     track: &TrackInfo,
 ) -> Vec<DetailAction> {
@@ -486,6 +475,11 @@ pub fn panel(
                             {
                                 status_pill(ui, status);
                             }
+                            if let Some(url) = &track.url {
+                                if lumen::link(ui, "SIMKL ↗", lumen::FAINT).clicked() {
+                                    actions.push(DetailAction::OpenUrl(url.clone()));
+                                }
+                            }
                         });
                     }
                 });
@@ -512,37 +506,8 @@ pub fn panel(
                 );
             }
 
-            ui.add_space(12.0);
-            let ai_w = (ui.available_width() - 148.0).clamp(96.0, 140.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                ui.spacing_mut().item_spacing.y = 8.0;
-                if lumen::button_sized(ui, "Cerca il titolo", true, 140.0).clicked() {
-                    actions.push(DetailAction::Open(d.movie.id));
-                }
-                let ai_btn = ui
-                    .add_enabled_ui(
-                        ai_available && !summarizing && !d.movie.overview.is_empty(),
-                        |ui| {
-                            lumen::button_sized(
-                                ui,
-                                if summarizing {
-                                    "Riassumo…"
-                                } else {
-                                    "Riassumi"
-                                },
-                                false,
-                                ai_w,
-                            )
-                        },
-                    )
-                    .inner;
-                if ai_btn.clicked() {
-                    actions.push(DetailAction::Summarize);
-                }
-            });
             if let Some(link) = &d.provider_link {
-                ui.add_space(6.0);
+                ui.add_space(10.0);
                 if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
                 }
@@ -552,21 +517,12 @@ pub fn panel(
             lumen::hairline(ui);
             ui.add_space(10.0);
 
-            match summary {
-                Some(s) => {
-                    ui.label(lumen::mono(9.0, "SINTESI AI").color(lumen::EMBER));
-                    ui.add_space(4.0);
-                    ui.label(lumen::body(13.0, s));
-                }
-                None => {
-                    let text = if d.movie.overview.trim().is_empty() {
-                        "Nessuna descrizione disponibile in italiano.".to_string()
-                    } else {
-                        d.movie.overview.clone()
-                    };
-                    ui.label(lumen::body(12.5, text).color(lumen::MUTED));
-                }
-            }
+            let text = if d.movie.overview.trim().is_empty() {
+                "Nessuna descrizione disponibile in italiano.".to_string()
+            } else {
+                d.movie.overview.clone()
+            };
+            ui.label(lumen::body(12.5, text).color(lumen::MUTED));
 
             let genres = d
                 .genres

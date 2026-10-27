@@ -246,9 +246,6 @@ pub trait IntentProvider: Send + Sync {
         false
     }
     fn parse(&self, text: &str, tax: &Taxonomy) -> Result<Intent, String>;
-    fn summarize(&self, _text: &str) -> Result<String, String> {
-        Err("Sintesi AI non disponibile con il parser a regole.".into())
-    }
     /// Interpreta un messaggio di chat: come `parse`, ma con la memoria dei
     /// messaggi recenti e il contesto attivo, per capire i seguiti («no, senza
     /// commedia», «piu recenti»). Il default ignora la memoria.
@@ -2353,15 +2350,6 @@ impl IntentProvider for LlmProvider {
                 Ok(it)
             }
         }
-    }
-
-    fn summarize(&self, text: &str) -> Result<String, String> {
-        if text.trim().is_empty() {
-            return Err("Nessuna descrizione da riassumere.".into());
-        }
-        let system = "Riassumi in italiano, in massimo due frasi, senza spoiler e senza ripetere il titolo.";
-        self.chat(system, text, 300, None)
-            .map(|s| s.trim().trim_matches('"').to_string())
     }
 
     fn parse_chat(

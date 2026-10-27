@@ -193,7 +193,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   conteggio, azzera, aiuto, ricerca interna), pill dei filtri attivi, sezioni in
   mono maiuscolo e chip piatte con bordo ember quando attive.
 - **Scheda film**: pannello laterale fisso con backdrop e poster, titolo Fraunces,
-  fatti, azioni (cerca, riassumi, dove vederlo), disponibilita e simili.
+  fatti, stato SIMKL con voto e Da vedere, dove vederlo, disponibilita e simili.
 - **Impostazioni**: pagina intera con colonna centrata: TMDB, interprete, lingua,
   dati IMDb, aggiornamenti e salvataggio. Â«ChiudiÂ» o `Esc` tornano alla vista.
 - **Ridimensionamento**: minimo 800x600; i testi vanno a capo e i pannelli non si
@@ -414,10 +414,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.4.7 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.4.8 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.4.7.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.4.8.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
