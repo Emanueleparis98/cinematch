@@ -74,7 +74,7 @@ pub struct TrackedMovie {
     pub year: Option<u16>,
 }
 
-/// Un film iniziato e messo in pausa su un'altra app (Nuvio).
+/// Un film iniziato e messo in pausa su un'altra app.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Playback {
     pub tmdb: u64,

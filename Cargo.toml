@@ -1,6 +1,6 @@
 [package]
 name = "cinematch"
-version = "0.4.4"
+version = "0.4.5"
 edition = "2021"
 description = "CineMatch - esplorazione cinematografica a vincoli con supporto AI"
 
@@ -17,11 +17,9 @@ serde_json = "1"
 base64 = "0.22"
 flate2 = "1"
 sha2 = "0.10"
-qrcode = "0.14"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [profile.dev.package."*"]
 opt-level = 2

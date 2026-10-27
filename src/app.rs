@@ -16,7 +16,6 @@ use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::infra::winclock;
-use crate::integrations::nuvio;
 use crate::integrations::simkl;
 use crate::tmdb::client::{describe_credential, Tmdb};
 use crate::tmdb::models::{PagedMovies, Person};
@@ -132,15 +131,6 @@ struct PersonPool {
     result: ChatPoolResult,
     label: String,
     person: String,
-}
-
-/// Fallback quando Nuvio non accetta il deep link su Windows.
-#[derive(Clone)]
-struct NuvioHelp {
-    title: String,
-    link: String,
-    movie: Movie,
-    qr: Option<egui::TextureHandle>,
 }
 
 #[derive(Clone)]
@@ -780,9 +770,6 @@ pub struct App {
     simkl_busy: bool,
     simkl_status: Option<String>,
     simkl_error: Option<String>,
-    nuvio_help: Option<NuvioHelp>,
-    /// Dopo una scrittura "Da vedere" avvia Nuvio.
-    pending_nuvio_open: bool,
     update: UpdateUi,
     models: Vec<ModelInfo>,
     models_gen: u64,
@@ -878,8 +865,6 @@ impl App {
             simkl_busy: false,
             simkl_status: None,
             simkl_error: None,
-            nuvio_help: None,
-            pending_nuvio_open: false,
             update: UpdateUi::default(),
             models: Vec::new(),
             models_gen: 0,
@@ -1209,19 +1194,9 @@ impl App {
                             self.simkl_tokens = Some(tokens);
                             self.simkl_error = None;
                             self.simkl_status = Some("Salvato su SIMKL.".into());
-                            if self.pending_nuvio_open {
-                                self.pending_nuvio_open = false;
-                                match nuvio::open_app() {
-                                    Ok(()) => self.toast(
-                                        "Nuvio aperto: scegli il profilo e apri Da vedere.",
-                                    ),
-                                    Err(e) => self.toast(e),
-                                }
-                            }
                             self.start_simkl_sync(false);
                         }
                         Err(e) => {
-                            self.pending_nuvio_open = false;
                             self.simkl_status = None;
                             if e.contains("ricollega") || e.contains("rifiutato") {
                                 self.simkl_tokens = None;
@@ -2472,183 +2447,6 @@ impl App {
         self.start_simkl_write(&d.movie, op);
     }
 
-    fn open_in_nuvio(&mut self) {
-        let Some(d) = self.detail.clone() else {
-            return;
-        };
-        let Some(imdb) = d.movie.imdb_id.clone().filter(|s| !s.trim().is_empty()) else {
-            self.toast("Manca l'identificativo IMDb: non posso aprire Nuvio.");
-            return;
-        };
-        let link = match nuvio::link(&imdb) {
-            Ok(link) => link,
-            Err(e) => {
-                self.toast(e);
-                return;
-            }
-        };
-        match nuvio::open_link(&link) {
-            Ok(()) => self.toast("Apro Nuvio…"),
-            Err(_) => {
-                let qr = qr_texture(&self.ctx, &link);
-                self.nuvio_help = Some(NuvioHelp {
-                    title: d.movie.title.clone(),
-                    link,
-                    movie: d.movie.clone(),
-                    qr,
-                });
-            }
-        }
-    }
-
-    fn nuvio_help_window(&mut self, ctx: &egui::Context) {
-        let Some(help) = self.nuvio_help.clone() else {
-            return;
-        };
-        let status = self
-            .simkl_store
-            .get(help.movie.id)
-            .map(|tracked| tracked.status.clone());
-        let completed = status.as_deref() == Some("completed");
-        let watchlist = status.as_deref() == Some("plantowatch");
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.nuvio_help = None;
-            return;
-        }
-        let screen = ctx.screen_rect();
-        let modal_w = (screen.width() - 80.0).clamp(320.0, 460.0);
-        let modal_h = (screen.height() - 40.0).clamp(320.0, 600.0);
-        let modal = egui::Rect::from_center_size(
-            screen.center(),
-            egui::vec2(modal_w, modal_h),
-        );
-        let mut close = false;
-        let mut copy = false;
-        let mut add = false;
-        let mut open_app = false;
-        let mut open_after_write = false;
-        egui::Area::new(egui::Id::new("nuvio-help"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(screen.min)
-            .show(ctx, |ui| {
-                ui.set_clip_rect(screen);
-                ui.painter().rect_filled(
-                    screen,
-                    egui::Rounding::ZERO,
-                    lumen::alpha(lumen::INK, 225),
-                );
-                let scrim = ui.interact(
-                    screen,
-                    egui::Id::new("nuvio-help-scrim"),
-                    egui::Sense::click(),
-                );
-                if scrim.clicked() {
-                    close = true;
-                }
-                ui.painter().rect_filled(
-                    modal,
-                    egui::Rounding::same(lumen::RADIUS),
-                    lumen::INK,
-                );
-                ui.painter().rect_stroke(
-                    modal,
-                    egui::Rounding::same(lumen::RADIUS),
-                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI),
-                );
-                let inner = modal.shrink(18.0);
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(inner),
-                    |ui| {
-                        ui.label(lumen::mono(9.5, "APRI IN NUVIO").color(lumen::EMBER));
-                        ui.add_space(4.0);
-                        ui.label(lumen::display(22.0, &help.title));
-                        ui.add_space(8.0);
-                        if let Some(qr) = &help.qr {
-                            ui.horizontal(|ui| {
-                                egui::Frame::none()
-                                    .fill(egui::Color32::WHITE)
-                                    .inner_margin(egui::Margin::same(8.0))
-                                    .show(ui, |ui| {
-                                        ui.add(egui::Image::new((
-                                            qr.id(),
-                                            egui::vec2(188.0, 188.0),
-                                        )));
-                                    });
-                            });
-                        }
-                        ui.add_space(6.0);
-                        ui.label(lumen::mono(8.5, &help.link).color(lumen::FAINT));
-                        ui.add_space(8.0);
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            let can_add = self.simkl_tokens.is_some()
-                                && !self.simkl_busy
-                                && !completed
-                                && !watchlist;
-                            if can_add {
-                                if lumen::button_sized(
-                                    ui,
-                                    "Da vedere e apri Nuvio",
-                                    true,
-                                    200.0,
-                                )
-                                .clicked()
-                                {
-                                    add = true;
-                                    open_after_write = true;
-                                }
-                            } else if nuvio::exe_path().is_some() {
-                                if lumen::button_sized(ui, "Apri Nuvio", true, 128.0).clicked()
-                                {
-                                    open_app = true;
-                                }
-                            }
-                            if nuvio::exe_path().is_some() && can_add {
-                                if lumen::link(ui, "Apri Nuvio", lumen::MUTED).clicked() {
-                                    open_app = true;
-                                }
-                            }
-                            if lumen::link(ui, "Copia link", lumen::MUTED).clicked() {
-                                copy = true;
-                            }
-                        });
-                        ui.add_space(8.0);
-                        let note = if completed {
-                            "Questo film è già nei visti SIMKL. Su Windows Nuvio non accetta il link diretto: cerca il titolo in Nuvio oppure usa il QR; nella TV lo trovi in Libreria → Visti."
-                        } else if watchlist {
-                            "Il film è già in Da vedere su SIMKL. Apri Nuvio e scegli il profilo collegato; se non compare subito: Impostazioni → Tracking → SIMKL → Sincronizza ora. Il QR apre il titolo su telefono e tablet."
-                        } else {
-                            "Su Windows Nuvio non accetta il link diretto: il film viene aggiunto a Da vedere su SIMKL e Nuvio viene aperto. Scegli il profilo collegato a SIMKL; se il film non compare subito, in Nuvio: Impostazioni → Tracking → SIMKL → Sincronizza ora. Il QR apre il titolo su telefono e tablet."
-                        };
-                        ui.label(lumen::body(10.0, note).color(lumen::MUTED));
-                        ui.add_space(6.0);
-                        if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
-                            close = true;
-                        }
-                    },
-                );
-            });
-        if copy {
-            ctx.copy_text(help.link.clone());
-            self.toast("Link Nuvio copiato.");
-        }
-        if open_app {
-            match nuvio::open_app() {
-                Ok(()) => self.toast("Apro Nuvio…"),
-                Err(e) => self.toast(e),
-            }
-        }
-        if add {
-            let started = self.start_simkl_write(&help.movie, simkl::WriteOp::Watchlist);
-            if started && open_after_write {
-                self.pending_nuvio_open = true;
-            }
-        }
-        if close || add {
-            self.nuvio_help = None;
-        }
-    }
-
     fn disconnect_simkl(&mut self) {
         self.simkl_cancel.store(true, Ordering::Relaxed);
         if let Err(e) = simkl::clear_tokens() {
@@ -2768,7 +2566,6 @@ impl App {
                 detail::DetailAction::ClearRating => {
                     self.simkl_write_current(simkl::WriteOp::ClearRating)
                 }
-                detail::DetailAction::OpenNuvio => self.open_in_nuvio(),
             }
         }
     }
@@ -2787,7 +2584,6 @@ impl App {
 
     fn close_detail(&mut self) {
         self.detail = None;
-        self.nuvio_help = None;
         self.summary = None;
         self.detail_loading = false;
         self.summarizing = false;
@@ -4152,7 +3948,7 @@ impl App {
                 ui.label(
                     lumen::body(
                         11.5,
-                        "CineMatch legge e aggiorna visti, lista e voti. Nuvio li tiene allineati mentre guardi.",
+                        "CineMatch legge e aggiorna visti, lista e voti.",
                     )
                     .color(lumen::MUTED),
                 );
@@ -4882,7 +4678,6 @@ impl eframe::App for App {
         self.grid_pager(ctx);
         self.central(ctx);
         self.chat_detail_preview(ctx);
-        self.nuvio_help_window(ctx);
         if self.guide_open {
             let actions = facets::guide_window(ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {
@@ -6056,34 +5851,6 @@ fn window_caption(
         .on_hover_text(tip)
 }
 
-fn qr_texture(ctx: &egui::Context, text: &str) -> Option<egui::TextureHandle> {
-    let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
-    let image = code
-        .render::<image::Luma<u8>>()
-        .min_dimensions(200, 200)
-        .quiet_zone(true)
-        .build();
-    let (width, height) = image.dimensions();
-    let pixels = image
-        .pixels()
-        .map(|p| {
-            if p[0] < 128 {
-                egui::Color32::BLACK
-            } else {
-                egui::Color32::WHITE
-            }
-        })
-        .collect();
-    Some(ctx.load_texture(
-        format!("nuvio-qr-{text}"),
-        egui::ColorImage {
-            size: [width as usize, height as usize],
-            pixels,
-        },
-        egui::TextureOptions::NEAREST,
-    ))
-}
-
 fn ago_label(ts: i64) -> String {
     if ts <= 0 {
         return "mai".into();
@@ -6131,17 +5898,11 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, describe, has_word, looks_like_question, merge_facets, qr_texture,
-        resize_edge, side_panel_widths, Facets,
+        allowed_url, describe, has_word, looks_like_question, merge_facets, resize_edge,
+        side_panel_widths, Facets,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
-
-    #[test]
-    fn il_qr_di_nuvio_si_genera() {
-        let ctx = egui::Context::default();
-        assert!(qr_texture(&ctx, "nuvio://movie/tt0060196").is_some());
-    }
 
     #[test]
     fn la_durata_compare_nei_criteri() {

@@ -14,7 +14,6 @@ pub enum DetailAction {
     RemoveTracking,
     Rate(u8),
     ClearRating,
-    OpenNuvio,
 }
 
 /// Stato SIMKL di un film, calcolato dall'app e passato alla scheda.
@@ -299,13 +298,6 @@ pub fn panel(
                 ui.add_space(6.0);
                 if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
-                }
-            }
-
-            if d.movie.imdb_id.is_some() {
-                ui.add_space(8.0);
-                if lumen::button_sized(ui, "Guarda in Nuvio", false, 168.0).clicked() {
-                    actions.push(DetailAction::OpenNuvio);
                 }
             }
 
