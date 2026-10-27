@@ -1476,7 +1476,7 @@ impl App {
                         }
                         Err(e) => Err(e),
                     }
-                } else if eff.is_empty() {
+                } else if wants_trending(&eff) {
                     match tmdb.trending(page) {
                         Ok(p) => Ok((
                             p.results.into_iter().map(Movie::from).collect(),
@@ -5223,6 +5223,13 @@ pub fn chat_pool(
     })
 }
 
+/// La griglia senza criteri e con l'ordinamento predefinito mostra le
+/// tendenze; qualunque altro ordinamento deve passare da discover, che
+/// accetta `sort_by`. `Sort` non fa parte di `Facets::is_empty`.
+fn wants_trending(f: &Facets) -> bool {
+    f.is_empty() && f.sort == Sort::default()
+}
+
 fn sort_movies(movies: &mut [Movie], sort: Sort) {
     movies.sort_by(|a, b| match sort {
         Sort::Newest => b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)),
@@ -5627,7 +5634,7 @@ fn chat_candidates(
         }
         return Ok((movies, total, format!("Risultati per «{t}»"), true));
     }
-    if eff.is_empty() && eff.sort == Sort::default() {
+    if wants_trending(eff) {
         let p = tmdb.trending(1)?;
         return Ok((
             dedupe(p.results.into_iter().map(Movie::from).collect()),
@@ -6050,10 +6057,18 @@ fn open_url(url: &str) {
 mod tests {
     use super::{
         allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
-        resize_edge, side_panel_widths, Facets, Movie,
+        resize_edge, side_panel_widths, wants_trending, Facets, Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn un_ordinamento_non_predefinito_non_usa_le_tendenze() {
+        let mut f = Facets::default();
+        assert!(wants_trending(&f));
+        f.sort = Sort::Rating;
+        assert!(!wants_trending(&f));
+    }
 
     #[test]
     fn il_filtro_locale_usa_i_generi_in_and() {
