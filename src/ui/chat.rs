@@ -111,6 +111,8 @@ pub struct PersonalCard {
     pub meta: String,
     pub movie_id: u64,
     pub progress: Option<f32>,
+    /// URL completo del poster TMDB, se già risolto.
+    pub poster: Option<String>,
 }
 
 // ------------------------------------------------------------- misure ------
@@ -402,6 +404,7 @@ pub fn home(
                         ui.add_space(4.0);
                         personal_strip(
                             ui,
+                            images,
                             "Riprendi",
                             "DAL TUO SIMKL",
                             resume,
@@ -413,6 +416,7 @@ pub fn home(
                     if !watchlist.is_empty() {
                         personal_strip(
                             ui,
+                            images,
                             "Dalla tua lista",
                             "DA VEDERE SU SIMKL",
                             watchlist,
@@ -429,6 +433,7 @@ pub fn home(
 
 fn personal_strip(
     ui: &mut egui::Ui,
+    images: &ImageStore,
     title: &str,
     kicker: &str,
     cards: &[PersonalCard],
@@ -441,79 +446,105 @@ fn personal_strip(
             ui.label(lumen::mono(9.0, kicker).color(lumen::FAINT));
         });
     });
-    ui.add_space(8.0);
-    let gap = 10.0;
+    ui.add_space(10.0);
+    let gap = 12.0;
     let cols = if width >= 900.0 { 4 } else { 2 };
-    let card_w = (((width - gap * (cols - 1) as f32) / cols as f32).floor()).min(300.0);
+    let card_w = (((width - gap * (cols - 1) as f32) / cols as f32).floor()).min(240.0);
     for row in cards.chunks(cols) {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
             for card in row {
-                personal_card(ui, card_w, card, actions);
+                personal_card(ui, images, card_w, card, actions);
             }
         });
-        ui.add_space(gap);
+        ui.add_space(16.0);
     }
 }
 
 fn personal_card(
     ui: &mut egui::Ui,
+    images: &ImageStore,
     width: f32,
     card: &PersonalCard,
     actions: &mut HomeActions,
 ) {
-    let id = ui
-        .id()
-        .with(("personal-card", card.movie_id, card.title.clone()));
-    let frame = egui::Frame::none()
-        .fill(lumen::SURFACE)
-        .stroke(egui::Stroke::new(1.0_f32, lumen::BORDER))
-        .rounding(Rounding::same(lumen::RADIUS))
-        .inner_margin(egui::Margin::symmetric(10.0, 9.0));
-    let inner = ui.allocate_ui_with_layout(
-        egui::vec2(width, 0.0),
-        egui::Layout::top_down(egui::Align::LEFT),
-        |ui| {
-            ui.set_width(width);
-            frame
-                .show(ui, |ui| {
-                    ui.set_min_height(52.0);
-                    ui.add(
-                        egui::Label::new(lumen::bold(13.0, &card.title))
-                            .truncate(),
-                    );
-                    ui.add_space(3.0);
-                    ui.add(
-                        egui::Label::new(
-                            lumen::mono(8.5, &card.meta).color(lumen::FAINT),
-                        )
-                        .truncate(),
-                    );
-                    if let Some(progress) = card.progress {
-                        ui.add_space(6.0);
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(ui.available_width(), 3.0),
-                            Sense::hover(),
-                        );
-                        ui.painter().rect_filled(rect, Rounding::ZERO, lumen::DEEP);
-                        let filled = egui::Rect::from_min_size(
-                            rect.min,
-                            egui::vec2(rect.width() * progress.clamp(0.0, 1.0), 3.0),
-                        );
-                        ui.painter().rect_filled(filled, Rounding::ZERO, lumen::EMBER);
-                    }
-                })
-                .response
-        },
+    let poster_h = (width * 1.5).round();
+    let (rect, resp) = ui.allocate_exact_size(
+        egui::vec2(width, poster_h + 46.0),
+        Sense::click(),
     );
-    let resp = ui.interact(inner.inner.rect, id, Sense::click());
-    if resp.hovered() {
-        ui.painter().rect_stroke(
-            inner.inner.rect,
-            Rounding::same(lumen::RADIUS),
-            egui::Stroke::new(1.0_f32, lumen::EMBER),
+    let poster = Rect::from_min_size(rect.min, egui::vec2(width, poster_h));
+    let painter = ui.painter();
+    painter.rect_filled(poster, Rounding::ZERO, lumen::SURFACE);
+    if let Some(url) = &card.poster {
+        if let Some(tex) = images.texture(ui.ctx(), url) {
+            painter.image(
+                tex.id(),
+                poster,
+                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            // Il poster può essere un rettangolo diverso da 2:3: riempi i
+            // bordi con il fondo, non con il nero del buffer.
+            painter.rect_stroke(
+                poster,
+                Rounding::ZERO,
+                Stroke::new(1.0_f32, lumen::BORDER),
+            );
+        } else {
+            painter.text(
+                poster.center(),
+                Align2::CENTER_CENTER,
+                "SIMKL",
+                FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+                lumen::FAINT,
+            );
+        }
+    } else {
+        painter.text(
+            poster.center(),
+            Align2::CENTER_CENTER,
+            "SIMKL",
+            FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            lumen::FAINT,
         );
     }
+    if resp.hovered() {
+        painter.rect_stroke(
+            poster,
+            Rounding::ZERO,
+            Stroke::new(1.0_f32, lumen::EMBER),
+        );
+    }
+    if let Some(progress) = card.progress {
+        let track = Rect::from_min_size(
+            egui::pos2(poster.left(), poster.bottom() - 4.0),
+            egui::vec2(poster.width(), 4.0),
+        );
+        painter.rect_filled(track, Rounding::ZERO, lumen::INK);
+        painter.rect_filled(
+            Rect::from_min_size(
+                track.min,
+                egui::vec2(track.width() * progress.clamp(0.0, 1.0), 4.0),
+            ),
+            Rounding::ZERO,
+            lumen::EMBER,
+        );
+    }
+    painter.text(
+        egui::pos2(rect.left(), poster.bottom() + 8.0),
+        Align2::LEFT_TOP,
+        theme::truncate(&card.title, 32),
+        FontId::proportional(13.0),
+        lumen::IVORY,
+    );
+    painter.text(
+        egui::pos2(rect.left(), poster.bottom() + 27.0),
+        Align2::LEFT_TOP,
+        &card.meta,
+        FontId::new(8.5, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
+    );
     if resp.clicked() {
         actions.open_detail = Some(card.movie_id);
     }

@@ -17,7 +17,7 @@ use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::infra::winclock;
 use crate::integrations::simkl;
-use crate::tmdb::client::{describe_credential, Tmdb};
+use crate::tmdb::client::{describe_credential, poster_url, Tmdb};
 use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
@@ -73,6 +73,8 @@ enum Msg {
     SimklSynced(Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>),
     /// Scrittura su SIMKL completata.
     SimklWritten(Result<(simkl::Tokens, simkl::WriteOutcome), String>),
+    /// Poster TMDB risolto per una card SIMKL della home.
+    Poster { id: u64, url: Option<String> },
 }
 
 #[derive(Default)]
@@ -758,6 +760,8 @@ pub struct App {
     /// codice di autorizzazione in corso e stato dell'ultima sincronizzazione.
     simkl_tokens: Option<simkl::Tokens>,
     simkl_store: simkl::Store,
+    /// Poster TMDB delle card SIMKL della home: None = in caricamento.
+    poster_cache: HashMap<u64, Option<String>>,
     simkl_auth: Option<simkl::DeviceCode>,
     simkl_cancel: Arc<AtomicBool>,
     simkl_syncing: bool,
@@ -849,6 +853,7 @@ impl App {
             settings_check: None,
             simkl_tokens,
             simkl_store,
+            poster_cache: HashMap::new(),
             simkl_auth: None,
             simkl_cancel: Arc::new(AtomicBool::new(false)),
             simkl_syncing: false,
@@ -1203,6 +1208,10 @@ impl App {
                             self.simkl_error = Some(e);
                         }
                     }
+                }
+                Msg::Poster { id, url } => {
+                    self.poster_cache.insert(id, url);
+                    self.ctx.request_repaint();
                 }
                 Msg::ChatStream { gen, index, chunk } => {
                     if gen != self.chat_gen {
@@ -2498,6 +2507,44 @@ impl App {
         self.simkl_status = Some("SIMKL scollegato: la copia locale è stata rimossa.".into());
     }
 
+    fn ensure_simkl_posters(&mut self) {
+        let Some(tmdb) = self.tmdb.clone() else {
+            return;
+        };
+        let mut ids: Vec<u64> = self
+            .simkl_store
+            .resume_picks(4)
+            .iter()
+            .map(|p| p.tmdb)
+            .collect();
+        ids.extend(
+            self.simkl_store
+                .watchlist_picks(4)
+                .iter()
+                .map(|m| m.tmdb),
+        );
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            if self.poster_cache.contains_key(&id) {
+                continue;
+            }
+            self.poster_cache.insert(id, None);
+            let tmdb = tmdb.clone();
+            let tx = self.tx.clone();
+            let ctx = self.ctx.clone();
+            std::thread::spawn(move || {
+                let url = tmdb
+                    .details(id)
+                    .ok()
+                    .and_then(|d| d.movie.poster_path)
+                    .map(|p| poster_url(&p, "w342"));
+                let _ = tx.send(Msg::Poster { id, url });
+                ctx.request_repaint();
+            });
+        }
+    }
+
     fn simkl_resume_cards(&self) -> Vec<chat::PersonalCard> {
         self.simkl_store
             .resume_picks(4)
@@ -2516,6 +2563,11 @@ impl App {
                     },
                     movie_id: playback.tmdb,
                     progress: Some((playback.progress / 100.0).clamp(0.0, 1.0)),
+                    poster: self
+                        .poster_cache
+                        .get(&playback.tmdb)
+                        .cloned()
+                        .flatten(),
                 }
             })
             .collect()
@@ -2537,6 +2589,7 @@ impl App {
                 },
                 movie_id: movie.tmdb,
                 progress: None,
+                poster: self.poster_cache.get(&movie.tmdb).cloned().flatten(),
             })
             .collect()
     }
@@ -3771,6 +3824,7 @@ impl App {
     /// pannello fisso sopra la barra di stato; la casa ha il comando in alto.
     fn chat_central(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         self.ensure_fonts_for_results();
+        self.ensure_simkl_posters();
         let now = ctx.input(|i| i.time);
         if self.chat.is_empty() {
             self.refresh_home_suggestions(now);

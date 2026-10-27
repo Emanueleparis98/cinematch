@@ -259,6 +259,21 @@ h1 span { color: var(--ember); }
   color: var(--faint);
 }
 
+.simkl-shelf {
+  margin: 0 auto 56px;
+}
+.simkl-shelf img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--deep);
+}
+.simkl-shelf figcaption {
+  margin-top: 10px;
+  font: 400 9px/1.5 var(--mono);
+  color: var(--faint);
+}
+
 .shot { margin: 0; }
 .shot img {
   width: 100%;
