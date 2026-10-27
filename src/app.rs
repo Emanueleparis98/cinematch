@@ -2513,13 +2513,13 @@ impl App {
         };
         let mut ids: Vec<u64> = self
             .simkl_store
-            .resume_picks(4)
+            .resume_picks(12)
             .iter()
             .map(|p| p.tmdb)
             .collect();
         ids.extend(
             self.simkl_store
-                .watchlist_picks(4)
+                .watchlist_picks(12)
                 .iter()
                 .map(|m| m.tmdb),
         );
@@ -2547,7 +2547,7 @@ impl App {
 
     fn simkl_resume_cards(&self) -> Vec<chat::PersonalCard> {
         self.simkl_store
-            .resume_picks(4)
+            .resume_picks(12)
             .into_iter()
             .map(|playback| {
                 let percent = playback.progress.round() as u32;
@@ -2575,7 +2575,7 @@ impl App {
 
     fn simkl_watchlist_cards(&self) -> Vec<chat::PersonalCard> {
         self.simkl_store
-            .watchlist_picks(4)
+            .watchlist_picks(12)
             .into_iter()
             .map(|movie| chat::PersonalCard {
                 title: if movie.title.is_empty() {

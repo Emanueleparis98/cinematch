@@ -408,7 +408,6 @@ pub fn home(
                             "Riprendi",
                             "DAL TUO SIMKL",
                             resume,
-                            width,
                             &mut actions,
                         );
                         ui.add_space(20.0);
@@ -420,7 +419,6 @@ pub fn home(
                             "Dalla tua lista",
                             "DA VEDERE SU SIMKL",
                             watchlist,
-                            width,
                             &mut actions,
                         );
                     }
@@ -437,28 +435,46 @@ fn personal_strip(
     title: &str,
     kicker: &str,
     cards: &[PersonalCard],
-    width: f32,
     actions: &mut HomeActions,
 ) {
+    let mut scroll_delta = 0.0f32;
     ui.horizontal(|ui| {
         ui.label(lumen::label(title));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if lumen::icon_button(ui, lumen::Icon::ArrowRight, 24.0, "Scorri a destra")
+                .clicked()
+            {
+                scroll_delta = 1.0;
+            }
+            if lumen::icon_button(ui, lumen::Icon::ArrowLeft, 24.0, "Scorri a sinistra")
+                .clicked()
+            {
+                scroll_delta = -1.0;
+            }
+            ui.add_space(6.0);
             ui.label(lumen::mono(9.0, kicker).color(lumen::FAINT));
         });
     });
-    ui.add_space(10.0);
-    let gap = 12.0;
-    let cols = if width >= 900.0 { 4 } else { 2 };
-    let card_w = (((width - gap * (cols - 1) as f32) / cols as f32).floor()).min(240.0);
-    for row in cards.chunks(cols) {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = gap;
-            for card in row {
-                personal_card(ui, images, card_w, card, actions);
+    ui.add_space(8.0);
+    let gap = 10.0;
+    let card_w = 132.0;
+    let page = (card_w + gap) * 5.0;
+    egui::ScrollArea::horizontal()
+        .id_salt(("personal-strip", title))
+        .drag_to_scroll(true)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for card in cards {
+                    personal_card(ui, images, card_w, card, actions);
+                }
+            });
+            if scroll_delta != 0.0 {
+                ui.scroll_with_delta(egui::vec2(scroll_delta * page, 0.0));
             }
         });
-        ui.add_space(16.0);
-    }
+    ui.add_space(14.0);
 }
 
 fn personal_card(
@@ -534,7 +550,7 @@ fn personal_card(
     painter.text(
         egui::pos2(rect.left(), poster.bottom() + 8.0),
         Align2::LEFT_TOP,
-        theme::truncate(&card.title, 32),
+        theme::truncate(&card.title, 22),
         FontId::proportional(13.0),
         lumen::IVORY,
     );
