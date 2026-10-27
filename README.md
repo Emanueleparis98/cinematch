@@ -445,6 +445,10 @@ Authenticode in formato PFX:
 3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
    viene comunque pubblicata e il workflow lascia un avviso nel summary.
 
+Per firmare la 0.5.0 gia pubblicata, dopo aver aggiunto i secret lancia
+Actions -> Release -> Run workflow con version `0.5.0`: la CI ricostruisce e
+sostituisce gli asset della release.
+
 L'updater e disattivato in debug, quando l'exe gira da `target` e quando e
 impostata la variabile `CINEMATCH_NO_UPDATE=1`; `run.ps1` avvia una build di
 sviluppo e non deve mai sostituirla.
