@@ -287,12 +287,16 @@ fn url(base: &str, path: &str, client_id: &str) -> String {
 }
 
 fn urlencode(raw: &str) -> String {
-    raw.chars()
-        .map(|c| match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            _ => format!("%{:02X}", c as u32),
-        })
-        .collect()
+    let mut out = String::new();
+    for byte in raw.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 fn error_text(status: u16, body: &str) -> String {
@@ -705,6 +709,11 @@ pub fn link_to(tracked: &TrackedMovie) -> String {
     )
 }
 
+/// Ricerca SIMKL per i film non ancora tracciati.
+pub fn search_url(title: &str) -> String {
+    format!("https://simkl.com/search/?q={}", urlencode(title))
+}
+
 /// Un film abbastanza completo per una scrittura su SIMKL.
 #[derive(Clone, Debug)]
 pub struct WriteMovie {
@@ -1022,6 +1031,18 @@ mod tests {
         assert_eq!(good.rating, Some(9));
         assert_eq!(good.simkl_id, 123);
         assert!(link_to(good).contains("/movies/123/"));
+    }
+
+    #[test]
+    fn la_ricerca_simkl_codifica_il_titolo() {
+        assert_eq!(
+            search_url("Bad Apples"),
+            "https://simkl.com/search/?q=Bad%20Apples"
+        );
+        assert_eq!(
+            search_url("L'isola degli è"),
+            "https://simkl.com/search/?q=L%27isola%20degli%20%C3%A8"
+        );
     }
 
     #[test]

@@ -2596,15 +2596,16 @@ impl App {
             Some(tracked) => detail::TrackInfo {
                 status: Some(tracked.status.clone()),
                 rating: tracked.rating,
-                url: if tracked.simkl_id > 0 {
-                    Some(simkl::link_to(tracked))
+                url: Some(if tracked.simkl_id > 0 {
+                    simkl::link_to(tracked)
                 } else {
-                    None
-                },
+                    simkl::search_url(&movie.title)
+                }),
                 connected: self.simkl_tokens.is_some(),
                 busy: self.simkl_busy || self.simkl_syncing,
             },
             None => detail::TrackInfo {
+                url: Some(simkl::search_url(&movie.title)),
                 connected: self.simkl_tokens.is_some(),
                 busy: self.simkl_busy || self.simkl_syncing,
                 ..Default::default()
