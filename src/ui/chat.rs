@@ -15,6 +15,10 @@ use super::{fx, lumen, theme};
 const CONTENT_MAX: f32 = 1100.0;
 const RESULT_BREAKPOINT: f32 = 940.0;
 
+/// Limite del messaggio: un incolla lungo non deve diventare una chiamata AI
+/// da migliaia di token.
+pub const MAX_PROMPT_CHARS: usize = 800;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Busy,
@@ -1637,15 +1641,16 @@ fn composer_inner(
             },
         ))
         .rounding(Rounding::same(lumen::RADIUS_SM))
-        .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+        .inner_margin(egui::Margin::symmetric(12.0, 6.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
                 let resp = ui.add_sized(
-                    [text_w, 22.0],
+                    [text_w, 40.0],
                     egui::TextEdit::multiline(draft)
                         .id(edit_id)
                         .frame(false)
+                        .char_limit(MAX_PROMPT_CHARS)
                         .desired_rows(1)
                         .hint_text(hint)
                         .font(egui::TextStyle::Body)

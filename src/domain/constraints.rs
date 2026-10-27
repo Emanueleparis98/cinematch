@@ -49,6 +49,36 @@ pub fn decade_span(tax: &Taxonomy, f: &Facets) -> Option<(u16, u16)> {
     span
 }
 
+/// Vero quando i decenni scelti formano piu' gruppi separati (es. anni '70 e
+/// anni '90). La query TMDB usa un solo intervallo continuo, quindi il vuoto in
+/// mezzo viene incluso: la UI lo dichiara. Con un movimento attivo il periodo
+/// e gia ristretto e il messaggio sarebbe fuorviante.
+pub fn decade_gap(tax: &Taxonomy, f: &Facets) -> bool {
+    if !f.movements.is_empty() {
+        return false;
+    }
+    let mut ranges: Vec<(u16, u16)> = f
+        .decades
+        .iter()
+        .filter_map(|id| tax.decade(id).map(|d| (d.from, d.to)))
+        .collect();
+    if ranges.len() < 2 {
+        return false;
+    }
+    ranges.sort();
+    let mut groups = 0usize;
+    let mut end = 0u16;
+    for (a, b) in ranges {
+        if groups == 0 || a > end.saturating_add(1) {
+            groups += 1;
+            end = b;
+        } else {
+            end = end.max(b);
+        }
+    }
+    groups > 1
+}
+
 /// Intervallo anni effettivo della ricerca.
 /// Ok(None) = nessun vincolo temporale. Err = vincolo impossibile.
 pub fn year_range(tax: &Taxonomy, f: &Facets) -> Result<Option<(u16, u16)>, String> {
@@ -483,10 +513,20 @@ pub fn to_discover(
         }
     }
 
+    // I generi esclusi dall'utente («senza commedia») e quelli vietati dai
+    // movimenti finiscono nella stessa lista: prima i secondi venivano passati
+    // a TMDB da soli, quindi l'esclusione esplicita non arrivava al server.
+    let mut without = f.without_genres.clone();
+    for g in forbidden_genres(tax, f) {
+        if !without.contains(&g) {
+            without.push(g);
+        }
+    }
+
     Ok(DiscoverQuery {
         genres,
         genres_or,
-        without_genres: forbidden_genres(tax, f),
+        without_genres: without,
         keywords,
         keywords_or,
         countries: effective_countries(tax, f),

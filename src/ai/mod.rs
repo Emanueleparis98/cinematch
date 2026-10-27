@@ -38,6 +38,21 @@ impl Read for CancelReader<'_> {
     }
 }
 
+/// Corpo della risposta con annullamento, anche quando viene letto a righe
+/// (streaming): senza questo, Stop aspetta la prossima riga dal server.
+fn body_reader<'a>(
+    resp: reqwest::blocking::Response,
+    cancel: Option<&'a AtomicBool>,
+) -> Box<dyn Read + 'a> {
+    match cancel {
+        Some(cancel) => Box::new(CancelReader {
+            inner: resp,
+            cancel,
+        }),
+        None => Box::new(resp),
+    }
+}
+
 fn read_text(
     resp: reqwest::blocking::Response,
     cancel: Option<&AtomicBool>,
@@ -1411,20 +1426,6 @@ pub fn list_models(kind: LlmKind, base_url: &str, api_key: &str) -> Result<Vec<M
     Ok(out)
 }
 
-/// Fra i modelli scoperti sceglie quello che costa meno: buon predefinito per
-/// un compito semplice come estrarre facce da una frase.
-pub fn cheapest_models(models: &[ModelInfo]) -> Option<ModelInfo> {
-    models
-        .iter()
-        .filter(|m| m.multiplier.is_some())
-        .min_by(|a, b| {
-            a.multiplier
-                .partial_cmp(&b.multiplier)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .cloned()
-}
-
 /// Aggiunto al prompt d'interpretazione quando si conversa in chat: il
 /// messaggio puo essere un seguito, quindi lo stato dei filtri va restituito
 /// completo (non solo le differenze).
@@ -2065,7 +2066,8 @@ impl LlmProvider {
                 let mut full = String::new();
                 let mut plain = String::new();
                 let mut saw_sse = false;
-                for line in std::io::BufReader::new(resp).lines() {
+                let reader = body_reader(resp, cancel);
+                for line in std::io::BufReader::new(reader).lines() {
                     if cancelled(cancel) {
                         return Err(CANCELLED.into());
                     }
@@ -2135,7 +2137,8 @@ impl LlmProvider {
                     ));
                 }
                 let mut full = String::new();
-                for line in std::io::BufReader::new(resp).lines() {
+                let reader = body_reader(resp, cancel);
+                for line in std::io::BufReader::new(reader).lines() {
                     if cancelled(cancel) {
                         return Err(CANCELLED.into());
                     }

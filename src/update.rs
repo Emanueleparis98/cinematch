@@ -82,8 +82,15 @@ pub fn download_installer(
     manifest: &Manifest,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf, String> {
-    let dir = updates_dir()?;
-    std::fs::create_dir_all(&dir)
+    download_installer_to(&updates_dir()?, manifest, progress)
+}
+
+fn download_installer_to(
+    dir: &Path,
+    manifest: &Manifest,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir)
         .map_err(|e| format!("Impossibile creare la cartella aggiornamenti: {e}"))?;
     let name = format!("CineMatch-Setup-{}.exe", manifest.version);
     let part = dir.join(format!("{name}.part"));
@@ -251,6 +258,73 @@ fn numeric_parts(version: &str) -> Option<Vec<u64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    fn serve(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("porta libera");
+        let addr = listener.local_addr().expect("indirizzo");
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("richiesta");
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&body);
+        });
+        (format!("http://{addr}/setup.exe"), handle)
+    }
+
+    fn sha_hex(body: &[u8]) -> String {
+        let digest = Sha256::digest(body);
+        digest.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn manifest(version: &str, url: String, body: &[u8]) -> Manifest {
+        Manifest {
+            version: version.into(),
+            notes: String::new(),
+            notes_url: String::new(),
+            installer: Installer {
+                url,
+                sha256: sha_hex(body),
+                size: body.len() as u64,
+            },
+        }
+    }
+
+    #[test]
+    fn scarica_e_verifica_l_hash() {
+        let body = b"finto installer".to_vec();
+        let (url, server) = serve(body.clone());
+        let dir = std::env::temp_dir().join(format!("cinematch_upd_ok_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let m = manifest("0.0.1", url, &body);
+        let path = download_installer_to(&dir, &m, &mut |_, _| {}).expect("download");
+        server.join().expect("server");
+        assert_eq!(std::fs::read(&path).expect("file"), body);
+        assert!(!dir.join("CineMatch-Setup-0.0.1.exe.part").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn un_hash_sbagliato_non_produce_un_installer() {
+        let body = b"finto installer".to_vec();
+        let (url, server) = serve(body.clone());
+        let dir = std::env::temp_dir().join(format!("cinematch_upd_bad_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut m = manifest("0.0.2", url, &body);
+        m.installer.sha256 = "0".repeat(64);
+        let err = download_installer_to(&dir, &m, &mut |_, _| {}).unwrap_err();
+        server.join().expect("server");
+        assert!(err.contains("integrità"));
+        assert!(!dir.join("CineMatch-Setup-0.0.2.exe").exists());
+        assert!(!dir.join("CineMatch-Setup-0.0.2.exe.part").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn confronta_versioni_numeriche() {

@@ -2,6 +2,23 @@
 
 use cinematch::{app, infra, ui};
 
+// Glow (OpenGL) e il default: su Windows impegna circa meta memoria del
+// backend wgpu/DX12 (~190 MB contro ~420 MB a riposo). Il backend wgpu entra
+// solo in una build con `--features wgpu`; in quella build `CINEMATCH_RENDERER=wgpu` lo sceglie.
+fn renderer() -> eframe::Renderer {
+    #[cfg(feature = "wgpu")]
+    {
+        match std::env::var("CINEMATCH_RENDERER").unwrap_or_default().as_str() {
+            "wgpu" => eframe::Renderer::Wgpu,
+            _ => eframe::Renderer::Glow,
+        }
+    }
+    #[cfg(not(feature = "wgpu"))]
+    {
+        eframe::Renderer::Glow
+    }
+}
+
 fn app_icon() -> Option<egui::IconData> {
     let image = image::load_from_memory(include_bytes!("../assets/cinematch.png")).ok()?;
     let image = image.to_rgba8();
@@ -15,13 +32,7 @@ fn app_icon() -> Option<egui::IconData> {
 
 fn main() -> eframe::Result<()> {
     let cfg = infra::config::Config::load();
-    // Renderer: glow (OpenGL) e il default perche su Windows impegna circa meta
-    // memoria del backend wgpu/DX12 (misurato: ~190 MB contro ~420 MB a riposo).
-    // Per usare wgpu: CINEMATCH_RENDERER=wgpu
-    let renderer = match std::env::var("CINEMATCH_RENDERER").unwrap_or_default().as_str() {
-        "wgpu" => eframe::Renderer::Wgpu,
-        _ => eframe::Renderer::Glow,
-    };
+    let renderer = renderer();
     let mut viewport = egui::ViewportBuilder::default()
         // A 150% su 1920x1200 l'area di lavoro e ~1280x752 logici:
         // 660 resta sopra la taskbar. La posizione fissa evita che la

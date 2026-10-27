@@ -29,22 +29,6 @@ pub const ROUND_CARD: f32 = 4.0;
 
 pub use super::lumen::{alpha, mix};
 
-pub fn pulse(now: f64, speed: f64) -> f32 {
-    (0.5 + 0.5 * (now * speed).sin()) as f32
-}
-
-pub fn apply(ctx: &egui::Context) {
-    lumen::apply(ctx);
-}
-
-pub fn card_frame() -> egui::Frame {
-    egui::Frame::none()
-        .fill(CARD)
-        .stroke(Stroke::new(1.0_f32, BORDER))
-        .rounding(Rounding::same(ROUND_CARD))
-        .inner_margin(egui::Margin::same(14.0))
-}
-
 pub fn chip(
     ui: &mut egui::Ui,
     text: &str,

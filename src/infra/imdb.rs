@@ -63,11 +63,44 @@ pub fn data_size_mb() -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Quante voci contiene l'indice (righe / BLOCK), utile per mostrare qualcosa.
+/// Quante voci contiene l'indice, contando anche l'ultimo blocco parziale.
 pub fn entries() -> usize {
-    std::fs::metadata(index_path())
-        .map(|m| (m.len().saturating_sub(MAGIC.len() as u64) / ENTRY as u64) as usize * BLOCK)
-        .unwrap_or(0)
+    entries_from(&index_path(), &data_path())
+}
+
+fn entries_from(index: &Path, data: &Path) -> usize {
+    let raw = std::fs::read(index).unwrap_or_default();
+    if raw.len() <= MAGIC.len() || &raw[..MAGIC.len()] != MAGIC {
+        return 0;
+    }
+    let body = &raw[MAGIC.len()..];
+    if body.len() % ENTRY != 0 {
+        return 0;
+    }
+    let blocks = body.len() / ENTRY;
+    if blocks == 0 {
+        return 0;
+    }
+    let last = &body[(blocks - 1) * ENTRY..];
+    let offset = u64::from_le_bytes(last[0..8].try_into().unwrap_or([0; 8]));
+    let rows = std::fs::File::open(data)
+        .ok()
+        .and_then(|file| {
+            let mut reader = BufReader::new(file);
+            reader.seek(SeekFrom::Start(offset)).ok()?;
+            let mut line = String::new();
+            let mut n = 0usize;
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).ok()? == 0 || n == BLOCK {
+                    break;
+                }
+                n += 1;
+            }
+            Some(n)
+        })
+        .unwrap_or(0);
+    (blocks - 1) * BLOCK + rows
 }
 
 /// Scarica e scompatta i voti IMDb, poi costruisce l'indice.
@@ -316,6 +349,7 @@ mod tests {
         )
         .expect("dati di prova");
         build_index_from(&data, &idx).expect("indice di prova");
+        assert_eq!(entries_from(&idx, &data), 2, "conta anche il blocco parziale");
         let raw = std::fs::read(&idx).expect("lettura indice");
         assert_eq!(&raw[..MAGIC.len()], MAGIC);
         let offset = u64::from_le_bytes(raw[MAGIC.len()..MAGIC.len() + 8].try_into().unwrap());

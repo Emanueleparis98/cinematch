@@ -28,7 +28,13 @@ fn cache_dir() -> PathBuf {
 
 fn from_disk(uri: &str) -> Option<Vec<u8>> {
     let path = cache_dir().join(format!("{:016x}.img", hash(uri)));
-    std::fs::read(path).ok()
+    let bytes = std::fs::read(&path).ok()?;
+    // La potatura ordina per mtime: una lettura conta come uso, altrimenti
+    // cancella i poster visti spesso ma scaricati tanto tempo fa.
+    if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&path) {
+        let _ = file.set_modified(std::time::SystemTime::now());
+    }
+    Some(bytes)
 }
 
 fn to_disk(uri: &str, bytes: &[u8]) {

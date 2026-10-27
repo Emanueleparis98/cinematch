@@ -51,12 +51,6 @@ pub struct Curation {
 
 // ------------------------------------------------------- scelta deterministica
 
-/// Punteggio del motore quando l'AI non c'e: voto pesato dai voti, cosi un
-/// 8.5 con 200 voti non batte un 7.9 con 20.000.
-pub fn score(c: &Candidate) -> f64 {
-    c.rating as f64 * (1.0 + c.votes as f64).ln()
-}
-
 fn understood_of(req: &Request) -> String {
     let u = req.understood.trim();
     if u.is_empty() {

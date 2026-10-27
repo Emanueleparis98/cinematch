@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CineMatch — il film giusto, senza perdere la serata</title>
-  <meta name="description" content="CineMatch trasforma una richiesta libera in film reali da TMDB, con il perché e un consiglio. Oppure esplora il catalogo con i filtri. App per Windows 10/11, installer per-utente.">
+  <meta name="description" content="CineMatch trasforma una richiesta libera in film reali da TMDB, con il perché e un consiglio. Oppure esplora il catalogo con i filtri. App per Windows 10/11 con tracciamento SIMKL, installer per-utente.">
   <meta name="theme-color" content="#08090c">
   <link rel="canonical" href="https://emanueleparis98.github.io/cinematch/">
   <meta property="og:type" content="website">
@@ -12,14 +12,14 @@
   <meta property="og:site_name" content="CineMatch">
   <meta property="og:url" content="https://emanueleparis98.github.io/cinematch/">
   <meta property="og:title" content="CineMatch — il film giusto, senza perdere la serata">
-  <meta property="og:description" content="Scrivi cosa vuoi vedere: fino a 5 film reali da TMDB, con il perché. Oppure esplora il catalogo con i filtri.">
+  <meta property="og:description" content="Scrivi cosa vuoi vedere: fino a 5 film reali da TMDB, con il perché. Oppure esplora il catalogo con i filtri. Con SIMKL per visti, lista e voti.">
   <meta property="og:image" content="https://emanueleparis98.github.io/cinematch/assets/app-chat.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="675">
   <meta property="og:image:alt" content="La home di CineMatch con le quattro piste">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="CineMatch — il film giusto, senza perdere la serata">
-  <meta name="twitter:description" content="Scrivi cosa vuoi vedere: fino a 5 film reali da TMDB, con il perché. Oppure esplora il catalogo con i filtri.">
+  <meta name="twitter:description" content="Scrivi cosa vuoi vedere: fino a 5 film reali da TMDB, con il perché. Oppure esplora il catalogo con i filtri. Con SIMKL per visti, lista e voti.">
   <meta name="twitter:image" content="https://emanueleparis98.github.io/cinematch/assets/app-chat.png">
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="assets/cinematch.png">
@@ -36,7 +36,7 @@
       "operatingSystem": "Windows 10, Windows 11",
       "url": "https://emanueleparis98.github.io/cinematch/",
       "downloadUrl": "https://github.com/Emanueleparis98/cinematch/releases/latest",
-      "description": "App Windows per trasformare una richiesta libera in film reali da TMDB, oppure per esplorare il cinema con i filtri."
+      "description": "App Windows per trasformare una richiesta libera in film reali da TMDB, oppure per esplorare il cinema con i filtri. Con SIMKL per visti, lista e voti."
     }
   </script>
 </head>
@@ -52,6 +52,7 @@
       <nav class="nav-links" aria-label="Navigazione principale">
         <a href="#come-si-usa">Come si usa</a>
         <a href="#come-funziona">Come funziona</a>
+        <a href="#simkl">SIMKL</a>
         <a href="https://github.com/Emanueleparis98/cinematch" rel="noopener">GitHub ↗</a>
       </nav>
       <a class="btn btn-small" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
@@ -65,14 +66,14 @@
       <div class="hero-copy">
         <p class="kicker"><span class="dot"></span> CINEMATCH · WINDOWS 10/11</p>
         <h1>Il film giusto,<br><span>senza perdere<br>la serata.</span></h1>
-        <p class="lede">Scrivi cosa vuoi vedere. CineMatch interpreta la richiesta, cerca su TMDB e ti mostra fino a cinque film reali con il perché. Oppure esplora il catalogo con i filtri.</p>
+        <p class="lede">Scrivi cosa vuoi vedere. CineMatch interpreta la richiesta, cerca su TMDB e ti mostra fino a cinque film reali con il perché. Oppure esplora il catalogo con i filtri. Collega SIMKL e ritrovi visti, lista e voti.</p>
         <div class="actions">
           <a class="btn btn-primary" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
             Scarica per Windows
           </a>
           <a class="ghost" href="https://github.com/Emanueleparis98/cinematch" rel="noopener">Vedi su GitHub ↗</a>
         </div>
-        <p class="fineprint">Installer per-utente · <span data-size>6,3 MB</span> · <span data-version>v0.4.9</span></p>
+        <p class="fineprint">Installer per-utente · <span data-size>~6 MB</span> · <span data-version>v0.5.0</span></p>
       </div>
       <figure class="shot">
         <img src="assets/app-chat.png" width="1200" height="675" alt="CineMatch: la home con le quattro piste, hero, composer e poster">
@@ -113,10 +114,40 @@
             <p>Chiavi, configurazione e cache restano in locale. L'aggiornamento viene verificato con SHA-256.</p>
           </li>
           <li>
-            <span class="label">SIMKL</span>
-            <p>Collega SIMKL per visti, lista e voti. La home mostra Riprendi e Dalla tua lista.</p>
+            <span class="label">IMDB</span>
+            <p>I voti IMDb arrivano dai dati pubblici, senza chiave: nella scheda stanno accanto al voto TMDB.</p>
           </li>
         </ul>
+      </div>
+    </section>
+
+    <section class="info wrap" id="simkl" aria-label="SIMKL">
+      <div class="info-col">
+        <p class="kicker"><span class="dot"></span> SIMKL</p>
+        <h2>Quello che guardi, già segnato.</h2>
+        <p class="lede">Collega l'account SIMKL e ritrovi visti, lista e voti dentro CineMatch. La scheda film diventa il punto unico: segna, aggiungi, vota, riprendi.</p>
+        <p class="fineprint">Token nel Windows Credential Manager · sincronizzazione incrementale · nessun polling.</p>
+      </div>
+      <div class="info-col">
+        <ul class="facts">
+          <li>
+            <span class="label">VISTO E DA VEDERE</span>
+            <p>Segna un film come visto o mettilo in “Da vedere” dalla scheda. Lo stato arriva da SIMKL e resta allineato.</p>
+          </li>
+          <li>
+            <span class="label">VOTO 1–10</span>
+            <p>La stessa ghiera della scheda scrive il voto su SIMKL. “Rimuovi” cancella stato e voto, come da API.</p>
+          </li>
+          <li>
+            <span class="label">RIPRENDI</span>
+            <p>Se lasci un film a metà in un'altra app, la home mostra la percentuale e il punto da cui ripartire.</p>
+          </li>
+          <li>
+            <span class="label">DALLA TUA LISTA</span>
+            <p>I film “Da vedere” compaiono sotto la chat: un clic e apri la scheda.</p>
+          </li>
+        </ul>
+        <p class="fineprint">Novità 0.5.0: chiavi API nel Credential Manager, configurazione con backup, filtri più coerenti e composer della chat sempre pronto.</p>
       </div>
     </section>
 
@@ -133,7 +164,7 @@
 
   <footer class="site-footer wrap">
     <div class="foot-row">
-      <span>CineMatch <span data-version>v0.4.9</span></span>
+      <span>CineMatch <span data-version>v0.5.0</span></span>
       <span><a href="https://github.com/Emanueleparis98/cinematch" rel="noopener">GitHub</a> · <a href="https://www.themoviedb.org/" rel="noopener">TMDB</a></span>
     </div>
     <p class="tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>

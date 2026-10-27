@@ -435,24 +435,6 @@ impl Tmdb {
         Ok(res)
     }
 
-    /// Ricerca per titolo vincolata all'anno di uscita: serve ad agganciare i
-    /// titoli delle filmografie (spesso in inglese) alle schede TMDB.
-    pub fn search_year(&self, query: &str, year: u16, page: u32) -> Result<PagedMovies, String> {
-        let p = vec![
-            ("query".to_string(), query.to_string()),
-            ("year".to_string(), year.to_string()),
-            ("include_adult".into(), "false".into()),
-            ("page".into(), page.to_string()),
-        ];
-        let key = Self::cache_key("/search/movie", &p);
-        if let Some(hit) = self.list_cached(&key) {
-            return Ok(hit);
-        }
-        let res: PagedMovies = self.get("/search/movie", &p)?;
-        self.list_store(key, &res);
-        Ok(res)
-    }
-
     /// Cerca una persona (regista o attore) per nome.
     pub fn search_person(&self, query: &str) -> Result<Vec<Person>, String> {
         let name = query.trim().to_lowercase();

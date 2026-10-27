@@ -1,14 +1,20 @@
 [package]
 name = "cinematch"
-version = "0.4.9"
+version = "0.5.0"
 edition = "2021"
 description = "CineMatch - esplorazione cinematografica a vincoli con supporto AI"
 
 [build-dependencies]
 winres = "0.1"
 
+[features]
+default = []
+# Renderer wgpu/DX12 opzionale: `cargo build --release --features wgpu`.
+# La build normale usa glow (OpenGL), piu leggera in memoria.
+wgpu = ["eframe/wgpu"]
+
 [dependencies]
-eframe = { version = "0.29", features = ["wgpu"] }
+eframe = { version = "0.29" }
 egui = "0.29"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 reqwest = { version = "0.12", features = ["blocking", "json", "gzip"] }

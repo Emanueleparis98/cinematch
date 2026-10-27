@@ -212,6 +212,33 @@ fn le_parole_chiave_tematiche_restano_strette_vicino_a_una_corrente() {
 }
 
 #[test]
+fn due_decenni_non_contigui_vengono_dichiarati() {
+    let tax = Taxonomy::load();
+    assert!(constraints::decade_gap(
+        &tax,
+        &facets(&["1970s", "1990s"], &[], &[])
+    ));
+    assert!(!constraints::decade_gap(
+        &tax,
+        &facets(&["1970s", "1980s"], &[], &[])
+    ));
+}
+
+#[test]
+fn un_genere_escluso_dall_utente_arriva_a_tmdb() {
+    let tax = Taxonomy::load();
+    let f = Facets {
+        without_genres: vec![35],
+        ..Default::default()
+    };
+    let q = to_discover(&tax, &f, &[], 1).unwrap();
+    assert!(
+        q.without_genres.contains(&35),
+        "«senza commedia» deve finire in without_genres"
+    );
+}
+
+#[test]
 fn voto_minimo_massimo_e_voti_arrivano_alla_query() {
     let tax = Taxonomy::load();
     let f = Facets {

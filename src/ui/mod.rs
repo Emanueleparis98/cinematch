@@ -6,5 +6,4 @@ pub mod fx;
 pub mod grid;
 pub mod images;
 pub mod lumen;
-pub mod style_lab;
 pub mod theme;

@@ -22,7 +22,9 @@ use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
 use crate::ui::images::ImageStore;
-use crate::ui::{chat, detail, facets, fx, grid, lumen, style_lab, theme};
+use crate::ui::{chat, detail, facets, fx, grid, lumen, theme};
+
+const MAX_QUERY_CHARS: usize = 300;
 
 struct Results {
     facets: Facets,
@@ -750,10 +752,6 @@ pub struct App {
     /// Widget che deve ricevere il fuoco al prossimo frame (composer o ricerca).
     focus: Option<ViewMode>,
     show_settings: bool,
-    /// Style lab LUMEN: avviata con CINEMATCH_STYLE_LAB=1.
-    style_lab: bool,
-    lab: style_lab::LabState,
-    lab_booted: bool,
     settings: SettingsDraft,
     settings_check: Option<String>,
     /// Collegamento SIMKL: token (nel Credential Manager), libreria locale,
@@ -847,9 +845,6 @@ impl App {
             dirty: None,
             focus: None,
             show_settings: false,
-            style_lab: std::env::var_os("CINEMATCH_STYLE_LAB").is_some(),
-            lab: style_lab::LabState::default(),
-            lab_booted: false,
             settings,
             settings_check: None,
             simkl_tokens,
@@ -921,6 +916,7 @@ impl App {
                         });
                         let hidden = before - p.movies.len();
                         if hidden > 0 {
+                            p.total = p.total.saturating_sub(hidden as u32);
                             p.info
                                 .push(format!("{hidden} film già visti nascosti."));
                         }
@@ -947,6 +943,9 @@ impl App {
                     } else {
                         self.total = p.total;
                         self.total_pages = p.total_pages;
+                        if self.total_pages <= 1 {
+                            self.page = 1;
+                        }
                         self.movies = p.movies;
                         self.ensure_fonts_for_results();
                         self.apply_track_flags();
@@ -1158,6 +1157,10 @@ impl App {
                             if e.contains("ricollega") || e.contains("rifiutato") {
                                 self.simkl_tokens = None;
                                 let _ = simkl::clear_tokens();
+                            } else {
+                                // Il refresh puo' aver salvato token nuovi prima
+                                // che una richiesta successiva fallisse.
+                                self.reload_simkl_tokens();
                             }
                             self.simkl_error = Some(e);
                         }
@@ -1194,6 +1197,8 @@ impl App {
                             if e.contains("ricollega") || e.contains("rifiutato") {
                                 self.simkl_tokens = None;
                                 let _ = simkl::clear_tokens();
+                            } else {
+                                self.reload_simkl_tokens();
                             }
                             self.simkl_error = Some(e);
                         }
@@ -1224,6 +1229,11 @@ impl App {
                         continue;
                     }
                     self.chat_busy = false;
+                    // Dopo la risposta il campo torna pronto: l'utente puo'
+                    // scrivere subito senza doverlo cliccare.
+                    if self.mode == ViewMode::Chat && !self.show_settings && !self.guide_open {
+                        self.focus = Some(ViewMode::Chat);
+                    }
                     let mut p = *payload;
                     if self.cfg.simkl.hide_watched {
                         let before = p.cards.len();
@@ -1298,10 +1308,6 @@ impl App {
     /// Se tra i risultati ci sono titoli in scritture non latine (giapponese,
     /// coreano), carica i font di sistema che le coprono: una volta sola.
     fn ensure_fonts_for_results(&mut self) {
-        // La style lab ha i suoi font: non ricaricare i font di sistema.
-        if self.style_lab {
-            return;
-        }
         let mut texts: Vec<&str> = self
             .movies
             .iter()
@@ -1330,7 +1336,12 @@ impl App {
         self.loading = true;
         self.grid_reset_scroll = true;
 
-        let text = self.grid_query.trim().to_string();
+        let text = self
+            .grid_query
+            .trim()
+            .chars()
+            .take(MAX_QUERY_CHARS)
+            .collect::<String>();
         let base = self.facets.clone();
         let known = self.keyword_map.clone();
         let cached = self.ai_cache.clone();
@@ -1427,10 +1438,16 @@ impl App {
                         Err(e) => Err(e),
                     }
                 } else if let Some(t) = title {
-                    match tmdb.search(&t, page) {
+                    // Con filtri attivi la ricerca per titolo non ha pagine
+                    // utili: TMDB ignora i filtri e ogni pagina andrebbe
+                    // filtrata localmente. Si usa la prima e si dichiara il
+                    // conteggio reale.
+                    let search_page = if eff.is_empty() { page } else { 1 };
+                    match tmdb.search(&t, search_page) {
                         Ok(p) => {
                             let raw = p.results.into_iter().map(Movie::from).collect::<Vec<_>>();
                             let filtered = filter_movies(raw.clone(), &tax, &eff);
+                            let limits = local_filter_limits(&tax, &eff);
                             let mut note = format!("Risultati per «{t}»");
                             if !eff.is_empty() {
                                 note.push_str(&format!(
@@ -1438,13 +1455,24 @@ impl App {
                                     filtered.len(),
                                     raw.len()
                                 ));
+                                if !limits.is_empty() {
+                                    note.push_str(&format!(
+                                        " · limiti: {}",
+                                        limits.join(", ")
+                                    ));
+                                }
                                 if filtered.is_empty() {
                                     payload.ai_notes.push(
                                         "La ricerca per titolo non supporta i filtri lato server: nessun risultato compatibile nella prima pagina.".into(),
                                     );
                                 }
                             }
-                            Ok((filtered, p.total_results, p.total_pages, note))
+                            let (total, pages) = if eff.is_empty() {
+                                (p.total_results, p.total_pages)
+                            } else {
+                                (filtered.len() as u32, 1)
+                            };
+                            Ok((filtered, total, pages, note))
                         }
                         Err(e) => Err(e),
                     }
@@ -1645,6 +1673,15 @@ impl App {
             self.toast("Scrivi cosa vuoi vedere: anche in modo libero.");
             return;
         }
+        let text = if text.chars().count() > chat::MAX_PROMPT_CHARS {
+            self.toast(format!(
+                "Messaggio accorciato a {} caratteri.",
+                chat::MAX_PROMPT_CHARS
+            ));
+            text.chars().take(chat::MAX_PROMPT_CHARS).collect()
+        } else {
+            text
+        };
         self.chat_draft.clear();
         self.chat_jump = true;
         self.suggestion_hovered = false;
@@ -1805,7 +1842,7 @@ impl App {
             self.ai_cache = Some((user.clone(), intent));
         }
         self.prune = constraints::pruning(&self.tax, &self.facets);
-        self.grid_query = user;
+        self.grid_query = user.chars().take(MAX_QUERY_CHARS).collect();
         self.page = 1;
         self.switch_mode(ViewMode::Griglia);
         self.launch_search(true);
@@ -2442,10 +2479,17 @@ impl App {
         self.start_simkl_write(&d.movie, op);
     }
 
+    fn reload_simkl_tokens(&mut self) {
+        if let Ok(Some(tokens)) = simkl::load_tokens() {
+            self.simkl_tokens = Some(tokens);
+        }
+    }
+
     fn disconnect_simkl(&mut self) {
         self.simkl_cancel.store(true, Ordering::Relaxed);
         if let Err(e) = simkl::clear_tokens() {
             self.simkl_error = Some(e);
+            return;
         }
         self.simkl_tokens = None;
         self.simkl_auth = None;
@@ -3328,6 +3372,7 @@ impl App {
                                         egui::TextEdit::singleline(&mut self.grid_query)
                                             .id(field_id)
                                             .frame(false)
+                                            .char_limit(MAX_QUERY_CHARS)
                                             .hint_text(hint)
                                             .font(egui::TextStyle::Body),
                                     )
@@ -3806,7 +3851,9 @@ impl App {
         let width = (avail - pad * 2.0).min(1100.0);
         let want_focus = self.focus == Some(ViewMode::Chat);
         let mut send = false;
-        egui::TopBottomPanel::bottom("chat-composer")
+        // ID diverso dal TextEdit "chat-composer": se coincidono, lo stato del
+        // pannello sovrascrive il fuoco del campo e non si riesce piu a scrivere.
+        egui::TopBottomPanel::bottom("chat-composer-panel")
             .exact_height(64.0)
             .frame(egui::Frame::none().fill(lumen::INK))
             .show(ctx, |ui| {
@@ -4696,26 +4743,6 @@ impl eframe::App for App {
         }
         self.tick();
         window_resize_edges(ctx);
-        if self.style_lab {
-            if !self.lab_booted {
-                self.lab_booted = true;
-                if self.tmdb.is_some() {
-                    self.load_trending();
-                }
-            }
-            let close = style_lab::show(
-                ctx,
-                &self.images,
-                &self.movies,
-                &self.suggestions,
-                &self.tax,
-                &mut self.lab,
-            );
-            if close {
-                ctx.send_viewport_cmd(egui::viewport::ViewportCommand::Close);
-            }
-            return;
-        }
         let now = ctx.input(|i| i.time);
         fx::background(ctx, now);
         self.shortcuts(ctx);
@@ -4891,12 +4918,34 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
     if f.is_empty() {
         return movies;
     }
-    let year = constraints::year_range(tax, f).ok().flatten();
-    let langs = constraints::effective_countries(tax, f)
+    // Usa la stessa traduzione della query server: generi, anno e paesi non
+    // devono cambiare significato tra griglia e ricerca per titolo.
+    let query = constraints::to_discover(tax, f, &[], 1).ok();
+    let year = match &query {
+        Some(q) => q.year,
+        None => constraints::year_range(tax, f).ok().flatten(),
+    };
+    let genres: &[u32] = query
+        .as_ref()
+        .map(|q| q.genres.as_slice())
+        .unwrap_or(f.genres.as_slice());
+    let genres_or = query.as_ref().map(|q| q.genres_or).unwrap_or(false);
+    let without: &[u32] = query
+        .as_ref()
+        .map(|q| q.without_genres.as_slice())
+        .unwrap_or(f.without_genres.as_slice());
+    let countries = query
+        .as_ref()
+        .map(|q| q.countries.clone())
+        .unwrap_or_else(|| constraints::effective_countries(tax, f));
+    let langs = countries
         .iter()
         .filter_map(|c| constraints::country_language(c))
         .collect::<Vec<&'static str>>();
-    let forbidden = constraints::forbidden_genres(tax, f);
+    let min_rating = query.as_ref().and_then(|q| q.min_rating).or(f.min_rating);
+    let max_rating = query.as_ref().and_then(|q| q.max_rating).or(f.max_rating);
+    let min_votes = query.as_ref().and_then(|q| q.min_votes).or(f.min_votes);
+
     movies
         .into_iter()
         .filter(|m| {
@@ -4906,30 +4955,36 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
                     _ => return false,
                 }
             }
-            if !f.genres.is_empty() && !f.genres.iter().any(|g| m.genre_ids.contains(g)) {
+            if !genres.is_empty() {
+                let ok = if genres_or {
+                    genres.iter().any(|g| m.genre_ids.contains(g))
+                } else {
+                    genres.iter().all(|g| m.genre_ids.contains(g))
+                };
+                if !ok {
+                    return false;
+                }
+            }
+            if m.genre_ids.iter().any(|g| without.contains(g)) {
                 return false;
             }
-            if m.genre_ids.iter().any(|g| f.without_genres.contains(g)) {
-                return false;
-            }
-            if m.genre_ids.iter().any(|g| forbidden.contains(g)) {
-                return false;
-            }
+            // Il paese non e un campo della ricerca per titolo: la lingua
+            // originale e solo una stima. La UI lo dichiara.
             if !langs.is_empty() && !langs.contains(&m.lang.as_str()) {
                 return false;
             }
-            if let Some(r) = f.min_rating {
+            if let Some(r) = min_rating {
                 if m.rating < r {
                     return false;
                 }
             }
             // Un voto 0 significa «nessun voto»: non e un giudizio basso.
-            if let Some(r) = f.max_rating {
+            if let Some(r) = max_rating {
                 if m.rating > 0.0 && m.rating > r {
                     return false;
                 }
             }
-            if let Some(v) = f.min_votes {
+            if let Some(v) = min_votes {
                 if m.votes < v {
                     return false;
                 }
@@ -4937,6 +4992,27 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
             true
         })
         .collect()
+}
+
+/// Criteri che la ricerca per titolo applica solo in parte o non applica.
+fn local_filter_limits(tax: &Taxonomy, f: &Facets) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if f.runtime.is_some() {
+        out.push("durata");
+    }
+    if !f.moods.is_empty() {
+        out.push("mood");
+    }
+    if !f.keywords.is_empty() {
+        out.push("temi");
+    }
+    if !f.countries.is_empty() {
+        out.push("paese (stimato dalla lingua)");
+    }
+    if constraints::decade_gap(tax, f) {
+        out.push("periodi non contigui (la ricerca include gli anni in mezzo)");
+    }
+    out
 }
 
 /// R5 · validazione sui dati reali. Se i vincoli chiesti producono zero titoli,
@@ -4951,6 +5027,12 @@ pub fn discover_with_relaxation(
     removed: &mut Vec<String>,
 ) -> Result<(Vec<Movie>, u32, u32, String), String> {
     let base = constraints::to_discover(tax, facets, kw, page)?;
+    if constraints::decade_gap(tax, facets) {
+        removed.push(
+            "I periodi scelti non sono contigui: la ricerca copre anche gli anni in mezzo."
+                .into(),
+        );
+    }
     let headline = describe(tax, facets, base.year);
     let pack = |p: PagedMovies, suffix: Option<String>| -> (Vec<Movie>, u32, u32, String) {
         (
@@ -5967,11 +6049,55 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, describe, has_word, looks_like_question, merge_facets, resize_edge,
-        side_panel_widths, Facets,
+        allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
+        resize_edge, side_panel_widths, Facets, Movie,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn il_filtro_locale_usa_i_generi_in_and() {
+        let tax = Taxonomy::load();
+        let f = Facets {
+            genres: vec![27, 35],
+            ..Default::default()
+        };
+        let only_horror = Movie {
+            id: 1,
+            genre_ids: vec![27],
+            ..Default::default()
+        };
+        let both = Movie {
+            id: 2,
+            genre_ids: vec![27, 35],
+            ..Default::default()
+        };
+        let out = filter_movies(vec![only_horror, both], &tax, &f);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, 2);
+    }
+
+    #[test]
+    fn il_filtro_locale_rispetta_senza_genere() {
+        let tax = Taxonomy::load();
+        let f = Facets {
+            without_genres: vec![35],
+            ..Default::default()
+        };
+        let comedy = Movie {
+            id: 1,
+            genre_ids: vec![35],
+            ..Default::default()
+        };
+        let drama = Movie {
+            id: 2,
+            genre_ids: vec![18],
+            ..Default::default()
+        };
+        let out = filter_movies(vec![comedy, drama], &tax, &f);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, 2);
+    }
 
     #[test]
     fn la_durata_compare_nei_criteri() {

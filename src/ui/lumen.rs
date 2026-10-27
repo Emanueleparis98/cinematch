@@ -166,27 +166,6 @@ pub fn seam(painter: &egui::Painter, rect: Rect) {
     painter.add(mesh);
 }
 
-pub fn scrim(painter: &egui::Painter, rect: Rect) {
-    let mut mesh = Mesh::default();
-    let top = Color32::TRANSPARENT;
-    let bottom = alpha(INK, 245);
-    mesh.colored_vertex(rect.left_top(), top);
-    mesh.colored_vertex(rect.right_top(), top);
-    mesh.colored_vertex(rect.left_bottom(), bottom);
-    mesh.colored_vertex(rect.right_bottom(), bottom);
-    mesh.add_triangle(0, 1, 2);
-    mesh.add_triangle(1, 2, 3);
-    painter.add(mesh);
-}
-
-pub fn card_frame() -> egui::Frame {
-    egui::Frame::none()
-        .fill(SURFACE)
-        .stroke(Stroke::new(1.0_f32, BORDER))
-        .rounding(Rounding::same(RADIUS))
-        .inner_margin(egui::Margin::same(14.0))
-}
-
 pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) -> Response {
     let enabled = ui.is_enabled();
     let sense = if enabled {
@@ -528,6 +507,19 @@ pub fn poster(
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+pub fn scrim(painter: &egui::Painter, rect: Rect) {
+    let mut mesh = Mesh::default();
+    let top = Color32::TRANSPARENT;
+    let bottom = alpha(INK, 245);
+    mesh.colored_vertex(rect.left_top(), top);
+    mesh.colored_vertex(rect.right_top(), top);
+    mesh.colored_vertex(rect.left_bottom(), bottom);
+    mesh.colored_vertex(rect.right_bottom(), bottom);
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(1, 2, 3);
+    painter.add(mesh);
+}
+
 pub fn backdrop(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -571,12 +563,4 @@ pub fn watched_overlay(ui: &mut egui::Ui, rect: Rect, hovered: bool) {
         FontId::new(8.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         CELADON,
     );
-}
-
-pub fn warm_spill(painter: &egui::Painter, center: egui::Pos2, radius: f32) {
-    for i in 0..4 {
-        let r = radius * (1.0 - i as f32 * 0.18);
-        let a = (12 - i * 3) as u8;
-        painter.circle_filled(center, r, alpha(EMBER, a));
-    }
 }

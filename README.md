@@ -72,8 +72,8 @@ incolli il token v4, ne ricava anche la chiave v3 dal claim `aud` come ripiego.
 Il pulsante **Verifica credenziale** fa una lettura di prova e riporta l'esito senza
 salvare nulla.
 
-La chiave viene salvata in `%APPDATA%\CineMatch\config.json` (uso personale: resta
-sulla tua macchina).
+La chiave viene salvata nel **Windows Credential Manager**, non in
+`config.json`: non resta in chiaro nella cartella dell'app.
 
 ## SIMKL (facoltativo)
 
@@ -184,7 +184,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 - **Chat**: casa con hero, collage di poster reali, composer e quattro spunti
   locali in griglia 2x2; risultati con un film in evidenza e le altre card sotto.
   Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
-  riprova e Â«Vedi tutti in grigliaÂ» restano dove erano.
+  riprova e «Vedi tutti in griglia» restano dove erano.
 - **Griglia**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
   card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza;
   a 1220 px quattro con i filtri e cinque senza. Il pager sta in basso, fuori
@@ -195,7 +195,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 - **Scheda film**: pannello laterale fisso con backdrop e poster, titolo Fraunces,
   fatti, stato SIMKL con voto e Da vedere, dove vederlo, disponibilita e simili.
 - **Impostazioni**: pagina intera con colonna centrata: TMDB, interprete, lingua,
-  dati IMDb, aggiornamenti e salvataggio. Â«ChiudiÂ» o `Esc` tornano alla vista.
+  dati IMDb, aggiornamenti e salvataggio. «Chiudi» o `Esc` tornano alla vista.
 - **Ridimensionamento**: minimo 800x600; i testi vanno a capo e i pannelli non si
   sovrappongono. A 1220x660 la griglia passa a cinque colonne senza filtri
   (quattro con i filtri) e la scheda resta leggibile.
@@ -279,6 +279,9 @@ In *Impostazioni → Interprete delle richieste* scegli il provider:
 - **OpenRouter**: incolli la chiave e premi **Rileva modelli**; l'elenco mostra
   tutti i modelli pubblicati, con nome e contesto.
 - **Ollama**: indichi il collegamento locale e il modello.
+
+Anche le chiavi di DeepSeek e OpenRouter stanno nel **Windows Credential
+Manager**, non in `config.json`.
 
 | Pulsante | Cosa fa |
 |---|---|
@@ -369,7 +372,7 @@ e invisibile.
 
 ```
 src/
-├─ main.rs            bootstrap eframe (glow di default, wgpu con CINEMATCH_RENDERER=wgpu)
+├─ main.rs            bootstrap eframe (glow di default; wgpu con `--features wgpu`)
 ├─ app.rs             stato, barra di comando, ricerca asincrona, pannelli
 ├─ update.rs          manifesto release, download setup, SHA-256, avvio installer
 ├─ domain/
@@ -381,7 +384,7 @@ src/
 ├─ ai/                trait IntentProvider + parser a regole + LLM pluggable
 │                     (chat, curatela dei film, rilevamento modelli, verifica)
 ├─ ui/                tema, facce, chat, griglia virtualizzata, scheda, immagini
-└─ infra/             config, voti IMDb
+└─ infra/             config, chiavi (Credential Manager), voti IMDb
 installer/         Inno Setup per-utente
 site/              pagina download statica (GitHub Pages)
 ```
@@ -393,8 +396,9 @@ genera `latest.json` e pubblica release e pagina di download.
   si disegna solo cio che e visibile.
 - **Renderer glow (OpenGL) per default**: misurato a riposo ~190 MB di memoria
   privata contro ~420 MB del backend wgpu/DX12 su Windows (il valore assoluto
-  dipende dal driver grafico; il rapporto resta di circa due volte). Si cambia con
-  `CINEMATCH_RENDERER=wgpu` se un driver preferisce Vulkan/DX12.
+  dipende dal driver grafico; il rapporto resta di circa due volte). Il backend
+  wgpu entra solo con `cargo build --release --features wgpu`; in quella build
+  `CINEMATCH_RENDERER=wgpu` lo sceglie se un driver preferisce Vulkan/DX12.
 - **Poster**: memoria → disco (`%APPDATA%\CineMatch\cache`) → rete, decodifica in
   thread separati. Al riavvio i poster sono gia li.
 - **Titoli non latini**: i film giapponesi e coreani arrivano con il titolo originale
@@ -414,10 +418,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.4.9 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.5.0 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.4.9.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.5.0.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 

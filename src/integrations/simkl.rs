@@ -265,6 +265,15 @@ pub fn clear_tokens() -> Result<(), String> {
     }
 }
 
+/// Il refresh puo' ruotare il refresh token: va salvato subito, prima delle
+/// richieste successive, altrimenti un errore piu' avanti lo perde.
+fn save_refreshed(tokens: &Tokens, persist: bool) -> Result<(), String> {
+    if persist {
+        save_tokens(tokens).map_err(|e| format!("Token rinnovato ma non salvato: {e}"))?;
+    }
+    Ok(())
+}
+
 // ------------------------------------------------------------------ http -----
 
 fn http() -> reqwest::blocking::Client {
@@ -551,7 +560,7 @@ pub fn sync(
     store: Store,
     force_full: bool,
 ) -> Result<(Store, Tokens, SyncReport), String> {
-    sync_at(API_BASE, client_id, tokens, store, force_full)
+    sync_at(API_BASE, client_id, tokens, store, force_full, true)
 }
 
 fn sync_at(
@@ -560,9 +569,11 @@ fn sync_at(
     mut tokens: Tokens,
     mut store: Store,
     force_full: bool,
+    persist_tokens: bool,
 ) -> Result<(Store, Tokens, SyncReport), String> {
     if tokens.needs_refresh() {
         tokens = refresh_at(base, client_id, &tokens.refresh_token)?;
+        save_refreshed(&tokens, persist_tokens)?;
     }
 
     let old = store.activities.clone();
@@ -693,15 +704,6 @@ fn sync_at(
     Ok((store, tokens, report))
 }
 
-/// Verifica che il voto salvato appartenga ancora a un item della libreria.
-pub fn rating_of(store: &Store, tmdb_id: u64) -> Option<u8> {
-    store.get(tmdb_id).and_then(|m| m.rating)
-}
-
-pub fn status_of(store: &Store, tmdb_id: u64) -> Option<&str> {
-    store.get(tmdb_id).map(|m| m.status.as_str())
-}
-
 pub fn link_to(tracked: &TrackedMovie) -> String {
     format!(
         "https://simkl.com/movies/{}/{}",
@@ -818,7 +820,7 @@ pub fn write(
     movie: &WriteMovie,
     op: WriteOp,
 ) -> Result<(Tokens, WriteOutcome), String> {
-    write_at(API_BASE, client_id, tokens, movie, op)
+    write_at(API_BASE, client_id, tokens, movie, op, true)
 }
 
 fn write_at(
@@ -827,9 +829,11 @@ fn write_at(
     mut tokens: Tokens,
     movie: &WriteMovie,
     op: WriteOp,
+    persist_tokens: bool,
 ) -> Result<(Tokens, WriteOutcome), String> {
     if tokens.needs_refresh() {
         tokens = refresh_at(base, client_id, &tokens.refresh_token)?;
+        save_refreshed(&tokens, persist_tokens)?;
     }
     if let WriteOp::Rate(rating) = op {
         if !(1..=10).contains(&rating) {
@@ -1155,6 +1159,7 @@ mod tests {
             tokens.clone(),
             Store::default(),
             false,
+            false,
         )
         .expect("sync");
         handle.join().expect("server");
@@ -1195,7 +1200,7 @@ mod tests {
             expires_at: now() + 3600,
         };
         let (out_tokens, outcome) =
-            write_at(&base, "client", tokens.clone(), &write_movie(), WriteOp::Watched)
+            write_at(&base, "client", tokens.clone(), &write_movie(), WriteOp::Watched, false)
                 .expect("scrittura");
         handle.join().expect("server");
         assert_eq!(out_tokens, tokens);
@@ -1222,6 +1227,7 @@ mod tests {
             tokens,
             &write_movie(),
             WriteOp::Watchlist,
+            false,
         )
         .expect("watchlist");
         handle.join().expect("server");
@@ -1246,6 +1252,7 @@ mod tests {
             tokens,
             &write_movie(),
             WriteOp::Rate(9),
+            false,
         )
         .expect("voto");
         handle.join().expect("server");
@@ -1267,6 +1274,7 @@ mod tests {
             tokens,
             &write_movie(),
             WriteOp::ClearRating,
+            false,
         )
         .expect("togli voto");
         handle.join().expect("server");
@@ -1283,7 +1291,7 @@ mod tests {
             refresh_token: "r".into(),
             expires_at: now() + 3600,
         };
-        write_at(&base, "client", tokens, &write_movie(), WriteOp::Remove)
+        write_at(&base, "client", tokens, &write_movie(), WriteOp::Remove, false)
             .expect("rimozione");
         handle.join().expect("server");
         assert!(seen
@@ -1299,7 +1307,7 @@ mod tests {
             refresh_token: "r".into(),
             expires_at: now() + 3600,
         };
-        let err = write_at(&base, "client", tokens, &write_movie(), WriteOp::Watched)
+        let err = write_at(&base, "client", tokens, &write_movie(), WriteOp::Watched, false)
             .unwrap_err();
         handle.join().expect("server");
         assert!(err.contains("non ha riconosciuto"));
@@ -1384,10 +1392,39 @@ mod tests {
             expires_at: now() + 3600,
         };
         let (store, _, report) =
-            sync_at(&base, "client", tokens, store, false).expect("delta");
+            sync_at(&base, "client", tokens, store, false, false).expect("delta");
         handle.join().expect("server");
         assert_eq!(store.movies.len(), 1);
         assert_eq!(store.get(429).unwrap().rating, Some(10));
         assert_eq!(report.watched, 1);
+    }
+
+    #[test]
+    fn il_token_rinnovato_viene_usato_subito() {
+        let refreshed = r#"{"access_token":"nuovo","refresh_token":"r2","expires_in":1000}"#;
+        let activities = serde_json::json!({
+            "all": "2026-01-01T00:00:00Z",
+            "movies": { "removed_from_list": null, "rated_at": null, "playback": null }
+        });
+        let (base, seen, handle) = mock_server(vec![
+            (200, refreshed.to_string()),
+            (200, activities.to_string()),
+            (200, sample().to_string()),
+            (200, "[]".to_string()),
+        ]);
+        let tokens = Tokens {
+            access_token: "vecchio".into(),
+            refresh_token: "r1".into(),
+            expires_at: 0,
+        };
+        let (_store, out, _report) =
+            sync_at(&base, "client", tokens, Store::default(), true, false).expect("sync");
+        handle.join().expect("server");
+        assert_eq!(out.access_token, "nuovo");
+        assert_eq!(out.refresh_token, "r2");
+        let raw = seen.lock().unwrap().join("\n").to_lowercase();
+        assert!(raw.starts_with("post /oauth2/token"));
+        assert!(raw.contains("grant_type=refresh_token"));
+        assert!(raw.contains("authorization: bearer nuovo"));
     }
 }

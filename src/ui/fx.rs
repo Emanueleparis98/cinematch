@@ -13,19 +13,6 @@ pub fn background(ctx: &Context, _now: f64) {
         .rect_filled(rect, Rounding::ZERO, theme::BG);
 }
 
-pub fn gradient_bar(
-    painter: &egui::Painter,
-    rect: Rect,
-    from: Color32,
-    _to: Color32,
-    _rounding: f32,
-) {
-    if rect.width() < 1.0 || rect.height() < 1.0 {
-        return;
-    }
-    painter.rect_filled(rect, Rounding::ZERO, from);
-}
-
 pub fn shimmer(ui: &Ui, rect: Rect, rounding: f32, _now: f64) {
     if rect.width() < 3.0 || rect.height() < 3.0 {
         return;
