@@ -237,7 +237,7 @@ h1 span { color: var(--ember); }
 
 /* -------------------------------------------------------------- simkl ----- */
 
-.simkl {
+.info.simkl {
   grid-template-columns: minmax(0, 1fr) minmax(260px, 360px) minmax(0, 1fr);
   gap: 40px;
   align-items: start;
@@ -374,7 +374,7 @@ h1 span { color: var(--ember); }
 }
 
 @media (max-width: 1080px) {
-  .simkl { grid-template-columns: 1fr; }
+  .info.simkl { grid-template-columns: 1fr; }
   .simkl-shot { grid-column: auto; }
 }
 
@@ -387,7 +387,7 @@ h1 span { color: var(--ember); }
   .shot { order: 2; }
   .info { grid-template-columns: 1fr; gap: 8px; padding: 36px 0 44px; }
   .info-col + .info-col { margin-top: 30px; }
-  .simkl { grid-template-columns: 1fr; }
+  .info.simkl { grid-template-columns: 1fr; }
   .simkl-shot { grid-column: auto; margin-top: 8px; }
 }
 
