@@ -432,6 +432,19 @@ pubblica `site/` su <https://emanueleparis98.github.io/cinematch/> quando cambia
 la pagina. La pagina legge l'ultima release dall'API GitHub e aggiorna da sola
 versione, dimensione e link di download.
 
+### Firma Authenticode
+
+Senza un certificato l'installer viene pubblicato lo stesso, ma Windows puo
+mostrare l'avviso "editore sconosciuto". Per firmarlo serve un certificato
+Authenticode in formato PFX:
+
+1. Converti il certificato in base64:
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("CineMatch.pfx"))`
+2. Su GitHub: Settings -> Secrets and variables -> Actions, crea
+   `SIGN_PFX_BASE64` con la stringa e `SIGN_PFX_PASSWORD` con la password.
+3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
+   viene comunque pubblicata e il workflow lascia un avviso nel summary.
+
 L'updater e disattivato in debug, quando l'exe gira da `target` e quando e
 impostata la variabile `CINEMATCH_NO_UPDATE=1`; `run.ps1` avvia una build di
 sviluppo e non deve mai sostituirla.

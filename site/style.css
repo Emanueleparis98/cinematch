@@ -232,6 +232,32 @@ h1 span { color: var(--ember); }
   letter-spacing: .02em;
   color: var(--faint);
 }
+.fineprint a { color: var(--muted); text-decoration: none; }
+.fineprint a:hover { color: var(--ivory); }
+
+/* -------------------------------------------------------------- simkl ----- */
+
+.simkl {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.simkl-shot {
+  max-width: 360px;
+  margin: 0;
+}
+.simkl-shot img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--deep);
+}
+.simkl-shot figcaption {
+  margin-top: 10px;
+  font: 400 9px/1.5 var(--mono);
+  color: var(--faint);
+}
 
 .shot { margin: 0; }
 .shot img {
@@ -347,6 +373,11 @@ h1 span { color: var(--ember); }
   color: var(--faint);
 }
 
+@media (max-width: 1080px) {
+  .simkl { grid-template-columns: 1fr; }
+  .simkl-shot { grid-column: auto; }
+}
+
 @media (max-width: 980px) {
   .hero {
     grid-template-columns: 1fr;
@@ -356,6 +387,8 @@ h1 span { color: var(--ember); }
   .shot { order: 2; }
   .info { grid-template-columns: 1fr; gap: 8px; padding: 36px 0 44px; }
   .info-col + .info-col { margin-top: 30px; }
+  .simkl { grid-template-columns: 1fr; }
+  .simkl-shot { grid-column: auto; margin-top: 8px; }
 }
 
 @media (max-width: 760px) {
