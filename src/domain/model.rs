@@ -35,7 +35,9 @@ impl Sort {
             Sort::Rating => "vote_average.desc",
             Sort::Votes => "vote_count.desc",
             Sort::Newest => "primary_release_date.desc",
-            Sort::Upcoming => "primary_release_date.asc",
+            // I film futuri non hanno ancora voti/durata: la data crescente
+            // farebbe emergere schede vuote, quindi vince la popolarita.
+            Sort::Upcoming => "popularity.desc",
             Sort::Oldest => "primary_release_date.asc",
         }
     }

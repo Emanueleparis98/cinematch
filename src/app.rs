@@ -1526,6 +1526,12 @@ impl App {
                                 .into(),
                         );
                     }
+                    if quality_visual && eff.sort == Sort::Upcoming {
+                        payload.info.push(
+                            "Prossimamente: ordinato per popolarita, senza schede senza poster; per i film futuri voti e durata non sono ancora affidabili."
+                                .into(),
+                        );
+                    }
                     payload.movies = movies;
                     payload.total = total;
                     payload.total_pages = pages;
@@ -5312,14 +5318,13 @@ fn wants_trending(f: &Facets) -> bool {
 fn sort_movies(movies: &mut [Movie], sort: Sort) {
     movies.sort_by(|a, b| match sort {
         Sort::Newest => b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)),
-        Sort::Upcoming => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
         Sort::Oldest => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
         Sort::Rating => b
             .rating
             .partial_cmp(&a.rating)
             .unwrap_or(std::cmp::Ordering::Equal),
         Sort::Votes => b.votes.cmp(&a.votes),
-        Sort::Popularity => {
+        Sort::Popularity | Sort::Upcoming => {
             let sa = a.rating * (1.0 + a.votes as f32).ln();
             let sb = b.rating * (1.0 + b.votes as f32).ln();
             sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
@@ -5574,7 +5579,6 @@ fn chat_theme_pool(
         let cb = b.matched.iter().filter(|m| **m).count();
         cb.cmp(&ca).then_with(|| match eff.sort {
             Sort::Newest => b.movie.year.cmp(&a.movie.year),
-            Sort::Upcoming => a.movie.year.cmp(&b.movie.year),
             Sort::Oldest => a.movie.year.cmp(&b.movie.year),
             Sort::Rating => b
                 .movie
@@ -5582,7 +5586,7 @@ fn chat_theme_pool(
                 .partial_cmp(&a.movie.rating)
                 .unwrap_or(std::cmp::Ordering::Equal),
             Sort::Votes => b.movie.votes.cmp(&a.movie.votes),
-            Sort::Popularity => {
+            Sort::Popularity | Sort::Upcoming => {
                 let sa = a.movie.rating as f64 * (1.0 + a.movie.votes as f64).ln();
                 let sb = b.movie.rating as f64 * (1.0 + b.movie.votes as f64).ln();
                 sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
@@ -6138,7 +6142,7 @@ fn open_url(url: &str) {
 mod tests {
     use super::{
         allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
-        resize_edge, side_panel_widths, wants_trending, Facets, Movie, Sort,
+        resize_edge, side_panel_widths, sort_movies, wants_trending, Facets, Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
@@ -6149,6 +6153,27 @@ mod tests {
         assert!(wants_trending(&f));
         f.sort = Sort::Rating;
         assert!(!wants_trending(&f));
+    }
+
+    #[test]
+    fn prossimamente_ordina_per_popolarita_non_per_data() {
+        let noto = Movie {
+            id: 1,
+            year: Some(2026),
+            rating: 8.0,
+            votes: 5_000,
+            ..Default::default()
+        };
+        let oscuro = Movie {
+            id: 2,
+            year: Some(2027),
+            rating: 5.0,
+            votes: 5,
+            ..Default::default()
+        };
+        let mut v = vec![oscuro, noto];
+        sort_movies(&mut v, Sort::Upcoming);
+        assert_eq!(v[0].id, 1);
     }
 
     #[test]
