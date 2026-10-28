@@ -1559,6 +1559,12 @@ impl App {
             }
 
             let grid_len = payload.movies.len();
+            let seen = payload
+                .movies
+                .iter()
+                .map(|m| m.id)
+                .collect::<HashSet<_>>();
+            let current_total = payload.total;
             let unlockable = discover_used
                 && page == 1
                 && payload.error.is_none()
@@ -1575,7 +1581,8 @@ impl App {
             // ogni variante è una chiamata TMDB. Meglio una griglia pronta e
             // la striscia «Sblocca» un istante più tardi che il contrario.
             if unlockable {
-                let unlocks = unlock_options(&tmdb, &tax, &eff, &kw);
+                let unlocks =
+                    unlock_options(&tmdb, &tax, &eff, &kw, current_total, &seen);
                 if !unlocks.is_empty() {
                     let _ = tx.send(Msg::Unlocks { gen, unlocks });
                 }
@@ -5163,6 +5170,8 @@ fn unlock_options(
     tax: &Taxonomy,
     facets: &Facets,
     kw: &[(String, u64)],
+    current_total: u32,
+    seen: &HashSet<u64>,
 ) -> Vec<unlock::Unlock> {
     let mut out = Vec::new();
     for (label, relaxed) in unlock_candidates(tax, facets) {
@@ -5172,19 +5181,30 @@ fn unlock_options(
         let Ok(page) = tmdb.discover(&q) else {
             continue;
         };
-        if page.total_results == 0 {
+        // Una variante che non aggiunge nemmeno un film non è un compromesso.
+        if page.total_results <= current_total {
             continue;
+        }
+        let mut preview = page
+            .results
+            .iter()
+            .filter(|m| !seen.contains(&m.id))
+            .map(|m| m.title.clone())
+            .take(2)
+            .collect::<Vec<_>>();
+        if preview.is_empty() {
+            preview = page
+                .results
+                .iter()
+                .take(2)
+                .map(|m| m.title.clone())
+                .collect();
         }
         out.push(unlock::Unlock {
             label,
             facets: relaxed,
             total: page.total_results,
-            preview: page
-                .results
-                .iter()
-                .take(2)
-                .map(|m| m.title.clone())
-                .collect(),
+            preview,
         });
     }
     out.sort_by_key(|u| u.total);
