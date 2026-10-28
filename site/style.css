@@ -40,7 +40,7 @@
   --border-hi: #3d4350;
   --ivory: #f4eee2;
   --muted: #a7a399;
-  --faint: #6e6b64;
+  --faint: #918d84;
   --ember: #ff5c35;
   --ember-hi: #ff7a57;
   --celadon: #8fe3c0;
@@ -232,7 +232,7 @@ h1 span { color: var(--ember); }
   letter-spacing: .02em;
   color: var(--faint);
 }
-.fineprint a { color: var(--muted); text-decoration: none; }
+.fineprint a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
 .fineprint a:hover { color: var(--ivory); }
 
 /* -------------------------------------------------------------- simkl ----- */
