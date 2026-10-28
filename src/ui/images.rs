@@ -193,6 +193,12 @@ impl ImageStore {
     }
 }
 
+impl Default for ImageStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::prune_cache_dir;
@@ -224,11 +230,5 @@ mod tests {
         assert!(!dir.join("00.img").exists(), "il piu vecchio viene rimosso");
 
         let _ = std::fs::remove_dir_all(&dir);
-    }
-}
-
-impl Default for ImageStore {
-    fn default() -> Self {
-        Self::new()
     }
 }

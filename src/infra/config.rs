@@ -109,11 +109,12 @@ impl AiCfg {
                     changed = true;
                 }
             }
-            "openrouter" => {
-                if self.openrouter_api_key.trim().is_empty() && looks_like_openrouter(&self.api_key) {
-                    self.openrouter_api_key = self.api_key.clone();
-                    changed = true;
-                }
+            "openrouter"
+                if self.openrouter_api_key.trim().is_empty()
+                    && looks_like_openrouter(&self.api_key) =>
+            {
+                self.openrouter_api_key = self.api_key.clone();
+                changed = true;
             }
             _ => {}
         }

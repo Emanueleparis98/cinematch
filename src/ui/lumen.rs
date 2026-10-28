@@ -3,7 +3,7 @@
 //! JetBrains Mono per i metadati. Solo la lab usa questo modulo.
 
 use egui::{
-    Align2, Color32, FontFamily, FontId, Mesh, Rect, Response, RichText, Rounding, Sense,
+    Align2, Color32, FontFamily, FontId, Mesh, Rect, Response, RichText, Sense,
     Stroke,
 };
 
@@ -28,6 +28,11 @@ pub const DANGER: Color32 = Color32::from_rgb(255, 77, 94);
 pub const RADIUS: f32 = 4.0;
 pub const RADIUS_SM: f32 = 2.0;
 
+/// Arrotondamento in pixel interi: egui 0.34 usa `CornerRadius` (u8).
+pub fn radius(v: f32) -> egui::CornerRadius {
+    egui::CornerRadius::same(v.round().clamp(0.0, 255.0) as u8)
+}
+
 // ------------------------------------------------------------- stile ------
 
 pub fn apply(ctx: &egui::Context) {
@@ -36,13 +41,13 @@ pub fn apply(ctx: &egui::Context) {
     visuals.window_fill = SURFACE;
     visuals.faint_bg_color = SURFACE;
     visuals.extreme_bg_color = DEEP;
-    visuals.window_rounding = Rounding::same(RADIUS);
-    visuals.menu_rounding = Rounding::same(RADIUS);
+    visuals.window_corner_radius = radius(RADIUS);
+    visuals.menu_corner_radius = radius(RADIUS);
     visuals.window_stroke = Stroke::new(1.0_f32, BORDER);
     visuals.window_shadow = egui::epaint::Shadow {
-        offset: egui::vec2(0.0, 0.0),
-        blur: 0.0,
-        spread: 0.0,
+        offset: [0, 0],
+        blur: 0,
+        spread: 0,
         color: Color32::TRANSPARENT,
     };
     visuals.popup_shadow = visuals.window_shadow;
@@ -53,35 +58,35 @@ pub fn apply(ctx: &egui::Context) {
     visuals.widgets.noninteractive.bg_fill = SURFACE;
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, IVORY);
-    visuals.widgets.noninteractive.rounding = Rounding::same(RADIUS);
+    visuals.widgets.noninteractive.corner_radius = radius(RADIUS);
     visuals.widgets.inactive.bg_fill = DEEP;
     visuals.widgets.inactive.weak_bg_fill = DEEP;
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, MUTED);
-    visuals.widgets.inactive.rounding = Rounding::same(RADIUS);
+    visuals.widgets.inactive.corner_radius = radius(RADIUS);
     visuals.widgets.hovered.bg_fill = RAISED;
     visuals.widgets.hovered.weak_bg_fill = RAISED;
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, BORDER_HI);
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, IVORY);
-    visuals.widgets.hovered.rounding = Rounding::same(RADIUS);
+    visuals.widgets.hovered.corner_radius = radius(RADIUS);
     visuals.widgets.active.bg_fill = EMBER;
     visuals.widgets.active.weak_bg_fill = EMBER;
     visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, EMBER);
     // Il testo «strong» di egui usa il colore dei widget attivi: deve restare
     // avorio, altrimenti i titoli delle viste 0.2.3 diventano neri su nero.
     visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, IVORY);
-    visuals.widgets.active.rounding = Rounding::same(RADIUS);
+    visuals.widgets.active.corner_radius = radius(RADIUS);
     visuals.widgets.open.weak_bg_fill = RAISED;
     visuals.widgets.open.bg_fill = RAISED;
     visuals.widgets.open.bg_stroke = Stroke::new(1.0_f32, BORDER);
     visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, IVORY);
-    visuals.widgets.open.rounding = Rounding::same(RADIUS);
+    visuals.widgets.open.corner_radius = radius(RADIUS);
     visuals.selection.bg_fill = alpha(EMBER, 90);
     visuals.selection.stroke = Stroke::new(1.0_f32, IVORY);
     visuals.hyperlink_color = EMBER;
     visuals.override_text_color = Some(IVORY);
 
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
     style.visuals = visuals;
     style.spacing.item_spacing = egui::vec2(8.0, 8.0);
     style.spacing.button_padding = egui::vec2(12.0, 8.0);
@@ -92,7 +97,7 @@ pub fn apply(ctx: &egui::Context) {
         bar_outer_margin: 2.0,
         ..Default::default()
     };
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 pub fn install(ctx: &egui::Context) {
@@ -152,7 +157,7 @@ pub fn hairline(ui: &mut egui::Ui) {
         egui::vec2(ui.available_width(), 1.0),
         Sense::hover(),
     );
-    ui.painter().rect_filled(rect, Rounding::ZERO, BORDER);
+    ui.painter().rect_filled(rect, egui::CornerRadius::ZERO, BORDER);
 }
 
 pub fn seam(painter: &egui::Painter, rect: Rect) {
@@ -201,15 +206,14 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
         IVORY
     };
     let p = ui.painter();
-    p.rect_filled(rect, Rounding::same(RADIUS_SM), fill);
+    p.rect_filled(rect, radius(RADIUS_SM), fill);
     p.rect_stroke(
         rect,
-        Rounding::same(RADIUS_SM),
+        radius(RADIUS_SM),
         Stroke::new(
             1.0_f32,
             if primary && enabled { EMBER } else { BORDER },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     p.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -242,9 +246,8 @@ pub fn focus(ui: &egui::Ui, resp: &Response, rounding: f32) {
     if resp.has_focus() {
         ui.painter().rect_stroke(
             resp.rect.expand(1.0),
-            Rounding::same(rounding + 1.0),
-            Stroke::new(1.0_f32, EMBER),
-        );
+            radius(rounding + 1.0),
+            Stroke::new(1.0_f32, EMBER), egui::StrokeKind::Inside);
     }
 }
 
@@ -256,12 +259,11 @@ pub fn field(ui: &mut egui::Ui, label_text: &str, value: &str, mask: bool) {
         egui::vec2(ui.available_width(), 38.0),
         Sense::hover(),
     );
-    ui.painter().rect_filled(rect, Rounding::same(RADIUS_SM), DEEP);
+    ui.painter().rect_filled(rect, radius(RADIUS_SM), DEEP);
     ui.painter().rect_stroke(
         rect,
-        Rounding::same(RADIUS_SM),
-        Stroke::new(1.0_f32, BORDER),
-    );
+        radius(RADIUS_SM),
+        Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Inside);
     let text = if mask {
         "•".repeat(value.chars().count().min(32))
     } else {
@@ -300,18 +302,16 @@ pub fn icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
         Icon::Home => {
             painter.rect_stroke(
                 Rect::from_min_max(p(-7.0, -5.0), p(7.0, 6.0)),
-                Rounding::same(1.5 * s),
-                stroke,
-            );
+                radius(1.5 * s),
+                stroke, egui::StrokeKind::Inside);
             painter.line_segment([p(-3.0, 2.0), p(3.0, 2.0)], stroke);
         }
         Icon::Results => {
             for y in [-5.0, 0.0, 5.0] {
                 painter.rect_stroke(
                     Rect::from_min_max(p(-7.0, y - 1.8), p(-2.0, y + 1.8)),
-                    Rounding::same(1.0 * s),
-                    stroke,
-                );
+                    radius(1.0 * s),
+                    stroke, egui::StrokeKind::Inside);
                 painter.line_segment([p(0.0, y), p(7.0, y)], stroke);
             }
         }
@@ -320,18 +320,16 @@ pub fn icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color32) {
                 for y in [-6.5, 1.0] {
                     painter.rect_stroke(
                         Rect::from_min_size(p(x, y), egui::vec2(5.5, 5.5) * s),
-                        Rounding::same(1.0 * s),
-                        stroke,
-                    );
+                        radius(1.0 * s),
+                        stroke, egui::StrokeKind::Inside);
                 }
             }
         }
         Icon::Detail => {
             painter.rect_stroke(
                 Rect::from_min_max(p(-7.0, -6.0), p(7.0, 6.0)),
-                Rounding::same(1.5 * s),
-                stroke,
-            );
+                radius(1.5 * s),
+                stroke, egui::StrokeKind::Inside);
             painter.line_segment([p(-4.0, 2.0), p(4.0, 2.0)], stroke);
             painter.circle_filled(p(0.0, -1.5), 1.5 * s, color);
         }
@@ -385,14 +383,13 @@ pub fn icon_button(
     if hover > 0.01 {
         ui.painter().rect_filled(
             rect,
-            Rounding::same(RADIUS_SM),
+            radius(RADIUS_SM),
             mix(INK, RAISED, hover),
         );
         ui.painter().rect_stroke(
             rect,
-            Rounding::same(RADIUS_SM),
-            Stroke::new(1.0_f32, BORDER),
-        );
+            radius(RADIUS_SM),
+            Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Inside);
     }
     icon(
         ui.painter(),
@@ -414,14 +411,14 @@ pub fn nav_item(ui: &mut egui::Ui, icon_kind: Icon, label_text: &str, active: bo
     if active || hover > 0.01 {
         p.rect_filled(
             rect,
-            Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             if active { SURFACE } else { alpha(SURFACE, 130) },
         );
     }
     if active {
         p.rect_filled(
             Rect::from_min_size(rect.min, egui::vec2(2.0, rect.height())),
-            Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             EMBER,
         );
     }
@@ -460,7 +457,7 @@ pub fn poster(
     selected: bool,
 ) -> Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
-    ui.painter().rect_filled(rect, Rounding::ZERO, DEEP);
+    ui.painter().rect_filled(rect, egui::CornerRadius::ZERO, DEEP);
     let mut loaded = false;
     if let Some(m) = movie {
         if let Some(path) = &m.poster_path {
@@ -473,7 +470,7 @@ pub fn poster(
         }
     }
     if !loaded {
-        ui.painter().rect_filled(rect, Rounding::ZERO, RAISED);
+        ui.painter().rect_filled(rect, egui::CornerRadius::ZERO, RAISED);
         if let Some(m) = movie {
             ui.painter().text(
                 rect.center(),
@@ -494,9 +491,8 @@ pub fn poster(
     };
     ui.painter().rect_stroke(
         rect,
-        Rounding::ZERO,
-        Stroke::new(1.0_f32, border),
-    );
+        egui::CornerRadius::ZERO,
+        Stroke::new(1.0_f32, border), egui::StrokeKind::Inside);
     if resp.hovered() || selected {
         seam(
             ui.painter(),
@@ -528,7 +524,7 @@ pub fn backdrop(
     height: f32,
 ) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), Sense::hover());
-    ui.painter().rect_filled(rect, Rounding::ZERO, DEEP);
+    ui.painter().rect_filled(rect, egui::CornerRadius::ZERO, DEEP);
     if let Some(m) = movie {
         if let Some(path) = &m.backdrop_path {
             let uri = poster_url(path, "w780");
@@ -545,17 +541,16 @@ pub fn watched_overlay(ui: &mut egui::Ui, rect: Rect, hovered: bool) {
     let veil = if hovered { 50 } else { 170 };
     ui.painter().rect_filled(
         rect,
-        Rounding::ZERO,
+        egui::CornerRadius::ZERO,
         alpha(Color32::from_gray(74), veil),
     );
     let badge = Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(44.0, 15.0));
     ui.painter()
-        .rect_filled(badge, Rounding::same(2.0), alpha(INK, 235));
+        .rect_filled(badge, radius(2.0), alpha(INK, 235));
     ui.painter().rect_stroke(
         badge,
-        Rounding::same(2.0),
-        Stroke::new(1.0_f32, alpha(BORDER_HI, 200)),
-    );
+        radius(2.0),
+        Stroke::new(1.0_f32, alpha(BORDER_HI, 200)), egui::StrokeKind::Inside);
     ui.painter().text(
         badge.center(),
         Align2::CENTER_CENTER,

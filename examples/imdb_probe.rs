@@ -17,7 +17,7 @@ fn main() {
     if !imdb::is_ready() {
         let res = imdb::download(&|done| {
             let mb = done as f64 / 1_048_576.0;
-            if (mb as u64) % 5 == 0 && done % 262_144 < 65_536 {
+            if (mb as u64).is_multiple_of(5) && done % 262_144 < 65_536 {
                 println!("  scaricati {mb:.1} MB");
             }
         });

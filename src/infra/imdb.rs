@@ -74,7 +74,7 @@ fn entries_from(index: &Path, data: &Path) -> usize {
         return 0;
     }
     let body = &raw[MAGIC.len()..];
-    if body.len() % ENTRY != 0 {
+    if !body.len().is_multiple_of(ENTRY) {
         return 0;
     }
     let blocks = body.len() / ENTRY;
@@ -188,7 +188,7 @@ fn build_index_from(data: &Path, out_path: &Path) -> Result<(), String> {
         // il primo blocco, altrimenti gli id piu bassi non sarebbero indicizzati.
         let header = line_no == 0 && line.starts_with("tconst");
         if !header {
-            if data_no % BLOCK == 0 {
+            if data_no.is_multiple_of(BLOCK) {
                 let id = line.split('\t').next().unwrap_or("").trim();
                 if id.starts_with("tt") {
                     // offset a 8 byte + identificativo grezzo a 16 byte
@@ -248,11 +248,11 @@ fn load_index() -> Option<Vec<(u64, Key)>> {
         return None;
     }
     let body = &raw[MAGIC.len()..];
-    if body.len() % ENTRY != 0 {
+    if !body.len().is_multiple_of(ENTRY) {
         return None;
     }
     let mut out = Vec::with_capacity(body.len() / ENTRY);
-    for chunk in body.chunks_exact(ENTRY) {
+    for chunk in body.as_chunks::<ENTRY>().0 {
         let offset = u64::from_le_bytes(chunk[0..8].try_into().ok()?);
         let mut id = [0u8; 16];
         id.copy_from_slice(&chunk[8..24]);

@@ -43,6 +43,7 @@ struct Results {
     intent: Option<(String, Intent)>,
 }
 
+#[allow(clippy::large_enum_variant)] // messaggi effimeri: boxare ogni variante aggiungerebbe indirezione
 enum Msg {
     Results { gen: u64, payload: Box<Results> },
     /// Compromessi calcolati dopo i risultati: la griglia li mostra appena
@@ -745,6 +746,8 @@ pub struct App {
     grid_reset_scroll: bool,
     loading: bool,
     headline: String,
+    /// Ultimo esito di rete: None = non ancora provato, Some(false) = offline.
+    net: Option<bool>,
     /// Compromessi «Sblocca» per la ricerca corrente, se la griglia è quasi vuota.
     unlocks: Vec<unlock::Unlock>,
 
@@ -847,6 +850,7 @@ impl App {
             grid_reset_scroll: false,
             loading: false,
             headline: String::new(),
+            net: None,
             unlocks: Vec::new(),
             detail: None,
             detail_loading: false,
@@ -917,6 +921,7 @@ impl App {
                     }
                     self.loading = false;
                     let mut p = *payload;
+                    let net_ok = p.error.is_none();
                     if self.cfg.simkl.hide_watched {
                         let before = p.movies.len();
                         p.movies.retain(|m| {
@@ -946,6 +951,7 @@ impl App {
                     if p.intent.is_some() {
                         self.ai_cache = p.intent;
                     }
+                    self.net = Some(net_ok);
                     if let Some(err) = p.error {
                         self.movies.clear();
                         self.total = 0;
@@ -976,6 +982,7 @@ impl App {
                         continue;
                     }
                     self.detail_loading = false;
+                    self.net = Some(res.is_ok());
                     match res {
                         Ok(d) => {
                             {
@@ -996,6 +1003,7 @@ impl App {
                     }
                 }
                 Msg::Check { res } => {
+                    self.net = Some(res.is_ok());
                     self.settings_check = Some(match res {
                         Ok(m) => format!("✔ {m}"),
                         Err(e) => format!("✕ {e}"),
@@ -1006,6 +1014,7 @@ impl App {
                         continue;
                     }
                     self.detecting = false;
+                    self.net = Some(res.is_ok());
                     match res {
                         Ok(models) => {
                             let count = models.len();
@@ -1036,6 +1045,7 @@ impl App {
                 }
                 Msg::AiCheck { res } => {
                     self.ai_checking = false;
+                    self.net = Some(res.is_ok());
                     self.ai_check = Some(match res {
                         Ok(m) => format!("✔ {m}"),
                         Err(e) => format!("✕ {e}"),
@@ -1256,6 +1266,7 @@ impl App {
                         self.focus = Some(ViewMode::Chat);
                     }
                     let mut p = *payload;
+                    self.net = Some(p.error.is_none());
                     if self.cfg.simkl.hide_watched {
                         let before = p.cards.len();
                         p.cards.retain(|c| {
@@ -3233,15 +3244,15 @@ impl App {
     }
 
     /// Top strip LUMEN: marchio, contesto, controlli finestra.
-    fn header(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("header")
-            .exact_height(48.0)
-            .frame(egui::Frame::none().fill(lumen::INK))
-            .show(ctx, |ui| {
+    fn header(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::top("header")
+            .exact_size(48.0)
+            .frame(egui::Frame::NONE.fill(lumen::INK))
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 let drag = ui.interact(
                     r,
-                    egui::Id::new("window-drag"),
+                    egui::Id::unique("window-drag"),
                     egui::Sense::click_and_drag(),
                 );
                 if drag.drag_started() {
@@ -3317,15 +3328,15 @@ impl App {
     }
 
     /// Rail LUMEN: Chat, Griglia, Nuova chat, Impostazioni.
-    fn rail(&mut self, ctx: &egui::Context) {
+    fn rail(&mut self, ui: &mut egui::Ui) {
         let mut switch = None;
         let mut new_chat = false;
         let mut settings = false;
-        egui::SidePanel::left("rail")
-            .exact_width(72.0)
+        egui::Panel::left("rail")
+            .exact_size(72.0)
             .resizable(false)
-            .frame(egui::Frame::none().fill(lumen::DEEP))
-            .show(ctx, |ui| {
+            .frame(egui::Frame::NONE.fill(lumen::DEEP))
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.right_top(), r.right_bottom()],
@@ -3401,21 +3412,22 @@ impl App {
     }
 
     /// Toolbar della griglia, dentro il contenuto a destra della rail.
-    fn grid_toolbar(&mut self, ctx: &egui::Context) {
+    fn grid_toolbar(&mut self, ui: &mut egui::Ui) {
         if self.mode != ViewMode::Griglia || self.show_settings {
             return;
         }
-        let compact = ctx.screen_rect().width() < 1000.0;
+        let compact = ui.ctx().content_rect().width() < 1000.0;
         let want_focus = self.focus == Some(ViewMode::Griglia);
         let sort_before = self.facets.sort;
         let mut do_search = false;
         let mut toggle_filters = false;
         let mut refresh = false;
 
-        egui::TopBottomPanel::top("grid-toolbar")
-            .exact_height(52.0)
-            .frame(egui::Frame::none().fill(lumen::INK))
-            .show(ctx, |ui| {
+        egui::Panel::top("grid-toolbar")
+            .exact_size(52.0)
+            .frame(egui::Frame::NONE.fill(lumen::INK))
+            .show(ui, |ui| {
+                ui.spacing_mut().combo_height = 360.0;
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.left_bottom(), r.right_bottom()],
@@ -3453,7 +3465,7 @@ impl App {
                                     egui::RichText::new(self.facets.sort.label()).size(11.0),
                                 )
                                 .width(if compact { 120.0 } else { 150.0 })
-                                .icon(|ui, rect, _visuals, _open, _above| {
+                                .icon(|ui, rect, _visuals, _open| {
                                     let c = rect.center();
                                     let stroke = egui::Stroke::new(1.2_f32, lumen::MUTED);
                                     ui.painter().line_segment(
@@ -3494,23 +3506,23 @@ impl App {
                             } else {
                                 "Titolo, corrente, tema…"
                             };
-                            let field_id = egui::Id::new("grid-query");
+                            let field_id = egui::Id::unique("grid-query");
                             let focused = ui.memory(|m| m.has_focus(field_id));
-                            let frame = egui::Frame::none()
+                            let frame = egui::Frame::NONE
                                 .fill(lumen::DEEP)
                                 .stroke(egui::Stroke::new(
                                     1.0_f32,
                                     if focused { lumen::EMBER } else { lumen::BORDER },
                                 ))
-                                .rounding(egui::Rounding::same(lumen::RADIUS_SM))
-                                .inner_margin(egui::Margin::symmetric(10.0, 7.0));
+                                .corner_radius(lumen::radius(lumen::RADIUS_SM))
+                                .inner_margin(egui::Margin::symmetric(10, 7));
                             let resp = frame
                                 .show(ui, |ui| {
                                     ui.add_sized(
                                         [(w - 20.0).max(80.0), 20.0],
                                         egui::TextEdit::singleline(&mut self.grid_query)
                                             .id(field_id)
-                                            .frame(false)
+                                            .frame(egui::Frame::NONE)
                                             .char_limit(MAX_QUERY_CHARS)
                                             .hint_text(hint)
                                             .font(egui::TextStyle::Body),
@@ -3555,11 +3567,11 @@ impl App {
     }
 
     /// Barra di stato LUMEN.
-    fn status_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status")
-            .exact_height(28.0)
-            .frame(egui::Frame::none().fill(lumen::INK))
-            .show(ctx, |ui| {
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::bottom("status")
+            .exact_size(28.0)
+            .frame(egui::Frame::NONE.fill(lumen::INK))
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.left_top(), r.right_top()],
@@ -3578,7 +3590,11 @@ impl App {
                     let (color, state) = if busy {
                         (lumen::EMBER, "LAVORO")
                     } else {
-                        (lumen::CELADON, "PRONTO")
+                        match self.net {
+                            Some(false) => (lumen::DANGER, "OFFLINE"),
+                            Some(true) => (lumen::CELADON, "PRONTO"),
+                            None => (lumen::FAINT, "PRONTO"),
+                        }
                     };
                     let (dot, _) = ui.allocate_exact_size(
                         egui::vec2(6.0, 6.0),
@@ -3624,23 +3640,23 @@ impl App {
     }
 
 
-    fn left_panel(&mut self, ctx: &egui::Context) {
+    fn left_panel(&mut self, ui: &mut egui::Ui) {
         // Il pannello e uno strumento della griglia: in chat sparisce del
         // tutto, ma lo stato (aperto, filtri, larghezza) resta intatto.
         if self.mode != ViewMode::Griglia || !self.filters_open || self.show_settings {
             return;
         }
-        let (left_max, _) = side_panel_widths(ctx.screen_rect().width());
-        let panel = egui::SidePanel::left("facets")
+        let (left_max, _) = side_panel_widths(ui.ctx().content_rect().width());
+        let panel = egui::Panel::left("facets")
             .resizable(true)
-            .default_width(self.filters_width.min(left_max))
-            .width_range(260.0..=left_max)
+            .default_size(self.filters_width.min(left_max))
+            .size_range(260.0..=left_max)
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(lumen::INK)
-                    .inner_margin(egui::Margin::symmetric(12.0, 10.0)),
+                    .inner_margin(egui::Margin::symmetric(12, 10)),
             )
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.right_top(), r.right_bottom()],
@@ -3662,7 +3678,7 @@ impl App {
                 );
                 ui.painter().rect_filled(
                     line,
-                    egui::Rounding::same(0.0),
+                    lumen::radius(0.0),
                     theme::alpha(theme::BORDER, 170),
                 );
                 ui.add_space(2.0);
@@ -3689,7 +3705,7 @@ impl App {
         self.filters_width = panel.response.rect.width();
     }
 
-    fn right_panel(&mut self, ctx: &egui::Context) {
+    fn right_panel(&mut self, ui: &mut egui::Ui) {
         // La scheda appartiene alla griglia; la chat resta a tutta larghezza.
         if self.mode != ViewMode::Griglia || self.show_settings {
             return;
@@ -3698,17 +3714,17 @@ impl App {
         if self.filters_open {
             return;
         }
-        let (_, right_max) = side_panel_widths(ctx.screen_rect().width());
+        let (_, right_max) = side_panel_widths(ui.ctx().content_rect().width());
         let Some(d) = self.detail.clone() else {
             if self.detail_loading {
-                egui::SidePanel::right("detail_loading")
-                    .default_width(380.0_f32.min(right_max))
+                egui::Panel::right("detail_loading")
+                    .default_size(380.0_f32.min(right_max))
                     .frame(
-                        egui::Frame::none()
+                        egui::Frame::NONE
                             .fill(lumen::INK)
-                            .inner_margin(egui::Margin::same(14.0)),
+                            .inner_margin(egui::Margin::same(14)),
                     )
-                    .show(ctx, |ui| {
+                    .show(ui, |ui| {
                         // Segnaposto animati: la scheda sta arrivando.
                         let now = ui.ctx().input(|i| i.time);
                         ui.add_space(8.0);
@@ -3733,16 +3749,16 @@ impl App {
             }
             return;
         };
-        egui::SidePanel::right("detail")
+        egui::Panel::right("detail")
             .resizable(true)
-            .default_width(392.0_f32.min(right_max))
-            .width_range(280.0..=right_max)
+            .default_size(392.0_f32.min(right_max))
+            .size_range(280.0..=right_max)
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(lumen::INK)
-                    .inner_margin(egui::Margin::symmetric(14.0, 10.0)),
+                    .inner_margin(egui::Margin::symmetric(14, 10)),
             )
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.left_top(), r.left_bottom()],
@@ -3769,7 +3785,7 @@ impl App {
         if self.detail.is_none() && !self.detail_loading {
             return;
         }
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let area_rect = egui::Rect::from_min_max(
             egui::pos2(screen.left() + 72.0, screen.top() + 48.0),
             egui::pos2(screen.right(), screen.bottom() - 28.0),
@@ -3782,36 +3798,35 @@ impl App {
         );
         let d = self.detail.clone();
         let mut actions = Vec::new();
-        egui::Area::new(egui::Id::new("chat-detail-preview"))
+        egui::Area::new(egui::Id::unique("chat-detail-preview"))
             .order(egui::Order::Foreground)
             .fixed_pos(area_rect.min)
             .show(ctx, |ui| {
                 ui.set_clip_rect(area_rect);
                 ui.painter().rect_filled(
                     area_rect,
-                    egui::Rounding::ZERO,
+                    egui::CornerRadius::ZERO,
                     lumen::alpha(lumen::INK, 205),
                 );
                 // Blocca la chat sotto il velo.
                 let _ = ui.interact(
                     area_rect,
-                    egui::Id::new("chat-detail-scrim"),
+                    egui::Id::unique("chat-detail-scrim"),
                     egui::Sense::click(),
                 );
                 ui.painter().rect_filled(
                     modal,
-                    egui::Rounding::same(lumen::RADIUS),
+                    lumen::radius(lumen::RADIUS),
                     lumen::INK,
                 );
                 ui.painter().rect_stroke(
                     modal,
-                    egui::Rounding::same(lumen::RADIUS),
-                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI),
-                );
+                    lumen::radius(lumen::RADIUS),
+                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI), egui::StrokeKind::Inside);
                 let inner = modal.shrink(16.0);
                 if let Some(d) = &d {
                     let track = self.simkl_track(&d.movie);
-                    ui.allocate_new_ui(
+                    ui.scope_builder(
                         egui::UiBuilder::new().max_rect(inner),
                         |ui| {
                             ui.set_min_height(inner.height());
@@ -3839,19 +3854,20 @@ impl App {
         }
     }
 
-    fn central(&mut self, ctx: &egui::Context) {        let chat = self.mode == ViewMode::Chat && !self.show_settings;
+    fn central(&mut self, ui: &mut egui::Ui) {
+        let chat = self.mode == ViewMode::Chat && !self.show_settings;
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(egui::Color32::TRANSPARENT)
                     // In chat il composer arriva fino al piè di pagina; la
                     // griglia conserva il suo respiro sopra e sotto.
                     .inner_margin(egui::Margin::symmetric(
-                        if chat { 0.0 } else { 14.0 },
-                        if chat { 0.0 } else { 10.0 },
+                        if chat { 0 } else { 14 },
+                        if chat { 0 } else { 10 },
                     )),
             )
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 if self.show_settings {
                     self.settings_page(ui);
                     return;
@@ -3879,7 +3895,7 @@ impl App {
                                     egui::RichText::new("Apri impostazioni").size(13.0),
                                 )
                                 .fill(theme::ACCENT)
-                                .rounding(egui::Rounding::same(10.0)),
+                                .corner_radius(lumen::radius(10.0)),
                             )
                             .clicked()
                         {
@@ -3899,7 +3915,8 @@ impl App {
                 }
 
                 if self.mode == ViewMode::Chat {
-                    self.chat_central(ui, ctx);
+                    let ctx = ui.ctx().clone();
+                    self.chat_central(ui, &ctx);
                 } else {
                     self.grid_central(ui);
                 }
@@ -3978,7 +3995,7 @@ impl App {
 
     /// Composer della conversazione: pannello fisso sopra la barra di stato,
     /// allineato alla colonna dei risultati.
-    fn chat_composer(&mut self, ctx: &egui::Context) {
+    fn chat_composer(&mut self, ui: &mut egui::Ui) {
         if self.mode != ViewMode::Chat
             || self.chat.is_empty()
             || self.show_settings
@@ -3986,17 +4003,17 @@ impl App {
         {
             return;
         }
-        let avail = (ctx.screen_rect().width() - 72.0).max(200.0);
+        let avail = (ui.ctx().content_rect().width() - 72.0).max(200.0);
         let pad = if avail < 900.0 { 20.0 } else { 34.0 };
         let width = (avail - pad * 2.0).min(1100.0);
         let want_focus = self.focus == Some(ViewMode::Chat);
         let mut send = false;
         // ID diverso dal TextEdit "chat-composer": se coincidono, lo stato del
         // pannello sovrascrive il fuoco del campo e non si riesce piu a scrivere.
-        egui::TopBottomPanel::bottom("chat-composer-panel")
-            .exact_height(64.0)
-            .frame(egui::Frame::none().fill(lumen::INK))
-            .show(ctx, |ui| {
+        egui::Panel::bottom("chat-composer-panel")
+            .exact_size(64.0)
+            .frame(egui::Frame::NONE.fill(lumen::INK))
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.left_top(), r.right_top()],
@@ -4063,7 +4080,7 @@ impl App {
 
     /// Pager fisso sopra la barra di stato: pagina corrente a sinistra,
     /// frecce a destra. Non ruba spazio quando c'è una pagina sola.
-    fn grid_pager(&mut self, ctx: &egui::Context) {
+    fn grid_pager(&mut self, ui: &mut egui::Ui) {
         if self.mode != ViewMode::Griglia || self.total_pages <= 1 || self.show_settings {
             return;
         }
@@ -4072,10 +4089,10 @@ impl App {
         let prev = page > 1 && !self.loading;
         let next = page < pages && !self.loading;
         let mut target = None;
-        egui::TopBottomPanel::bottom("grid-pager")
-            .exact_height(36.0)
-            .frame(egui::Frame::none().fill(lumen::INK))
-            .show(ctx, |ui| {
+        egui::Panel::bottom("grid-pager")
+            .exact_size(36.0)
+            .frame(egui::Frame::NONE.fill(lumen::INK))
+            .show(ui, |ui| {
                 let r = ui.max_rect();
                 ui.painter().line_segment(
                     [r.left_top(), r.right_top()],
@@ -4318,7 +4335,7 @@ impl App {
                                         egui::Button::new(
                                             egui::RichText::new("Controlla").size(11.0),
                                         )
-                                        .rounding(egui::Rounding::same(9.0)),
+                                        .corner_radius(lumen::radius(9.0)),
                                     )
                                     .clicked()
                                 {
@@ -4843,23 +4860,23 @@ impl App {
             74.0
         };
         let y = -lift + (1.0 - enter) * 20.0;
-        egui::Area::new(egui::Id::new("toast"))
+        egui::Area::new(egui::Id::unique("toast"))
             .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, y))
             .order(egui::Order::Foreground)
             .interactable(false)
             .show(ctx, |ui| {
                 ui.set_opacity(a);
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(theme::mix(theme::CARD_HOVER, theme::PANEL, 0.35))
                     .stroke(egui::Stroke::new(1.0_f32, theme::alpha(theme::ACCENT, 150)))
-                    .rounding(egui::Rounding::same(13.0))
+                    .corner_radius(lumen::radius(13.0))
                     .shadow(egui::epaint::Shadow {
-                        offset: egui::vec2(0.0, 12.0),
-                        blur: 34.0,
-                        spread: 0.0,
+                        offset: [0, 12],
+                        blur: 34,
+                        spread: 0,
                         color: egui::Color32::from_black_alpha(150),
                     })
-                    .inner_margin(egui::Margin::symmetric(14.0, 9.0))
+                    .inner_margin(egui::Margin::symmetric(14, 9))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             fx::dot(ui, theme::ACCENT, 0.0);
@@ -4883,16 +4900,23 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.update_ui(ui, frame);
+    }
+}
+
+impl App {
+    fn update_ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         self.poll();
         if self.images.poll() {
             ctx.request_repaint();
         }
         self.tick();
-        window_resize_edges(ctx);
+        window_resize_edges(&ctx);
         let now = ctx.input(|i| i.time);
-        fx::background(ctx, now);
-        self.shortcuts(ctx);
+        fx::background(&ctx, now);
+        self.shortcuts(&ctx);
         if !self.boot_done {
             self.boot_done = true;
             if self.tmdb.is_some() {
@@ -4902,23 +4926,23 @@ impl eframe::App for App {
             }
         }
         self.maybe_check_updates();
-        self.header(ctx);
-        self.status_bar(ctx);
-        self.rail(ctx);
-        self.grid_toolbar(ctx);
-        self.chat_composer(ctx);
-        self.left_panel(ctx);
-        self.right_panel(ctx);
-        self.grid_pager(ctx);
-        self.central(ctx);
-        self.chat_detail_preview(ctx);
+        self.header(ui);
+        self.status_bar(ui);
+        self.rail(ui);
+        self.grid_toolbar(ui);
+        self.chat_composer(ui);
+        self.left_panel(ui);
+        self.right_panel(ui);
+        self.grid_pager(ui);
+        self.central(ui);
+        self.chat_detail_preview(&ctx);
         if self.guide_open {
-            let actions = facets::guide_window(ctx, &self.tax, &mut self.guide_open);
+            let actions = facets::guide_window(&ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {
                 self.apply_actions(actions);
             }
         }
-        self.toast_overlay(ctx);
+        self.toast_overlay(&ctx);
         if self.loading
             || self.detail_loading
             || self.chat_busy
@@ -6144,7 +6168,7 @@ fn pager_button(
     };
     ui.painter().rect_filled(
         rect,
-        egui::Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         if hover > 0.01 {
             lumen::RAISED
         } else {
@@ -6153,7 +6177,7 @@ fn pager_button(
     );
     ui.painter().rect_stroke(
         rect,
-        egui::Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         egui::Stroke::new(
             1.0_f32,
             if hover > 0.01 {
@@ -6161,8 +6185,7 @@ fn pager_button(
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     lumen::icon(
         ui.painter(),
         egui::Rect::from_center_size(rect.center(), egui::vec2(14.0, 14.0)),
@@ -6223,7 +6246,7 @@ fn window_resize_edges(ctx: &egui::Context) {
     let Some(pos) = ctx.pointer_hover_pos() else {
         return;
     };
-    let Some(dir) = resize_edge(ctx.screen_rect(), pos) else {
+    let Some(dir) = resize_edge(ctx.viewport_rect(), pos) else {
         return;
     };
     use egui::viewport::ResizeDirection as Dir;
@@ -6270,7 +6293,7 @@ fn window_caption(
             theme::mix(lumen::INK, lumen::RAISED, hover)
         };
         ui.painter()
-            .rect_filled(resp.rect, egui::Rounding::ZERO, fill);
+            .rect_filled(resp.rect, egui::CornerRadius::ZERO, fill);
     }
     let color = if matches!(icon, CaptionIcon::Close) {
         theme::mix(theme::DIM, egui::Color32::WHITE, hover)
@@ -6290,9 +6313,8 @@ fn window_caption(
         CaptionIcon::Maximize => {
             p.rect_stroke(
                 egui::Rect::from_center_size(c, egui::vec2(8.5, 8.5)),
-                egui::Rounding::same(0.5),
-                stroke,
-            );
+                lumen::radius(0.5),
+                stroke, egui::StrokeKind::Inside);
         }
         CaptionIcon::Restore => {
             let back = egui::Rect::from_center_size(
@@ -6306,7 +6328,7 @@ fn window_caption(
             // Del riquadro dietro restano visibili solo alto e lato destro.
             p.line_segment([back.left_top(), back.right_top()], stroke);
             p.line_segment([back.right_top(), back.right_bottom()], stroke);
-            p.rect_stroke(front, egui::Rounding::same(0.5), stroke);
+            p.rect_stroke(front, lumen::radius(0.5), stroke, egui::StrokeKind::Inside);
         }
         CaptionIcon::Close => {
             let d = 4.2;

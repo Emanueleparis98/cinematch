@@ -1,5 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Sort {
+    #[default]
     Popularity,
     Rating,
     Votes,
@@ -40,12 +41,6 @@ impl Sort {
             Sort::Upcoming => "popularity.desc",
             Sort::Oldest => "primary_release_date.asc",
         }
-    }
-}
-
-impl Default for Sort {
-    fn default() -> Self {
-        Sort::Popularity
     }
 }
 

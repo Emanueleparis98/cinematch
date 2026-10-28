@@ -33,11 +33,11 @@ pub fn strip(ui: &mut egui::Ui, unlocks: &[Unlock]) -> Option<usize> {
         return None;
     }
     let mut clicked = None;
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(lumen::DEEP)
         .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .rounding(egui::Rounding::same(lumen::RADIUS))
-        .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+        .corner_radius(lumen::radius(lumen::RADIUS))
+        .inner_margin(egui::Margin::symmetric(12, 9))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(lumen::mono(9.0, "SBLOCCA").color(lumen::EMBER));
@@ -67,12 +67,12 @@ fn row(ui: &mut egui::Ui, u: &Unlock) -> bool {
     let painter = ui.painter().with_clip_rect(rect);
     painter.rect_filled(
         rect,
-        egui::Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         theme::mix(lumen::SURFACE, lumen::RAISED, hover),
     );
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         Stroke::new(
             1.0_f32,
             if hover > 0.05 {
@@ -80,8 +80,7 @@ fn row(ui: &mut egui::Ui, u: &Unlock) -> bool {
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
 
     let left = rect.left() + 10.0;
     let text_width = (rect.width() - 36.0).max(40.0);

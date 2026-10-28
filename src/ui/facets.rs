@@ -7,7 +7,7 @@
 //! dura quanto la sessione e non tocca il disco.
 
 use egui::{
-    Align, Align2, Color32, FontId, Frame, Id, Layout, Margin, Response, RichText, Rounding, Sense,
+    Align, Align2, Color32, FontId, Frame, Id, Layout, Margin, Response, RichText, Sense,
     Stroke, Ui,
 };
 
@@ -130,8 +130,8 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
         theme::ACCENT,
         hover * 0.65,
     );
-    p.rect_filled(rect, Rounding::same(8.0), fill);
-    p.rect_stroke(rect, Rounding::same(8.0), Stroke::new(1.0_f32, stroke));
+    p.rect_filled(rect, lumen::radius(8.0), fill);
+    p.rect_stroke(rect, lumen::radius(8.0), Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
     p.text(
         egui::pos2(rect.left() + pad, rect.center().y),
         Align2::LEFT_CENTER,
@@ -176,6 +176,7 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
 }
 
 /// Corpo del pannello: sezioni, guida e note. Scorre sotto la testata.
+#[allow(clippy::too_many_arguments)]
 pub fn sections(
     ui: &mut Ui,
     tax: &Taxonomy,
@@ -263,7 +264,7 @@ pub fn sections(
     if show {
         sep(ui, &mut drawn);
         let total = items.len();
-        let open_id = Id::new("facet-generi-tutti");
+        let open_id = Id::unique("facet-generi-tutti");
         let show_all = ui.data(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
         // I generi principali restano sotto gli occhi; i settoriali arrivano
         // con «Tutti i generi». Le scelte fuori elenco restano sempre visibili.
@@ -341,7 +342,7 @@ pub fn sections(
     if show {
         sep(ui, &mut drawn);
         let total = items.len();
-        let open_id = Id::new("facet-paesi-tutti");
+        let open_id = Id::unique("facet-paesi-tutti");
         let show_all = ui.data(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
         // Al chiuso restano i primi otto, piu' quelli gia' scelti: un filtro
         // attivo non sparisce mai sotto "Tutti i paesi".
@@ -426,7 +427,7 @@ pub fn sections(
                 });
                 if !filtering {
                     ui.add_space(4.0);
-                    let id = Id::new("cinematch_tema_nuovo");
+                    let id = Id::unique("cinematch_tema_nuovo");
                     let mut buf = ui.data_mut(|d| d.get_temp::<String>(id).unwrap_or_default());
                     let w = ui.available_width();
                     let resp = text_input(ui, &mut buf, "Aggiungi un tema (invio)…", w);
@@ -495,7 +496,7 @@ pub fn sections(
                     open_guide(ui, guide_open);
                     let label = m.label.clone();
                     ui.data_mut(|d| {
-                        d.insert_temp(Id::new("cinematch_guide_query"), label);
+                        d.insert_temp(Id::unique("cinematch_guide_query"), label);
                     });
                     query.clear();
                 }
@@ -525,11 +526,11 @@ pub fn sections(
     // ---- spiegazioni ----
     if !messages.is_empty() || !info.is_empty() || !ai_notes.is_empty() {
         ui.add_space(10.0);
-        Frame::none()
+        Frame::NONE
             .fill(theme::CARD)
             .stroke(Stroke::new(1.0_f32, theme::BORDER))
-            .rounding(Rounding::same(10.0))
-            .inner_margin(Margin::same(9.0))
+            .corner_radius(lumen::radius(10.0))
+            .inner_margin(Margin::same(9))
             .show(ui, |ui| {
                 ui.label(
                     RichText::new("PERCHÉ")
@@ -559,8 +560,8 @@ pub fn sections(
 fn open_guide(ui: &mut Ui, guide_open: &mut bool) {
     *guide_open = true;
     ui.data_mut(|d| {
-        d.insert_temp(Id::new("cinematch_guide_query"), String::new());
-        d.insert_temp(Id::new("cinematch_guide_fresh"), true);
+        d.insert_temp(Id::unique("cinematch_guide_query"), String::new());
+        d.insert_temp(Id::unique("cinematch_guide_fresh"), true);
     });
 }
 
@@ -593,7 +594,7 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
                 .color(lumen::MUTED),
             );
             ui.add_space(6.0);
-            let qid = Id::new("cinematch_guide_query");
+            let qid = Id::unique("cinematch_guide_query");
             let mut q = ui.data_mut(|d| d.get_temp::<String>(qid).unwrap_or_default());
             search_field(ui, &mut q, "Cerca una corrente…");
             ui.data_mut(|d| d.insert_temp(qid, q.clone()));
@@ -604,13 +605,13 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
             let needle = norm(&q);
             let mut found = 0usize;
             let fresh = ui.data(|d| {
-                d.get_temp::<bool>(Id::new("cinematch_guide_fresh"))
+                d.get_temp::<bool>(Id::unique("cinematch_guide_fresh"))
                     .unwrap_or(false)
             });
             let mut scroll = egui::ScrollArea::vertical()
                 .id_salt("guide-scroll")
                 .auto_shrink([false, false])
-                .max_height((ctx.screen_rect().height() * 0.62).max(300.0));
+                .max_height((ctx.content_rect().height() * 0.62).max(300.0));
             if fresh {
                 scroll = scroll.vertical_scroll_offset(0.0);
             }
@@ -667,7 +668,7 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
                         );
                     }
                 });
-            ui.data_mut(|d| d.insert_temp(Id::new("cinematch_guide_fresh"), false));
+            ui.data_mut(|d| d.insert_temp(Id::unique("cinematch_guide_fresh"), false));
         });
     if let Some(action) = apply {
         out.push(action);
@@ -691,7 +692,7 @@ fn paint_badge(painter: &egui::Painter, rect: egui::Rect, n: usize) {
         FontId::proportional(10.0),
         Color32::PLACEHOLDER,
     );
-    painter.rect_filled(rect, Rounding::same(rect.height() * 0.5), theme::ACCENT_DIM);
+    painter.rect_filled(rect, lumen::radius(rect.height() * 0.5), theme::ACCENT_DIM);
     painter.galley(
         egui::pos2(
             rect.center().x - galley.size().x * 0.5,
@@ -721,7 +722,7 @@ fn ghost(ui: &mut Ui, text: &str, enabled: bool) -> Response {
     if hover > 0.02 {
         ui.painter().rect_filled(
             rect,
-            Rounding::same(7.0),
+            lumen::radius(7.0),
             theme::alpha(theme::ACCENT, (24.0 * hover) as u8),
         );
     }
@@ -767,16 +768,16 @@ fn help_button(ui: &mut Ui) -> Response {
 
 /// Campo di testo con cornice arrotondata e anello di fuoco blu.
 fn text_input(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Response {
-    let frame = Frame::none()
+    let frame = Frame::NONE
         .fill(lumen::DEEP)
         .stroke(Stroke::new(1.0_f32, theme::BORDER))
-        .rounding(Rounding::same(lumen::RADIUS_SM))
-        .inner_margin(Margin::symmetric(8.0, 4.0));
+        .corner_radius(lumen::radius(lumen::RADIUS_SM))
+        .inner_margin(Margin::symmetric(8, 4));
     let inner = frame.show(ui, |ui| {
         ui.add_sized(
             [width - 16.0, 20.0],
             egui::TextEdit::singleline(text)
-                .frame(false)
+                .frame(egui::Frame::NONE)
                 .font(FontId::proportional(11.5))
                 .hint_text(RichText::new(hint).size(11.0).color(theme::FAINT)),
         )
@@ -784,9 +785,8 @@ fn text_input(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Respons
     if inner.inner.has_focus() {
         ui.painter().rect_stroke(
             inner.response.rect,
-            Rounding::same(lumen::RADIUS_SM),
-            Stroke::new(1.0_f32, theme::ACCENT),
-        );
+            lumen::radius(lumen::RADIUS_SM),
+            Stroke::new(1.0_f32, theme::ACCENT), egui::StrokeKind::Inside);
     }
     inner.inner
 }
@@ -836,17 +836,16 @@ fn pill(ui: &mut Ui, label: &str) -> Response {
     let p = ui.painter();
     p.rect_filled(
         rect,
-        Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         theme::mix(lumen::DEEP, lumen::RAISED, hover * 0.6),
     );
     p.rect_stroke(
         rect,
-        Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         Stroke::new(
             1.0_f32,
             theme::mix(theme::BORDER, theme::ACCENT, hover),
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     p.galley(
         rect.min + egui::vec2(7.0, 4.0),
         galley,
@@ -938,7 +937,7 @@ fn section(
 ) -> Vec<FacetAction> {
     // Id globale: lo stato della sezione non deve dipendere dall'id interno
     // dello ScrollArea, che cambia quando cambia il numero di widget sopra.
-    let id = Id::new(("facet-section", key));
+    let id = Id::unique(("facet-section", key));
     let stored = ui.data(|d| d.get_temp::<bool>(id));
     let open = forced_open || stored.unwrap_or(default_open || active > 0);
 
@@ -958,7 +957,7 @@ fn section(
     if hover > 0.02 {
         ui.painter().rect_filled(
             rect,
-            Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             theme::alpha(lumen::RAISED, (110.0 * hover) as u8),
         );
     }
@@ -1192,12 +1191,11 @@ fn metric_chip(
         )
     };
     let p = ui.painter();
-    p.rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
+    p.rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
     p.rect_stroke(
         rect,
-        Rounding::same(lumen::RADIUS_SM),
-        Stroke::new(1.0_f32, stroke),
-    );
+        lumen::radius(lumen::RADIUS_SM),
+        Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
     let galley = p.layout_no_wrap(
         label.to_owned(),
         FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
@@ -1216,9 +1214,9 @@ fn metric_chip(
         theme::mix(theme::FAINT, text, 0.55),
     );
 
-    let popup = Id::new(("metric-pop", key));
+    let popup = Id::unique(("metric-pop", key));
     if resp.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(popup));
+        egui::Popup::toggle_id(ui.ctx(), popup);
     }
     (resp, popup)
 }
@@ -1235,7 +1233,7 @@ fn menu_item(ui: &mut Ui, label: &str, selected: bool) -> bool {
         } else {
             theme::alpha(theme::CARD_HOVER, (150.0 * hover) as u8)
         };
-        ui.painter().rect_filled(rect, Rounding::same(7.0), fill);
+        ui.painter().rect_filled(rect, lumen::radius(7.0), fill);
     }
     let p = ui.painter();
     let galley = p.layout_no_wrap(
@@ -1274,12 +1272,11 @@ fn rating_popup(
 ) -> Option<FacetAction> {
     let mut chosen = None;
     let mut close = false;
-    egui::popup::popup_below_widget(
-        ui,
-        id,
-        resp,
-        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
-        |ui| {
+    egui::Popup::from_response(resp)
+        .id(id)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .open_memory(None)
+        .show(|ui| {
             ui.set_min_width(width.max(188.0));
             ui.label(RichText::new(title).size(10.0).color(theme::FAINT));
             ui.add_space(2.0);
@@ -1315,10 +1312,9 @@ fn rating_popup(
             if slider.changed() {
                 chosen = Some(make(Some(value)));
             }
-        },
-    );
+        });
     if close {
-        ui.memory_mut(|m| m.close_popup());
+        egui::Popup::close_id(ui.ctx(), id);
     }
     chosen
 }
@@ -1332,12 +1328,11 @@ fn votes_popup(
 ) -> Option<FacetAction> {
     let mut chosen = None;
     let mut close = false;
-    egui::popup::popup_below_widget(
-        ui,
-        id,
-        resp,
-        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
-        |ui| {
+    egui::Popup::from_response(resp)
+        .id(id)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .open_memory(None)
+        .show(|ui| {
             ui.set_min_width(width.max(188.0));
             ui.label(RichText::new("Voti minimi").size(10.0).color(theme::FAINT));
             ui.add_space(2.0);
@@ -1358,10 +1353,9 @@ fn votes_popup(
                     close = true;
                 }
             }
-        },
-    );
+        });
     if close {
-        ui.memory_mut(|m| m.close_popup());
+        egui::Popup::close_id(ui.ctx(), id);
     }
     chosen
 }
@@ -1383,12 +1377,11 @@ fn runtime_popup(
 ) -> Option<FacetAction> {
     let mut chosen = None;
     let mut close = false;
-    egui::popup::popup_below_widget(
-        ui,
-        id,
-        resp,
-        egui::popup::PopupCloseBehavior::CloseOnClickOutside,
-        |ui| {
+    egui::Popup::from_response(resp)
+        .id(id)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .open_memory(None)
+        .show(|ui| {
             ui.set_min_width(width.max(200.0));
             ui.label(RichText::new("Durata").size(10.0).color(theme::FAINT));
             ui.add_space(2.0);
@@ -1398,10 +1391,9 @@ fn runtime_popup(
                     close = true;
                 }
             }
-        },
-    );
+        });
     if close {
-        ui.memory_mut(|m| m.close_popup());
+        egui::Popup::close_id(ui.ctx(), id);
     }
     chosen
 }
@@ -1482,7 +1474,7 @@ fn hairline(ui: &mut Ui) {
     );
     ui.painter().rect_filled(
         rect,
-        Rounding::same(0.0),
+        lumen::radius(0.0),
         theme::alpha(theme::BORDER, 170),
     );
 }
@@ -1567,7 +1559,7 @@ mod tests {
     fn gli_alias_trovano_le_sezioni() {
         assert!(wanted("voto", "Metriche", METRIC_ALIASES));
         assert!(wanted("paesi", "Paese e lingua", COUNTRY_ALIASES));
-        assert!(wanted("horror", "Genere", GENRE_ALIASES) == false);
+        assert!(!wanted("horror", "Genere", GENRE_ALIASES));
         assert!(wanted("generi", "Genere", GENRE_ALIASES));
     }
 

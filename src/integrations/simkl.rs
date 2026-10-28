@@ -920,6 +920,7 @@ pub fn status_label(status: &str) -> &'static str {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;

@@ -1,7 +1,7 @@
 //! Chat LUMEN: home editoriale, conversazione lineare, risultati hero + griglia
 //! e composer piatto. Le azioni restano quelle della 0.2.3.
 
-use egui::{Align2, Color32, FontFamily, FontId, Rect, Rounding, Sense, Stroke};
+use egui::{Align2, Color32, FontFamily, FontId, Rect, Sense, Stroke};
 
 use crate::domain::model::{Facets, ImdbRating, Movie};
 use crate::domain::suggestions::Suggestion;
@@ -19,16 +19,11 @@ const RESULT_BREAKPOINT: f32 = 940.0;
 /// da migliaia di token.
 pub const MAX_PROMPT_CHARS: usize = 800;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum State {
     Busy,
+    #[default]
     Done,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::Done
-    }
 }
 
 #[derive(Clone, Default)]
@@ -144,7 +139,7 @@ fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
     let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
     let label = text.to_uppercase();
     let width = ui
-        .fonts(|f| f.layout_no_wrap(label.clone(), font.clone(), color).size().x)
+        .fonts_mut(|f| f.layout_no_wrap(label.clone(), font.clone(), color).size().x)
         + 2.0;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, 20.0), Sense::click());
     let ink = if resp.hovered() {
@@ -173,13 +168,13 @@ fn hairline(ui: &mut egui::Ui) {
         Sense::hover(),
     );
     ui.painter()
-        .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
+        .rect_filled(rect, egui::CornerRadius::ZERO, lumen::BORDER);
 }
 
 fn hairline_width(ui: &mut egui::Ui, width: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 1.0), Sense::hover());
     ui.painter()
-        .rect_filled(rect, Rounding::ZERO, lumen::BORDER);
+        .rect_filled(rect, egui::CornerRadius::ZERO, lumen::BORDER);
 }
 
 fn wrapped_font(
@@ -461,7 +456,7 @@ fn personal_strip(
     let page = (card_w + gap) * 5.0;
     egui::ScrollArea::horizontal()
         .id_salt(("personal-strip", title))
-        .drag_to_scroll(true)
+        .scroll_source(egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Always, ..Default::default() })
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.horizontal_top(|ui| {
@@ -491,7 +486,7 @@ fn personal_card(
     );
     let poster = Rect::from_min_size(rect.min, egui::vec2(width, poster_h));
     let painter = ui.painter();
-    painter.rect_filled(poster, Rounding::ZERO, lumen::SURFACE);
+    painter.rect_filled(poster, egui::CornerRadius::ZERO, lumen::SURFACE);
     if let Some(url) = &card.poster {
         if let Some(tex) = images.texture(ui.ctx(), url) {
             painter.image(
@@ -504,9 +499,8 @@ fn personal_card(
             // bordi con il fondo, non con il nero del buffer.
             painter.rect_stroke(
                 poster,
-                Rounding::ZERO,
-                Stroke::new(1.0_f32, lumen::BORDER),
-            );
+                egui::CornerRadius::ZERO,
+                Stroke::new(1.0_f32, lumen::BORDER), egui::StrokeKind::Inside);
         } else {
             painter.text(
                 poster.center(),
@@ -528,22 +522,21 @@ fn personal_card(
     if resp.hovered() {
         painter.rect_stroke(
             poster,
-            Rounding::ZERO,
-            Stroke::new(1.0_f32, lumen::EMBER),
-        );
+            egui::CornerRadius::ZERO,
+            Stroke::new(1.0_f32, lumen::EMBER), egui::StrokeKind::Inside);
     }
     if let Some(progress) = card.progress {
         let track = Rect::from_min_size(
             egui::pos2(poster.left(), poster.bottom() - 4.0),
             egui::vec2(poster.width(), 4.0),
         );
-        painter.rect_filled(track, Rounding::ZERO, lumen::INK);
+        painter.rect_filled(track, egui::CornerRadius::ZERO, lumen::INK);
         painter.rect_filled(
             Rect::from_min_size(
                 track.min,
                 egui::vec2(track.width() * progress.clamp(0.0, 1.0), 4.0),
             ),
-            Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             lumen::EMBER,
         );
     }
@@ -567,6 +560,7 @@ fn personal_card(
     resp.on_hover_cursor(egui::CursorIcon::PointingHand);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn hero_left(
     ui: &mut egui::Ui,
     width: f32,
@@ -628,7 +622,7 @@ fn collage(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32)
     let grid_h = small_w * 3.0 + gap;
     ui.horizontal_top(|ui| {
         ui.add_space(offset);
-        lumen::poster(ui, images, movies.get(0), big_w, big_h, true);
+        lumen::poster(ui, images, movies.first(), big_w, big_h, true);
         ui.add_space(12.0);
         ui.vertical(|ui| {
             ui.add_space(((big_h - grid_h) * 0.5).max(0.0));
@@ -911,7 +905,7 @@ fn suggestion_card(
     let p = ui.painter();
     p.rect_filled(
         rect,
-        Rounding::same(lumen::RADIUS),
+        lumen::radius(lumen::RADIUS),
         if hover > 0.01 {
             lumen::RAISED
         } else {
@@ -920,7 +914,7 @@ fn suggestion_card(
     );
     p.rect_stroke(
         rect,
-        Rounding::same(lumen::RADIUS),
+        lumen::radius(lumen::RADIUS),
         Stroke::new(
             1.0_f32,
             if hover > 0.01 {
@@ -928,8 +922,7 @@ fn suggestion_card(
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     p.text(
         rect.min + egui::vec2(14.0, 12.0),
         Align2::LEFT_TOP,
@@ -944,7 +937,7 @@ fn suggestion_card(
             title_size,
             FontFamily::Name(fonts::LUMEN_DISPLAY.into()),
         );
-        let measured = ui.fonts(|f| {
+        let measured = ui.fonts_mut(|f| {
             f.layout_no_wrap(pista.title.clone(), font, lumen::IVORY)
                 .size()
                 .x
@@ -990,7 +983,7 @@ fn suggestion_card(
             egui::pos2(rect.left() + 14.0, rect.bottom() - 34.0),
             egui::vec2(width - 28.0, 1.0),
         ),
-        Rounding::ZERO,
+        egui::CornerRadius::ZERO,
         lumen::BORDER,
     );
     let footer = if hover > 0.01 {
@@ -1020,6 +1013,7 @@ fn suggestion_card(
 
 // -------------------------------------------------------- conversazione -----
 
+#[allow(clippy::too_many_arguments)]
 pub fn view(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -1075,8 +1069,8 @@ pub fn view(
             });
         });
     let max_offset = (output.content_size.y - output.inner_rect.height()).max(0.0);
-    actions.scroll_offset = output.state.offset.y;
-    actions.at_bottom = output.state.offset.y >= max_offset - 8.0;
+    actions.scroll_offset = output.state.clamped_offset().y;
+    actions.at_bottom = output.state.clamped_offset().y >= max_offset - 8.0;
     actions
 }
 
@@ -1104,7 +1098,7 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
             egui::pos2(right + 10.0, rect.top() + 2.0),
             egui::pos2(right + 12.0, rect.top() + 2.0 + galley.size().y),
         ),
-        Rounding::ZERO,
+        egui::CornerRadius::ZERO,
         lumen::EMBER,
     );
     ui.painter().text(
@@ -1116,6 +1110,7 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn answer_view(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -1201,7 +1196,7 @@ fn answer_view(
         ui.add_space(5.0);
         ui.horizontal_top(|ui| {
             let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 16.0), Sense::hover());
-            ui.painter().rect_filled(bar, Rounding::ZERO, lumen::EMBER);
+            ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
             ui.add_space(7.0);
             ui.add(
                 egui::Label::new(wrapped(
@@ -1261,16 +1256,15 @@ fn answer_view(
     hairline_width(ui, width);
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        if a.grid_ready && total > 0 && !a.facets.is_empty() {
-            if link(
+        if a.grid_ready && total > 0 && !a.facets.is_empty()
+            && link(
                 ui,
                 &format!("Vedi tutti i {} in griglia ↗", theme::thousands(total)),
                 lumen::EMBER,
             )
             .clicked()
-            {
-                actions.show_all = Some(index);
-            }
+        {
+            actions.show_all = Some(index);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
@@ -1289,11 +1283,11 @@ fn hero_card(
     card: &Card,
     actions: &mut Actions,
 ) {
-    let frame = egui::Frame::none()
+    let frame = egui::Frame::NONE
         .fill(lumen::SURFACE)
         .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .rounding(Rounding::same(lumen::RADIUS))
-        .inner_margin(egui::Margin::same(12.0));
+        .corner_radius(lumen::radius(lumen::RADIUS))
+        .inner_margin(egui::Margin::same(12));
     frame.show(ui, |ui| {
         let available = ui.available_width();
         ui.set_min_width(available);
@@ -1383,14 +1377,14 @@ fn compact_card(
     const CARD_H: f32 = 172.0;
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::hover());
-    let id = ui.id().with(("chat-card", card.movie.id));
+    let id = ui.scope_id().with(("chat-card", card.movie.id));
     let resp = ui.interact(rect, id, Sense::hover());
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
     ui.painter().rect_filled(
         rect,
-        Rounding::same(lumen::RADIUS),
+        lumen::radius(lumen::RADIUS),
         if hover > 0.01 {
             lumen::RAISED
         } else {
@@ -1399,7 +1393,7 @@ fn compact_card(
     );
     ui.painter().rect_stroke(
         rect,
-        Rounding::same(lumen::RADIUS),
+        lumen::radius(lumen::RADIUS),
         Stroke::new(
             1.0_f32,
             if hover > 0.01 {
@@ -1407,15 +1401,14 @@ fn compact_card(
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
 
     let poster_rect = Rect::from_min_size(
         rect.min + egui::vec2(10.0, 10.0),
         egui::vec2(64.0, 96.0),
     );
     ui.painter()
-        .rect_filled(poster_rect, Rounding::ZERO, lumen::RAISED);
+        .rect_filled(poster_rect, egui::CornerRadius::ZERO, lumen::RAISED);
     let mut loaded = false;
     if let Some(path) = &card.movie.poster_path {
         let uri = poster_url(path, "w342");
@@ -1440,7 +1433,7 @@ fn compact_card(
     }
     ui.painter().rect_stroke(
         poster_rect,
-        Rounding::ZERO,
+        egui::CornerRadius::ZERO,
         Stroke::new(
             1.0_f32,
             if poster_resp.hovered() {
@@ -1448,8 +1441,7 @@ fn compact_card(
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     if poster_resp.clicked() {
         actions.open_detail = Some(card.movie.id);
     }
@@ -1492,7 +1484,7 @@ fn compact_card(
     if !card.consiglio.is_empty() {
         p.rect_filled(
             Rect::from_min_size(rect.min + egui::vec2(84.0, 78.0), egui::vec2(2.0, 26.0)),
-            Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             lumen::EMBER,
         );
         let cons = p.layout_job(wrapped_font(
@@ -1545,7 +1537,7 @@ fn card_link(
 ) -> (f32, bool) {
     let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
     let label = text.to_uppercase();
-    let width = ui.fonts(|f| {
+    let width = ui.fonts_mut(|f| {
         f.layout_no_wrap(label.clone(), font.clone(), color)
             .size()
             .x
@@ -1576,7 +1568,7 @@ fn card_link(
 fn consiglio(ui: &mut egui::Ui, text: &str, size: f32) {
     ui.horizontal_top(|ui| {
         let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 26.0), Sense::hover());
-        ui.painter().rect_filled(bar, Rounding::ZERO, lumen::EMBER);
+        ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
         ui.add_space(7.0);
         ui.add(
             egui::Label::new(wrapped(
@@ -1599,7 +1591,7 @@ fn busy_view(
     actions: &mut Actions,
 ) {
     const TAPPE: [&str; 3] = ["INTERPRETO", "CERCO SU TMDB", "SCELGO I FILM"];
-    let stage = a.stage.min(3).max(1);
+    let stage = a.stage.clamp(1, 3);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
         for (i, label) in TAPPE.iter().enumerate() {
@@ -1620,7 +1612,7 @@ fn busy_view(
     ui.add_space(9.0);
     let target = (stage as f32 / 3.0).max(0.08);
     let anim = ui.ctx().animate_value_with_time(
-        egui::Id::new(("chat-progress", index)),
+        egui::Id::unique(("chat-progress", index)),
         target,
         0.4,
     );
@@ -1669,7 +1661,7 @@ fn composer_inner(
     wide_send: bool,
 ) -> bool {
     let mut send = false;
-    let edit_id = egui::Id::new("chat-composer");
+    let edit_id = egui::Id::unique("chat-composer");
     let focused_at_start = ui.memory(|m| m.has_focus(edit_id));
     let focused = focused_at_start;
     let button_w = if wide_send { 100.0 } else { 40.0 };
@@ -1677,7 +1669,7 @@ fn composer_inner(
     let inner_w = (width - 24.0).max(120.0);
     let text_w = (inner_w - button_w - gap).max(70.0);
 
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(lumen::DEEP)
         .stroke(Stroke::new(
             1.0_f32,
@@ -1687,8 +1679,8 @@ fn composer_inner(
                 lumen::BORDER
             },
         ))
-        .rounding(Rounding::same(lumen::RADIUS_SM))
-        .inner_margin(egui::Margin::symmetric(12.0, 6.0))
+        .corner_radius(lumen::radius(lumen::RADIUS_SM))
+        .inner_margin(egui::Margin::symmetric(12, 6))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
@@ -1696,7 +1688,7 @@ fn composer_inner(
                     [text_w, 40.0],
                     egui::TextEdit::multiline(draft)
                         .id(edit_id)
-                        .frame(false)
+                        .frame(egui::Frame::NONE)
                         .char_limit(MAX_PROMPT_CHARS)
                         .desired_rows(1)
                         .hint_text(hint)
@@ -1756,7 +1748,7 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
         lumen::DEEP
     };
     ui.painter()
-        .rect_filled(rect, Rounding::same(lumen::RADIUS_SM), fill);
+        .rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
     let ink = if enabled {
         lumen::INK
     } else {

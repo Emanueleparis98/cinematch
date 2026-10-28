@@ -419,6 +419,7 @@ fn add_periods(
     }
 }
 
+#[allow(clippy::field_reassign_with_default)] // literal blocks would be harder to scan
 fn add_discoveries(
     out: &mut Vec<Suggestion>,
     seen: &mut BTreeSet<String>,
@@ -687,6 +688,7 @@ fn add_discoveries(
 
 // ----------------------------------------------------------- validazione -----
 
+#[allow(clippy::too_many_arguments)]
 fn push(
     out: &mut Vec<Suggestion>,
     seen: &mut BTreeSet<String>,
@@ -815,6 +817,7 @@ fn valid_with_base(tax: &Taxonomy, base: &Facets, extra: &Facets) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use std::collections::BTreeSet;
 

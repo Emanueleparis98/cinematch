@@ -148,6 +148,40 @@ jobs:
             dist/CineMatch-Setup-*.exe
             dist/latest.json
 
+      - name: Verifica release pubblicata
+        shell: pwsh
+        run: |
+          $local = Get-Content dist\latest.json -Raw | ConvertFrom-Json
+          $url = "https://github.com/Emanueleparis98/cinematch/releases/latest/download/latest.json"
+          $remote = $null
+          for ($i = 0; $i -lt 18; $i++) {
+            try {
+              $remote = Invoke-RestMethod -Uri $url -TimeoutSec 30
+              if ($remote.version -eq $local.version -and
+                  $remote.installer.sha256 -eq $local.installer.sha256 -and
+                  $remote.installer.size -eq $local.installer.size) { break }
+            } catch { }
+            Start-Sleep -Seconds 10
+          }
+          if (-not $remote) { throw "latest.json non raggiungibile dopo la pubblicazione." }
+          if ($remote.version -ne $local.version) {
+            throw "latest.json: versione $($remote.version), attesa $($local.version)."
+          }
+          if ($remote.installer.sha256 -ne $local.installer.sha256) {
+            throw "latest.json: SHA-256 diverso dall'installer pubblicato."
+          }
+          if ($remote.installer.size -ne $local.installer.size) {
+            throw "latest.json: dimensione diversa dall'installer pubblicato."
+          }
+          $setup = Join-Path $env:RUNNER_TEMP $remote.installer.url.Split('/')[-1]
+          Invoke-WebRequest -Uri $remote.installer.url -OutFile $setup -TimeoutSec 180
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $remote.installer.sha256) {
+            throw "Installer scaricato: SHA-256 diverso dal manifesto."
+          }
+          Remove-Item $setup -Force
+          "Release $($remote.version) verificata: installer scaricabile e hash coerente."
+
       - name: Salva artefatti
         uses: actions/upload-artifact@v4
         with:

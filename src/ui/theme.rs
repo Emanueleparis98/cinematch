@@ -1,6 +1,6 @@
 //! Alias del tema LUMEN usati dalle viste 0.2.3 ancora da convertire.
 
-use egui::{Color32, Rounding, Stroke};
+use egui::{Color32, Stroke};
 
 use super::lumen;
 
@@ -37,13 +37,7 @@ pub fn chip(
     reason: Option<&str>,
 ) -> egui::Response {
     let mut rich = egui::RichText::new(text).size(11.5);
-    let fill = if !enabled {
-        lumen::INK
-    } else if selected {
-        lumen::DEEP
-    } else {
-        lumen::DEEP
-    };
+    let fill = if enabled { lumen::DEEP } else { lumen::INK };
     rich = if !enabled {
         rich.color(FAINT)
     } else if selected {
@@ -53,7 +47,7 @@ pub fn chip(
     };
     let btn = egui::Button::new(rich)
         .fill(fill)
-        .rounding(Rounding::same(ROUND))
+        .corner_radius(lumen::radius(ROUND))
         .stroke(Stroke::new(
             1.0_f32,
             if selected && enabled { ACCENT } else { BORDER },
@@ -92,13 +86,12 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, size: egui::Vec2) -> egui:
     };
     let ink = if enabled { lumen::INK } else { FAINT };
     let painter = ui.painter();
-    painter.rect_filled(rect, Rounding::same(ROUND), fill);
+    painter.rect_filled(rect, lumen::radius(ROUND), fill);
     if resp.has_focus() {
         painter.rect_stroke(
             rect.expand(1.0),
-            Rounding::same(ROUND + 1.0),
-            Stroke::new(1.0_f32, TEXT),
-        );
+            lumen::radius(ROUND + 1.0),
+            Stroke::new(1.0_f32, TEXT), egui::StrokeKind::Inside);
     }
     painter.text(
         rect.center(),
@@ -118,9 +111,8 @@ pub fn focus_ring(ui: &egui::Ui, resp: &egui::Response, rounding: f32) {
     if resp.has_focus() {
         ui.painter().rect_stroke(
             resp.rect.expand(1.0),
-            Rounding::same(rounding + 1.0),
-            Stroke::new(1.0_f32, ACCENT),
-        );
+            lumen::radius(rounding + 1.0),
+            Stroke::new(1.0_f32, ACCENT), egui::StrokeKind::Inside);
     }
 }
 
@@ -139,7 +131,7 @@ pub fn thousands(v: u32) -> String {
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     let len = digits.len();
     for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (len - i) % 3 == 0 {
+        if i > 0 && (len - i).is_multiple_of(3) {
             out.push('.');
         }
         out.push(c);

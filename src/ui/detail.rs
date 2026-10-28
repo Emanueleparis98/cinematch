@@ -1,4 +1,4 @@
-use egui::{Align2, FontFamily, FontId, Rounding, Sense, Stroke};
+use egui::{Align2, FontFamily, FontId, Sense, Stroke};
 
 use crate::domain::model::Details;
 use crate::ui::images::ImageStore;
@@ -45,7 +45,7 @@ fn close_button(ui: &mut egui::Ui) -> bool {
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
     ui.painter().rect_stroke(
         rect,
-        Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         Stroke::new(
             1.0_f32,
             if hover > 0.01 {
@@ -53,8 +53,7 @@ fn close_button(ui: &mut egui::Ui) -> bool {
             } else {
                 lumen::BORDER
             },
-        ),
-    );
+        ), egui::StrokeKind::Inside);
     let c = rect.center();
     let color = lumen::mix(lumen::MUTED, lumen::IVORY, hover);
     ui.painter().line_segment(
@@ -77,7 +76,7 @@ fn avail_row(ui: &mut egui::Ui, label: &str, items: &[String], color: egui::Colo
     }
     ui.horizontal_top(|ui| {
         let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 26.0), Sense::hover());
-        ui.painter().rect_filled(bar, Rounding::ZERO, lumen::EMBER);
+        ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
         ui.add_space(7.0);
         ui.add(
             egui::Label::new(
@@ -128,12 +127,11 @@ fn status_pill(ui: &mut egui::Ui, status: &str) {
     let size = egui::vec2(galley.size().x + 25.0, 16.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter();
-    painter.rect_filled(rect, Rounding::same(8.0), lumen::alpha(color, 24));
+    painter.rect_filled(rect, lumen::radius(8.0), lumen::alpha(color, 24));
     painter.rect_stroke(
         rect,
-        Rounding::same(8.0),
-        Stroke::new(1.0_f32, lumen::alpha(color, 80)),
-    );
+        lumen::radius(8.0),
+        Stroke::new(1.0_f32, lumen::alpha(color, 80)), egui::StrokeKind::Inside);
     painter.circle_filled(
         egui::pos2(rect.left() + 8.0, rect.center().y),
         2.2,
@@ -155,8 +153,8 @@ fn rating_button(
     track: &TrackInfo,
     actions: &mut Vec<DetailAction>,
 ) {
-    let popup_id = egui::Id::new(("rating-open", movie_id));
-    let draft_id = egui::Id::new(("rating-draft", movie_id));
+    let popup_id = egui::Id::unique(("rating-open", movie_id));
+    let draft_id = egui::Id::unique(("rating-draft", movie_id));
     let mut open = ui.data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
     let label = match track.rating {
         Some(value) => format!("★ {value}/10"),
@@ -178,7 +176,7 @@ fn rating_button(
 
     let popup_w = 210.0;
     let popup_h = 246.0;
-    let screen = ui.ctx().screen_rect();
+    let screen = ui.ctx().content_rect();
     // A sinistra della scheda: così il popover non copre il film.
     let left_x = button.rect.left() - popup_w - 8.0;
     let x = if left_x >= screen.left() + 4.0 {
@@ -194,15 +192,15 @@ fn rating_button(
     let mut save = None;
     let mut clear = false;
     let mut popup_rect = None;
-    egui::Area::new(egui::Id::new(("rating-popup", movie_id)))
+    egui::Area::new(egui::Id::unique(("rating-popup", movie_id)))
         .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(x, y))
         .show(ui.ctx(), |ui| {
-            egui::Frame::none()
+            egui::Frame::NONE
                 .fill(lumen::SURFACE)
                 .stroke(Stroke::new(1.0_f32, lumen::BORDER_HI))
-                .rounding(Rounding::same(lumen::RADIUS))
-                .inner_margin(egui::Margin::same(12.0))
+                .corner_radius(lumen::radius(lumen::RADIUS))
+                .inner_margin(egui::Margin::same(12))
                 .show(ui, |ui| {
                     ui.set_width(186.0);
                     ui.horizontal(|ui| {
@@ -326,11 +324,11 @@ fn simkl_bar(
     actions: &mut Vec<DetailAction>,
 ) {
     let status = track.status.as_deref().unwrap_or("");
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(lumen::DEEP)
         .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .rounding(Rounding::same(lumen::RADIUS))
-        .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+        .corner_radius(lumen::radius(lumen::RADIUS))
+        .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {

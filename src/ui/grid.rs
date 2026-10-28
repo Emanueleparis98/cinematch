@@ -1,5 +1,5 @@
 use egui::text::LayoutJob;
-use egui::{Align2, Color32, FontFamily, FontId, Rect, Rounding, Sense, Stroke};
+use egui::{Align2, Color32, FontFamily, FontId, Rect, Sense, Stroke};
 
 use crate::domain::model::Movie;
 use crate::tmdb::poster_url;
@@ -19,7 +19,7 @@ pub fn paint_image(
 ) {
     if let Some(tex) = images.texture(ui.ctx(), uri) {
         let sized = egui::load::SizedTexture::new(tex.id(), rect.size());
-        ui.put(rect, egui::Image::new(sized).rounding(Rounding::same(rounding)));
+        ui.put(rect, egui::Image::new(sized).corner_radius(lumen::radius(rounding)));
     }
 }
 
@@ -50,7 +50,7 @@ fn card(
     let hover = ui.ctx().animate_bool_with_time(resp.id, hovered, 0.14);
     let poster_h = (width * 1.5).floor();
     let poster_rect = Rect::from_min_size(rect.min, egui::vec2(width, poster_h));
-    ui.painter().rect_filled(poster_rect, Rounding::ZERO, lumen::DEEP);
+    ui.painter().rect_filled(poster_rect, egui::CornerRadius::ZERO, lumen::DEEP);
     // I poster arrivano a rate: finché l'immagine non c'è, shimmer.
     let mut loaded = false;
     if let Some(path) = &m.poster_path {
@@ -77,9 +77,8 @@ fn card(
     };
     ui.painter().rect_stroke(
         poster_rect,
-        Rounding::ZERO,
-        Stroke::new(1.0_f32, border),
-    );
+        egui::CornerRadius::ZERO,
+        Stroke::new(1.0_f32, border), egui::StrokeKind::Inside);
     lumen::focus(ui, &resp, 0.0);
 
     let title = ui.painter().layout_job(trunc_job(
@@ -181,7 +180,7 @@ pub fn mini_card(ui: &mut egui::Ui, images: &ImageStore, m: &Movie) -> bool {
     let hover = ui.ctx().animate_bool_with_time(resp.id, hovered, 0.14);
     ui.painter().rect_filled(
         rect,
-        Rounding::same(lumen::RADIUS_SM),
+        lumen::radius(lumen::RADIUS_SM),
         theme::mix(lumen::SURFACE, lumen::RAISED, hover),
     );
     fx::ring(ui, rect, lumen::RADIUS_SM, lumen::EMBER, hover * 0.8);

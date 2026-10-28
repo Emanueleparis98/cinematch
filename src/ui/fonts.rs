@@ -19,27 +19,27 @@ fn lumen_defs() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "lumen-ui".into(),
-        FontData::from_static(include_bytes!(
+        std::sync::Arc::new(FontData::from_static(include_bytes!(
             "../../assets/fonts/InstrumentSans-Regular.ttf"
-        )),
+        ))),
     );
     fonts.font_data.insert(
         LUMEN_DISPLAY.into(),
-        FontData::from_static(include_bytes!(
+        std::sync::Arc::new(FontData::from_static(include_bytes!(
             "../../assets/fonts/Fraunces-SemiBold.ttf"
-        )),
+        ))),
     );
     fonts.font_data.insert(
         LUMEN_UI_BOLD.into(),
-        FontData::from_static(include_bytes!(
+        std::sync::Arc::new(FontData::from_static(include_bytes!(
             "../../assets/fonts/InstrumentSans-SemiBold.ttf"
-        )),
+        ))),
     );
     fonts.font_data.insert(
         LUMEN_MONO.into(),
-        FontData::from_static(include_bytes!(
+        std::sync::Arc::new(FontData::from_static(include_bytes!(
             "../../assets/fonts/JetBrainsMono-Regular.ttf"
-        )),
+        ))),
     );
     fonts
         .families
@@ -69,7 +69,7 @@ fn lumen_defs() -> FontDefinitions {
 pub fn install_lumen(ctx: &egui::Context) {
     ctx.set_fonts(lumen_defs());
 
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
     use egui::{FontFamily::Proportional, TextStyle::*};
     style
         .text_styles
@@ -83,7 +83,7 @@ pub fn install_lumen(ctx: &egui::Context) {
     style
         .text_styles
         .insert(Small, egui::FontId::new(11.0, Proportional));
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 fn needs_cjk(text: &str) -> bool {
@@ -110,7 +110,7 @@ pub fn ensure_cjk(ctx: &egui::Context, loaded: &mut bool, texts: &[&str]) {
         };
         fonts
             .font_data
-            .insert(name.to_string(), FontData::from_owned(bytes));
+            .insert(name.to_string(), std::sync::Arc::new(FontData::from_owned(bytes)));
         for family in [
             FontFamily::Proportional,
             FontFamily::Monospace,

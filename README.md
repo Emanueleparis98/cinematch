@@ -181,6 +181,10 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   48 px con marchio, contesto e controlli finestra, barra di stato da 28 px con
   versione, sorgente e provider. La finestra si trascina dalla striscia e si
   ridimensiona dai bordi.
+- **Barra di stato onesta**: «PRONTO» diventa verde solo dopo una richiesta di
+  rete riuscita, «LAVORO» e ambra durante le operazioni, «OFFLINE» e rosso quando
+  l'ultima richiesta fallisce. Le etichette TMDB/OpenRouter indicano la
+  configurazione, non la connessione.
 - **Chat**: casa con hero, collage di poster reali, composer e quattro spunti
   locali in griglia 2x2; risultati con un film in evidenza e le altre card sotto.
   Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
@@ -400,8 +404,10 @@ installer/         Inno Setup per-utente
 site/              pagina download statica (GitHub Pages)
 ```
 
-La CI in `.github/workflows/` testa e compila l'app su Windows, crea il setup,
-genera `latest.json` e pubblica release e pagina di download.
+La CI in `.github/workflows/` testa e compila l'app su Windows, esegue
+`clippy -- -D warnings`, controlla le dipendenze con RustSec/OSV, crea il setup,
+genera `latest.json`, pubblica release e pagina di download e verifica che il
+manifesto e l'installer pubblicati siano scaricabili con lo stesso SHA-256.
 
 - **Griglia virtualizzata** (`ScrollArea::show_rows`): con 20 risultati o con 20.000
   si disegna solo cio che e visibile.
@@ -429,10 +435,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.9.2 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.10.0 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.9.2.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.10.0.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
@@ -456,8 +462,8 @@ Authenticode in formato PFX:
 3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
    viene comunque pubblicata e il workflow lascia un avviso nel summary.
 
-Per firmare la 0.9.2 gia pubblicata, dopo aver aggiunto i secret lancia
-Actions -> Release -> Run workflow con version `0.9.2`: la CI ricostruisce e
+Per firmare la 0.10.0 gia pubblicata, dopo aver aggiunto i secret lancia
+Actions -> Release -> Run workflow con version `0.10.0`: la CI ricostruisce e
 sostituisce gli asset della release.
 
 L'updater e disattivato in debug, quando l'exe gira da `target` e quando e
