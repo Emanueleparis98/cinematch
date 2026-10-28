@@ -474,6 +474,8 @@ sviluppo e non deve mai sostituirla.
 
 ```powershell
 cargo test
+cargo clippy --all-targets -- -D warnings
+cargo audit
 ```
 
 I test in `tests/constraints_golden.rs` coprono i casi della discussione: anni '80 +
