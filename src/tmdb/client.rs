@@ -434,10 +434,17 @@ impl Tmdb {
             // ordinare per voto senza un minimo di voti farebbe emergere titoli
             // con due voti: una soglia minima tiene l'ordinamento credibile.
             p.push(("vote_count.gte".into(), "50".into()));
+        } else if q.sort == Sort::Newest {
+            // «Piu recenti»: fuori i titoli senza seguito (spesso corti o
+            // schede vuote). 50 voti e la stessa soglia dell'ordinamento per voto.
+            p.push(("vote_count.gte".into(), "50".into()));
         }
         if let Some((a, b)) = q.runtime {
             p.push(("with_runtime.gte".into(), a.to_string()));
             p.push(("with_runtime.lte".into(), b.to_string()));
+        } else if q.sort == Sort::Newest {
+            // Un lungometraggio, non un corto da zero minuti.
+            p.push(("with_runtime.gte".into(), "60".into()));
         }
         let key = Self::cache_key("/discover/movie", &p);
         if let Some(hit) = self.list_cached(&key) {

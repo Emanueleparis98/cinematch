@@ -256,8 +256,10 @@ chiude la scheda film e viceversa.
   il 6, ecc.) e uno slider per la sfumatura. «Nessuno» spegne la metrica. Il voto e
   l'intervallo TMDB 0-10; i voti minimi usano una scala da 10 a 500.000; la durata e
   in minuti. Se ordini per voto senza soglia, contano solo i titoli con almeno 50
-  voti. «Più recenti» considera solo i film già usciti; «Prossimamente» parte da
-  oggi e ordina per data crescente.
+  voti. «Più recenti» considera solo i film già usciti, nasconde i corti sotto i 60
+  minuti e i titoli con meno di 50 voti o senza poster; durata e voti minimi restano
+  regolabili dalle metriche. «Prossimamente» parte da oggi e ordina per data
+  crescente.
 - **Temi liberi**: arrivano dall'interprete AI o dalla casella «aggiungi un tema»
   (invio per confermare). Restano pill rimovibili come le altre facce; se TMDB non ha
   quella parola chiave, l'app lo dice nel riquadro *Perche* e prosegue.
@@ -419,10 +421,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.8.0 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.8.1 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.8.0.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.8.1.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
@@ -446,8 +448,8 @@ Authenticode in formato PFX:
 3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
    viene comunque pubblicata e il workflow lascia un avviso nel summary.
 
-Per firmare la 0.8.0 gia pubblicata, dopo aver aggiunto i secret lancia
-Actions -> Release -> Run workflow con version `0.8.0`: la CI ricostruisce e
+Per firmare la 0.8.1 gia pubblicata, dopo aver aggiunto i secret lancia
+Actions -> Release -> Run workflow con version `0.8.1`: la CI ricostruisce e
 sostituisce gli asset della release.
 
 L'updater e disattivato in debug, quando l'exe gira da `target` e quando e

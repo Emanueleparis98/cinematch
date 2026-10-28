@@ -1426,6 +1426,11 @@ impl App {
                 payload.intent = intent.clone().map(|it| (text.clone(), it));
             }
 
+            let quality_newest =
+                similar.is_none() && title.is_none() && eff.sort == Sort::Newest;
+            let quality_visual = similar.is_none()
+                && title.is_none()
+                && matches!(eff.sort, Sort::Newest | Sort::Upcoming);
             let outcome: Result<(Vec<Movie>, u32, u32, String), String> =
                 if let Some(name) = similar {
                     match tmdb.search(&name, 1) {
@@ -1500,7 +1505,27 @@ impl App {
                 };
 
             match outcome {
-                Ok((movies, total, pages, headline)) => {
+                Ok((mut movies, total, pages, headline)) => {
+                    if quality_visual {
+                        let before = movies.len();
+                        movies.retain(|m| m.poster_path.is_some());
+                        if movies.len() < before {
+                            payload.info.push(format!(
+                                "{} titoli senza poster nascosti.",
+                                before - movies.len()
+                            ));
+                        }
+                    }
+                    if quality_newest
+                        && eff.runtime.is_none()
+                        && eff.min_votes.is_none()
+                        && eff.min_rating.is_none()
+                    {
+                        payload.info.push(
+                            "Piu recenti: solo film usciti, con poster, durata almeno 60 minuti e 50 voti."
+                                .into(),
+                        );
+                    }
                     payload.movies = movies;
                     payload.total = total;
                     payload.total_pages = pages;
