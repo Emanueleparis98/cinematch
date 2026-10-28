@@ -31,6 +31,9 @@ fn app_icon() -> Option<egui::IconData> {
 }
 
 fn main() -> eframe::Result<()> {
+    let Some(_instance) = infra::single_instance::acquire() else {
+        return Ok(());
+    };
     let cfg = infra::config::Config::load();
     let renderer = renderer();
     let mut viewport = egui::ViewportBuilder::default()

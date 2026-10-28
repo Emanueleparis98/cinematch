@@ -218,8 +218,18 @@ impl Config {
                 cfg
             }
             // Lock, permission error or transient read failure: keep the file.
+            // Riprova una volta, poi usa l'ultima copia buona invece dei
+            // default: altrimenti il prossimo salvataggio scriverebbe i
+            // default sopra il file vero.
             Err(_) => {
-                let mut cfg = Config::default();
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let mut cfg = std::fs::read_to_string(path)
+                    .ok()
+                    .and_then(|raw| {
+                        serde_json::from_str(raw.trim_start_matches('\u{feff}')).ok()
+                    })
+                    .or_else(|| Self::recover(path))
+                    .unwrap_or_default();
                 if use_keyring && secrets::available() {
                     cfg.absorb_secrets();
                 }

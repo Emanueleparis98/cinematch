@@ -251,33 +251,6 @@ pub fn focus(ui: &egui::Ui, resp: &Response, rounding: f32) {
     }
 }
 
-pub fn field(ui: &mut egui::Ui, label_text: &str, value: &str, mask: bool) {
-    ui.add_space(10.0);
-    ui.label(label(label_text));
-    ui.add_space(5.0);
-    let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width(), 38.0),
-        Sense::hover(),
-    );
-    ui.painter().rect_filled(rect, radius(RADIUS_SM), DEEP);
-    ui.painter().rect_stroke(
-        rect,
-        radius(RADIUS_SM),
-        Stroke::new(1.0_f32, BORDER), egui::StrokeKind::Inside);
-    let text = if mask {
-        "•".repeat(value.chars().count().min(32))
-    } else {
-        value.to_string()
-    };
-    ui.painter().text(
-        rect.left_center() + egui::vec2(12.0, 0.0),
-        Align2::LEFT_CENTER,
-        text,
-        FontId::proportional(13.0),
-        if mask { MUTED } else { IVORY },
-    );
-}
-
 // -------------------------------------------------------------- icone -----
 
 #[derive(Clone, Copy)]

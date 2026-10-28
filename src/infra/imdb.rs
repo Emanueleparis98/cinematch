@@ -11,13 +11,15 @@
 
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use crate::domain::model::ImdbRating;
 
 const URL: &str = "https://datasets.imdbws.com/title.ratings.tsv.gz";
 /// Righe per blocco dell'indice.
 const BLOCK: usize = 2048;
+/// Il file vero e' molto piu' grande: sotto questa soglia e' un errore.
+const MIN_DATA_BYTES: u64 = 1_000_000;
 /// Intestazione del file indice: distingue il formato corrente da quelli vecchi.
 const MAGIC: &[u8; 8] = b"CMIDX03\n";
 /// Byte per voce dell'indice: offset (8) + identificativo grezzo (16).
@@ -141,6 +143,17 @@ pub fn download(progress: &dyn Fn(u64)) -> Result<String, String> {
         }
         file.flush().ok();
     }
+    // Un corpo valido ma non TSV (portale captive, pagina di errore gzip)
+    // non deve sostituire i voti buoni.
+    if let Err(e) = validate_data(&tmp, MIN_DATA_BYTES) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    // Dati e indice si sostituiscono insieme: una lookup non deve leggere
+    // offset vecchi nel file nuovo.
+    let _guard = DATA_LOCK
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
     std::fs::rename(&tmp, data_path()).map_err(|e| format!("Rinomina non riuscita: {e}"))?;
 
     // Il file appena scritto invalida sia l'indice su disco sia quello in
@@ -155,6 +168,25 @@ pub fn download(progress: &dyn Fn(u64)) -> Result<String, String> {
         mb,
         dir().display()
     ))
+}
+
+/// Il file deve iniziare con l'intestazione TSV e avere una dimensione
+/// plausibile. La soglia e' zero nei test.
+fn validate_data(path: &Path, min_bytes: u64) -> Result<(), String> {
+    let len = std::fs::metadata(path)
+        .map_err(|e| format!("Dati IMDb non leggibili: {e}"))?
+        .len();
+    if len < min_bytes {
+        return Err(format!("Dati IMDb incompleti: {len} byte."));
+    }
+    let mut file = std::fs::File::open(path).map_err(|e| format!("Dati IMDb non leggibili: {e}"))?;
+    let mut head = [0u8; 7];
+    file.read_exact(&mut head)
+        .map_err(|e| format!("Dati IMDb non leggibili: {e}"))?;
+    if &head != b"tconst\t" {
+        return Err("Il file IMDb non contiene la tabella dei voti.".into());
+    }
+    Ok(())
 }
 
 /// Costruisce l'indice dei blocchi: per ogni blocco salva (offset, primo id).
@@ -211,6 +243,9 @@ fn build_index_from(data: &Path, out_path: &Path) -> Result<(), String> {
 /// mancante o di formato vecchio viene ricostruito dal file dei voti.
 type IndexSlot = Mutex<Option<Arc<Vec<(u64, Key)>>>>;
 static INDEX: OnceLock<IndexSlot> = OnceLock::new();
+
+/// Serializza lo scambio dati/indice con le letture dei voti.
+static DATA_LOCK: RwLock<()> = RwLock::new(());
 
 fn index_slot() -> &'static IndexSlot {
     INDEX.get_or_init(|| Mutex::new(None))
@@ -288,6 +323,7 @@ pub fn lookup(tconst: &str) -> Option<ImdbRating> {
     if !tconst.starts_with("tt") {
         return None;
     }
+    let _guard = DATA_LOCK.read().unwrap_or_else(|e| e.into_inner());
     let (block, offset) = block_for(tconst)?;
     let file = std::fs::File::open(data_path()).ok()?;
     let mut reader = BufReader::with_capacity(64 * 1024, file);
@@ -382,5 +418,24 @@ mod tests {
             key("tt9999999"),
             "un identificativo di 7 cifre alte trova l'ultimo blocco"
         );
+    }
+
+    #[test]
+    fn i_dati_scaricati_devono_essere_la_tabella_dei_voti() {
+        let dir = std::env::temp_dir().join(format!("cinematch_val_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("cartella di prova");
+        let path = dir.join("ratings.tsv");
+
+        std::fs::write(&path, b"tconst\taverageRating\tnumVotes\n").expect("file valido");
+        assert!(validate_data(&path, 0).is_ok());
+
+        std::fs::write(&path, b"<!DOCTYPE html><html>errore</html>").expect("file html");
+        assert!(validate_data(&path, 0).is_err());
+
+        std::fs::write(&path, b"tconst\t").expect("file corto");
+        assert!(validate_data(&path, 10).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

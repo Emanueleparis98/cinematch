@@ -890,9 +890,9 @@ fn write_at(
             }
             Err(e) if !retried && e.contains("rallentare") => {
                 // SIMKL serializza le scritture per 20 secondi: un solo
-                // tentativo dopo una pausa, poi l'errore arriva all'utente.
+                // tentativo dopo la finestra, poi l'errore arriva all'utente.
                 retried = true;
-                std::thread::sleep(std::time::Duration::from_secs(3));
+                std::thread::sleep(std::time::Duration::from_secs(20));
             }
             Err(e) => return Err(e),
         }
@@ -907,16 +907,6 @@ pub fn sync_due(last_sync: i64) -> bool {
 
 pub fn now_secs() -> i64 {
     now()
-}
-
-/// Etichetta breve per la scheda.
-pub fn status_label(status: &str) -> &'static str {
-    match status {
-        "completed" => "VISTO",
-        "plantowatch" => "DA VEDERE",
-        "dropped" => "SCARTATO",
-        _ => "",
-    }
 }
 
 #[cfg(test)]
@@ -1084,14 +1074,6 @@ mod tests {
         assert!(t.needs_refresh());
         t.expires_at = now() + 3600;
         assert!(!t.needs_refresh());
-    }
-
-    #[test]
-    fn le_etichette_sono_le_tre_dei_film() {
-        assert_eq!(status_label("completed"), "VISTO");
-        assert_eq!(status_label("plantowatch"), "DA VEDERE");
-        assert_eq!(status_label("dropped"), "SCARTATO");
-        assert_eq!(status_label("watching"), "");
     }
 
     #[test]

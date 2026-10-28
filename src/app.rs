@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use crate::ai::{
     build_provider, classify_chat_action, curator, list_models, llm_config, model_details,
-    ChatAction, Intent, IntentProvider, LlmKind, LlmProvider, ModelInfo, Theme, ThemeConcept,
-    DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
+    ChatAction, Cleared, Intent, IntentProvider, LlmKind, LlmProvider, ModelInfo, Theme,
+    ThemeConcept, DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
 };
 use crate::domain::constraints::{self, Prune};
 use crate::domain::model::{toggle, Details, Facets, Movie, Sort, TrackState};
@@ -25,6 +25,8 @@ use crate::ui::images::ImageStore;
 use crate::ui::{chat, detail, facets, fx, grid, lumen, theme, unlock};
 
 const MAX_QUERY_CHARS: usize = 300;
+/// Pagine TMDB lette per una ricerca per titolo con filtri locali.
+const TITLE_PAGE_CAP: u32 = 3;
 
 struct Results {
     facets: Facets,
@@ -70,13 +72,25 @@ enum Msg {
     /// Setup scaricato e verificato (o errore).
     UpdateDownloaded(Result<PathBuf, String>),
     /// Codice dispositivo SIMKL ottenuto (o errore).
-    SimklCode(Result<simkl::DeviceCode, String>),
+    SimklCode {
+        gen: u64,
+        res: Result<simkl::DeviceCode, String>,
+    },
     /// Autorizzazione SIMKL completata (o errore).
-    SimklAuth(Result<simkl::Tokens, String>),
+    SimklAuth {
+        gen: u64,
+        res: Result<simkl::Tokens, String>,
+    },
     /// Sincronizzazione libreria SIMKL completata.
-    SimklSynced(Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>),
+    SimklSynced {
+        gen: u64,
+        res: Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>,
+    },
     /// Scrittura su SIMKL completata.
-    SimklWritten(Result<(simkl::Tokens, simkl::WriteOutcome), String>),
+    SimklWritten {
+        gen: u64,
+        res: Result<(simkl::Tokens, simkl::WriteOutcome), String>,
+    },
     /// Poster TMDB risolto per una card SIMKL della home.
     Poster { id: u64, url: Option<String> },
 }
@@ -768,10 +782,15 @@ pub struct App {
     /// codice di autorizzazione in corso e stato dell'ultima sincronizzazione.
     simkl_tokens: Option<simkl::Tokens>,
     simkl_store: simkl::Store,
+    /// Picks della home calcolate quando lo store cambia, non a ogni frame.
+    simkl_cards: Option<(Vec<simkl::Playback>, Vec<simkl::TrackedMovie>)>,
     /// Poster TMDB delle card SIMKL della home: None = in caricamento.
     poster_cache: HashMap<u64, Option<String>>,
     simkl_auth: Option<simkl::DeviceCode>,
     simkl_cancel: Arc<AtomicBool>,
+    /// Cambia a ogni collegamento/ scollegamento: i risultati vecchi non
+    /// devono ricollegare l'account o sovrascrivere lo store.
+    simkl_epoch: u64,
     simkl_syncing: bool,
     simkl_busy: bool,
     /// Scrittura in corso, per aggiornare subito lo stato locale.
@@ -863,9 +882,11 @@ impl App {
             settings_check: None,
             simkl_tokens,
             simkl_store,
+            simkl_cards: None,
             poster_cache: HashMap::new(),
             simkl_auth: None,
             simkl_cancel: Arc::new(AtomicBool::new(false)),
+            simkl_epoch: 0,
             simkl_syncing: false,
             simkl_busy: false,
             simkl_pending: None,
@@ -982,7 +1003,11 @@ impl App {
                         continue;
                     }
                     self.detail_loading = false;
-                    self.net = Some(res.is_ok());
+                    // Un 404 o un JSON rotto non significano "offline": il
+                    // badge lo aggiorna solo una risposta riuscita.
+                    if res.is_ok() {
+                        self.net = Some(true);
+                    }
                     match res {
                         Ok(d) => {
                             {
@@ -1003,7 +1028,9 @@ impl App {
                     }
                 }
                 Msg::Check { res } => {
-                    self.net = Some(res.is_ok());
+                    if res.is_ok() {
+                        self.net = Some(true);
+                    }
                     self.settings_check = Some(match res {
                         Ok(m) => format!("✔ {m}"),
                         Err(e) => format!("✕ {e}"),
@@ -1014,7 +1041,6 @@ impl App {
                         continue;
                     }
                     self.detecting = false;
-                    self.net = Some(res.is_ok());
                     match res {
                         Ok(models) => {
                             let count = models.len();
@@ -1045,7 +1071,6 @@ impl App {
                 }
                 Msg::AiCheck { res } => {
                     self.ai_checking = false;
-                    self.net = Some(res.is_ok());
                     self.ai_check = Some(match res {
                         Ok(m) => format!("✔ {m}"),
                         Err(e) => format!("✕ {e}"),
@@ -1124,7 +1149,10 @@ impl App {
                         }
                     }
                 }
-                Msg::SimklCode(res) => {
+                Msg::SimklCode { gen, res } => {
+                    if gen != self.simkl_epoch {
+                        continue;
+                    }
                     match res {
                         Ok(code) => {
                             self.simkl_auth = Some(code);
@@ -1138,10 +1166,18 @@ impl App {
                         }
                     }
                 }
-                Msg::SimklAuth(res) => {
+                Msg::SimklAuth { gen, res } => {
+                    if gen != self.simkl_epoch {
+                        continue;
+                    }
                     self.simkl_auth = None;
                     match res {
                         Ok(tokens) => {
+                            if let Err(e) = simkl::save_tokens(&tokens) {
+                                self.simkl_status = None;
+                                self.simkl_error = Some(e);
+                                continue;
+                            }
                             self.simkl_tokens = Some(tokens);
                             self.simkl_error = None;
                             self.simkl_status =
@@ -1154,7 +1190,13 @@ impl App {
                         }
                     }
                 }
-                Msg::SimklSynced(res) => {
+                Msg::SimklSynced { gen, res } => {
+                    if gen != self.simkl_epoch {
+                        // Un refresh puo' aver salvato token vecchi dopo lo
+                        // scollegamento: riallinea il Credential Manager.
+                        self.restore_simkl_tokens();
+                        continue;
+                    }
                     self.simkl_syncing = false;
                     match res {
                         Ok((store, tokens, _report)) => {
@@ -1176,6 +1218,7 @@ impl App {
                                 self.simkl_error = Some(e);
                             }
                             self.simkl_store = store;
+                            self.simkl_cards = None;
                             self.simkl_status = None;
                             self.apply_track_flags();
                         }
@@ -1193,7 +1236,11 @@ impl App {
                         }
                     }
                 }
-                Msg::SimklWritten(res) => {
+                Msg::SimklWritten { gen, res } => {
+                    if gen != self.simkl_epoch {
+                        self.restore_simkl_tokens();
+                        continue;
+                    }
                     self.simkl_busy = false;
                     let pending = self.simkl_pending.take();
                     match res {
@@ -1266,7 +1313,6 @@ impl App {
                         self.focus = Some(ViewMode::Chat);
                     }
                     let mut p = *payload;
-                    self.net = Some(p.error.is_none());
                     if self.cfg.simkl.hide_watched {
                         let before = p.cards.len();
                         p.cards.retain(|c| {
@@ -1403,7 +1449,7 @@ impl App {
             }
             let mut eff = base.clone();
             if let Some(it) = &intent {
-                merge_facets(&mut eff, &it.facets);
+                merge_facets(&mut eff, &it.facets, &it.cleared);
             }
             let (eff, removed) = constraints::sanitize(&tax, &eff);
 
@@ -1415,6 +1461,10 @@ impl App {
                 && similar.is_none()
                 && !text.is_empty()
                 && eff.is_empty()
+                && intent
+                    .as_ref()
+                    .map(|i| i.cleared.is_empty())
+                    .unwrap_or(true)
             {
                 title = Some(text.clone());
             }
@@ -1463,12 +1513,19 @@ impl App {
                             Some(first) => {
                                 let seed = first.title.clone();
                                 match tmdb.similar(first.id, page) {
-                                    Ok(rec) => Ok((
-                                        rec.results.into_iter().map(Movie::from).collect(),
-                                        rec.total_results,
-                                        rec.total_pages,
-                                        format!("Simili a «{seed}»"),
-                                    )),
+                                    Ok(rec) => {
+                                        let movies = filter_movies(
+                                            rec.results.into_iter().map(Movie::from).collect(),
+                                            &tax,
+                                            &eff,
+                                        );
+                                        let (total, pages) = if eff.is_empty() {
+                                            (rec.total_results, rec.total_pages)
+                                        } else {
+                                            (movies.len() as u32, 1)
+                                        };
+                                        Ok((movies, total, pages, format!("Simili a «{seed}»")))
+                                    }
                                     Err(e) => Err(e),
                                 }
                             }
@@ -1477,43 +1534,43 @@ impl App {
                         Err(e) => Err(e),
                     }
                 } else if let Some(t) = title {
-                    // Con filtri attivi la ricerca per titolo non ha pagine
-                    // utili: TMDB ignora i filtri e ogni pagina andrebbe
-                    // filtrata localmente. Si usa la prima e si dichiara il
-                    // conteggio reale.
-                    let search_page = if eff.is_empty() { page } else { 1 };
-                    match tmdb.search(&t, search_page) {
-                        Ok(p) => {
-                            let raw = p.results.into_iter().map(Movie::from).collect::<Vec<_>>();
-                            let filtered = filter_movies(raw.clone(), &tax, &eff);
-                            let limits = local_filter_limits(&tax, &eff);
-                            let mut note = format!("Risultati per «{t}»");
-                            if !eff.is_empty() {
-                                note.push_str(&format!(
-                                    " · filtri applicati localmente ({}/{})",
-                                    filtered.len(),
-                                    raw.len()
-                                ));
+                    if eff.is_empty() {
+                        match tmdb.search(&t, page) {
+                            Ok(p) => Ok((
+                                p.results.into_iter().map(Movie::from).collect(),
+                                p.total_results,
+                                p.total_pages,
+                                format!("Risultati per «{t}»"),
+                            )),
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        match search_title_pages(&tmdb, &t) {
+                            Ok((raw, total_results)) => {
+                                let raw_len = raw.len();
+                                let filtered = filter_movies(raw, &tax, &eff);
+                                let filtered_len = filtered.len();
+                                let limits = local_filter_limits(&tax, &eff);
+                                let mut note = format!(
+                                    "Risultati per «{t}» · filtri applicati localmente ({filtered_len}/{raw_len})"
+                                );
                                 if !limits.is_empty() {
+                                    note.push_str(&format!(" · limiti: {}", limits.join(", ")));
+                                }
+                                if total_results as usize > raw_len {
                                     note.push_str(&format!(
-                                        " · limiti: {}",
-                                        limits.join(", ")
+                                        " · prime {TITLE_PAGE_CAP} pagine di {total_results}"
                                     ));
                                 }
                                 if filtered.is_empty() {
                                     payload.ai_notes.push(
-                                        "La ricerca per titolo non supporta i filtri lato server: nessun risultato compatibile nella prima pagina.".into(),
+                                        "La ricerca per titolo non supporta i filtri lato server: nessun risultato compatibile nelle prime pagine.".into(),
                                     );
                                 }
+                                Ok((filtered, filtered_len as u32, 1, note))
                             }
-                            let (total, pages) = if eff.is_empty() {
-                                (p.total_results, p.total_pages)
-                            } else {
-                                (filtered.len() as u32, 1)
-                            };
-                            Ok((filtered, total, pages, note))
+                            Err(e) => Err(e),
                         }
-                        Err(e) => Err(e),
                     }
                 } else if wants_trending(&eff) {
                     match tmdb.trending(page) {
@@ -2095,7 +2152,7 @@ impl App {
                 } else if action.is_contextual() {
                     // Il parser a regole descrive solo il messaggio: va unito
                     // al contesto, che un seguito esplicito non deve perdere.
-                    merge_facets(&mut eff, &it.facets);
+                    merge_facets(&mut eff, &it.facets, &it.cleared);
                     merge_themes(&mut themes, &it.themes);
                 } else {
                     eff = it.facets.clone();
@@ -2441,6 +2498,8 @@ impl App {
             self.cfg.simkl.client_id = client_id.clone();
             let _ = self.cfg.save();
         }
+        self.simkl_epoch += 1;
+        let gen = self.simkl_epoch;
         self.simkl_cancel.store(false, Ordering::Relaxed);
         self.simkl_error = None;
         self.simkl_status = Some("Apro il collegamento SIMKL…".into());
@@ -2451,13 +2510,16 @@ impl App {
             let code = match simkl::device_start(&client_id) {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx.send(Msg::SimklCode(Err(e)));
+                    let _ = tx.send(Msg::SimklCode { gen, res: Err(e) });
                     ctx.request_repaint();
                     return;
                 }
             };
             let deadline = Instant::now() + Duration::from_secs(code.expires_in.min(900));
-            let _ = tx.send(Msg::SimklCode(Ok(code.clone())));
+            let _ = tx.send(Msg::SimklCode {
+                gen,
+                res: Ok(code.clone()),
+            });
             ctx.request_repaint();
             let mut interval = code.interval.max(1);
             loop {
@@ -2470,47 +2532,49 @@ impl App {
                 }
                 match simkl::device_poll(&client_id, &code.device_code) {
                     Ok(simkl::Poll::Tokens(tokens)) => {
-                        if let Err(e) = simkl::save_tokens(&tokens) {
-                            let _ = tx.send(Msg::SimklAuth(Err(e)));
-                        } else {
-                            let _ = tx.send(Msg::SimklAuth(Ok(tokens)));
-                        }
+                        let _ = tx.send(Msg::SimklAuth {
+                            gen,
+                            res: Ok(tokens),
+                        });
                         ctx.request_repaint();
                         return;
                     }
                     Ok(simkl::Poll::Pending) => {}
                     Ok(simkl::Poll::SlowDown) => interval += 5,
                     Ok(simkl::Poll::Expired) => {
-                        let _ = tx.send(Msg::SimklAuth(Err(
-                            "Codice scaduto: riprova il collegamento.".into(),
-                        )));
+                        let _ = tx.send(Msg::SimklAuth {
+                            gen,
+                            res: Err("Codice scaduto: riprova il collegamento.".into()),
+                        });
                         ctx.request_repaint();
                         return;
                     }
                     Err(e) => {
-                        let _ = tx.send(Msg::SimklAuth(Err(e)));
+                        let _ = tx.send(Msg::SimklAuth { gen, res: Err(e) });
                         ctx.request_repaint();
                         return;
                     }
                 }
             }
             if !cancel.load(Ordering::Relaxed) {
-                let _ = tx.send(Msg::SimklAuth(Err(
-                    "Tempo scaduto: riprova il collegamento.".into(),
-                )));
+                let _ = tx.send(Msg::SimklAuth {
+                    gen,
+                    res: Err("Tempo scaduto: riprova il collegamento.".into()),
+                });
                 ctx.request_repaint();
             }
         });
     }
 
     fn cancel_simkl_auth(&mut self) {
+        self.simkl_epoch += 1;
         self.simkl_cancel.store(true, Ordering::Relaxed);
         self.simkl_auth = None;
         self.simkl_status = Some("Collegamento SIMKL annullato.".into());
     }
 
     fn start_simkl_sync(&mut self, force: bool) {
-        if self.simkl_syncing {
+        if self.simkl_syncing || self.simkl_busy {
             return;
         }
         let Some(tokens) = self.simkl_tokens.clone() else {
@@ -2525,18 +2589,19 @@ impl App {
         self.simkl_syncing = true;
         self.simkl_error = None;
         self.simkl_status = Some("Sincronizzo la libreria SIMKL…".into());
+        let gen = self.simkl_epoch;
         let store = self.simkl_store.clone();
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
             let res = simkl::sync(&client_id, tokens, store, force);
-            let _ = tx.send(Msg::SimklSynced(res));
+            let _ = tx.send(Msg::SimklSynced { gen, res });
             ctx.request_repaint();
         });
     }
 
     fn start_simkl_write(&mut self, movie: &Movie, op: simkl::WriteOp) -> bool {
-        if self.simkl_busy {
+        if self.simkl_busy || self.simkl_syncing {
             return false;
         }
         let Some(tokens) = self.simkl_tokens.clone() else {
@@ -2552,12 +2617,13 @@ impl App {
         self.simkl_pending = Some((movie.id, op));
         self.simkl_error = None;
         self.simkl_status = Some("Salvo su SIMKL…".into());
+        let gen = self.simkl_epoch;
         let target = simkl::WriteMovie::from_movie(movie);
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
             let res = simkl::write(&client_id, tokens, &target, op);
-            let _ = tx.send(Msg::SimklWritten(res));
+            let _ = tx.send(Msg::SimklWritten { gen, res });
             ctx.request_repaint();
         });
         true
@@ -2576,7 +2642,21 @@ impl App {
         }
     }
 
+    /// Riallinea il Credential Manager allo stato corrente dopo un messaggio
+    /// SIMKL di un collegamento ormai vecchio.
+    fn restore_simkl_tokens(&self) {
+        match &self.simkl_tokens {
+            Some(tokens) => {
+                let _ = simkl::save_tokens(tokens);
+            }
+            None => {
+                let _ = simkl::clear_tokens();
+            }
+        }
+    }
+
     fn disconnect_simkl(&mut self) {
+        self.simkl_epoch += 1;
         self.simkl_cancel.store(true, Ordering::Relaxed);
         if let Err(e) = simkl::clear_tokens() {
             self.simkl_error = Some(e);
@@ -2584,7 +2664,11 @@ impl App {
         }
         self.simkl_tokens = None;
         self.simkl_auth = None;
+        self.simkl_syncing = false;
+        self.simkl_busy = false;
+        self.simkl_pending = None;
         self.simkl_store = simkl::Store::default();
+        self.simkl_cards = None;
         let _ = simkl::save_store(&self.simkl_store);
         self.simkl_status = Some("SIMKL scollegato: la copia locale è stata rimossa.".into());
     }
@@ -2593,18 +2677,9 @@ impl App {
         let Some(tmdb) = self.tmdb.clone() else {
             return;
         };
-        let mut ids: Vec<u64> = self
-            .simkl_store
-            .resume_picks(12)
-            .iter()
-            .map(|p| p.tmdb)
-            .collect();
-        ids.extend(
-            self.simkl_store
-                .watchlist_picks(12)
-                .iter()
-                .map(|m| m.tmdb),
-        );
+        let (resume, watchlist) = self.simkl_cards();
+        let mut ids: Vec<u64> = resume.iter().map(|p| p.tmdb).collect();
+        ids.extend(watchlist.iter().map(|m| m.tmdb));
         ids.sort_unstable();
         ids.dedup();
         for id in ids {
@@ -2627,9 +2702,29 @@ impl App {
         }
     }
 
-    fn simkl_resume_cards(&self) -> Vec<chat::PersonalCard> {
-        self.simkl_store
-            .resume_picks(12)
+    fn simkl_cards(&mut self) -> (Vec<simkl::Playback>, Vec<simkl::TrackedMovie>) {
+        if let Some(cards) = &self.simkl_cards {
+            return cards.clone();
+        }
+        let cards = (
+            self.simkl_store
+                .resume_picks(12)
+                .into_iter()
+                .cloned()
+                .collect(),
+            self.simkl_store
+                .watchlist_picks(12)
+                .into_iter()
+                .cloned()
+                .collect(),
+        );
+        self.simkl_cards = Some(cards.clone());
+        cards
+    }
+
+    fn simkl_resume_cards(&mut self) -> Vec<chat::PersonalCard> {
+        let (resume, _) = self.simkl_cards();
+        resume
             .into_iter()
             .map(|playback| {
                 let percent = playback.progress.round() as u32;
@@ -2655,9 +2750,9 @@ impl App {
             .collect()
     }
 
-    fn simkl_watchlist_cards(&self) -> Vec<chat::PersonalCard> {
-        self.simkl_store
-            .watchlist_picks(12)
+    fn simkl_watchlist_cards(&mut self) -> Vec<chat::PersonalCard> {
+        let (_, watchlist) = self.simkl_cards();
+        watchlist
             .into_iter()
             .map(|movie| chat::PersonalCard {
                 title: if movie.title.is_empty() {
@@ -2767,6 +2862,7 @@ impl App {
                 }
             }
         }
+        self.simkl_cards = None;
         self.apply_track_flags();
     }
 
@@ -5032,7 +5128,7 @@ fn merge_themes(base: &mut Vec<Theme>, extra: &[Theme]) {
     base.truncate(2);
 }
 
-fn merge_facets(base: &mut Facets, extra: &Facets) {
+fn merge_facets(base: &mut Facets, extra: &Facets, cleared: &Cleared) {
     for v in &extra.decades {
         if !base.decades.contains(v) {
             base.decades.push(v.clone());
@@ -5068,21 +5164,53 @@ fn merge_facets(base: &mut Facets, extra: &Facets) {
             base.keywords.push(v.clone());
         }
     }
-    if extra.min_rating.is_some() {
+    if cleared.min_rating {
+        base.min_rating = None;
+    } else if extra.min_rating.is_some() {
         base.min_rating = extra.min_rating;
     }
-    if extra.max_rating.is_some() {
+    if cleared.max_rating {
+        base.max_rating = None;
+    } else if extra.max_rating.is_some() {
         base.max_rating = extra.max_rating;
     }
-    if extra.min_votes.is_some() {
+    if cleared.min_votes {
+        base.min_votes = None;
+    } else if extra.min_votes.is_some() {
         base.min_votes = extra.min_votes;
     }
-    if extra.runtime.is_some() {
+    if cleared.runtime {
+        base.runtime = None;
+    } else if extra.runtime.is_some() {
         base.runtime = extra.runtime;
     }
     if extra.sort != Sort::default() {
         base.sort = extra.sort;
     }
+}
+
+/// Legge fino a `TITLE_PAGE_CAP` pagine di una ricerca per titolo quando i
+/// filtri sono locali: TMDB non li applica e la prima pagina puo' non
+/// contenerli.
+fn search_title_pages(tmdb: &Tmdb, query: &str) -> Result<(Vec<Movie>, u32), String> {
+    let mut raw = Vec::new();
+    let mut total = 0u32;
+    for page in 1..=TITLE_PAGE_CAP {
+        let found = if page == 1 {
+            tmdb.search(query, page)?
+        } else {
+            match tmdb.search(query, page) {
+                Ok(found) => found,
+                Err(_) => break,
+            }
+        };
+        total = found.total_results;
+        raw.extend(found.results.into_iter().map(Movie::from));
+        if page >= found.total_pages {
+            break;
+        }
+    }
+    Ok((dedupe(raw), total))
 }
 
 fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
@@ -5948,40 +6076,54 @@ fn chat_candidates(
         };
         let seed = first.title.clone();
         let rec = tmdb.similar(first.id, 1)?;
-        let movies = dedupe(rec.results.into_iter().map(Movie::from).collect());
+        let movies = filter_movies(
+            dedupe(rec.results.into_iter().map(Movie::from).collect()),
+            tax,
+            eff,
+        );
         if movies.is_empty() {
-            return Err(format!("Nessun film simile a «{seed}»."));
-        }
-        return Ok((movies, rec.total_results, format!("Simili a «{seed}»"), true));
-    }
-    if let Some(t) = title {
-        let p1 = tmdb.search(t, 1)?;
-        let total = p1.total_results;
-        let mut movies: Vec<Movie> = p1.results.into_iter().map(Movie::from).collect();
-        if p1.total_pages > 1 && movies.len() < 20 {
-            if let Ok(p2) = tmdb.search(t, 2) {
-                movies.extend(p2.results.into_iter().map(Movie::from));
-            }
-        }
-        let movies = if eff.is_empty() {
-            dedupe(movies)
-        } else {
-            filter_movies(dedupe(movies), tax, eff)
-        };
-        if movies.is_empty() && eff.is_empty() && looks_like_question(t) {
-            // Solo per una frase che sembra una domanda: una vera ricerca per
-            // titolo non viene sostituita dai film del momento.
-            notes.push(
-                "La frase sembra una domanda, non un titolo: propongo i film del momento.".into(),
-            );
-            let p = tmdb.trending(1)?;
-            return Ok((
-                dedupe(p.results.into_iter().map(Movie::from).collect()),
-                p.total_results,
-                "Tendenze della settimana".into(),
-                false,
+            return Err(format!(
+                "Nessun film simile a «{seed}» con i filtri attivi."
             ));
         }
+        let total = if eff.is_empty() {
+            rec.total_results
+        } else {
+            movies.len() as u32
+        };
+        return Ok((movies, total, format!("Simili a «{seed}»"), true));
+    }
+    if let Some(t) = title {
+        if eff.is_empty() {
+            let p1 = tmdb.search(t, 1)?;
+            let total = p1.total_results;
+            let mut movies: Vec<Movie> = p1.results.into_iter().map(Movie::from).collect();
+            if p1.total_pages > 1 && movies.len() < 20 {
+                if let Ok(p2) = tmdb.search(t, 2) {
+                    movies.extend(p2.results.into_iter().map(Movie::from));
+                }
+            }
+            let movies = dedupe(movies);
+            if movies.is_empty() && looks_like_question(t) {
+                // Solo per una frase che sembra una domanda: una vera ricerca
+                // per titolo non viene sostituita dai film del momento.
+                notes.push(
+                    "La frase sembra una domanda, non un titolo: propongo i film del momento."
+                        .into(),
+                );
+                let p = tmdb.trending(1)?;
+                return Ok((
+                    dedupe(p.results.into_iter().map(Movie::from).collect()),
+                    p.total_results,
+                    "Tendenze della settimana".into(),
+                    false,
+                ));
+            }
+            return Ok((movies, total, format!("Risultati per «{t}»"), true));
+        }
+        let (raw, _) = search_title_pages(tmdb, t)?;
+        let movies = filter_movies(raw, tax, eff);
+        let total = movies.len() as u32;
         return Ok((movies, total, format!("Risultati per «{t}»"), true));
     }
     if wants_trending(eff) {
@@ -6405,8 +6547,8 @@ fn open_url(url: &str) {
 mod tests {
     use super::{
         allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
-        resize_edge, side_panel_widths, sort_movies, unlock_candidates, wants_trending, Facets,
-        Movie, Sort,
+        resize_edge, side_panel_widths, sort_movies, unlock_candidates, wants_trending, Cleared,
+        Facets, Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
@@ -6532,8 +6674,25 @@ mod tests {
             countries: vec!["IT".into()],
             ..Default::default()
         };
-        merge_facets(&mut base, &extra);
+        merge_facets(&mut base, &extra, &Cleared::default());
         assert_eq!(base.countries, ["IT"]);
+    }
+
+    #[test]
+    fn togliere_un_filtro_lo_rimuove_dal_contesto() {
+        let mut base = Facets {
+            min_rating: Some(8.0),
+            min_votes: Some(500),
+            ..Default::default()
+        };
+        let extra = Facets::default();
+        let cleared = Cleared {
+            min_rating: true,
+            ..Default::default()
+        };
+        merge_facets(&mut base, &extra, &cleared);
+        assert!(base.min_rating.is_none());
+        assert_eq!(base.min_votes, Some(500), "gli altri filtri restano");
     }
 
     #[test]

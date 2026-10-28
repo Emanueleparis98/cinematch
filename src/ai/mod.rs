@@ -107,9 +107,27 @@ impl Theme {
     }
 }
 
+/// Filtri scalari che il messaggio chiede esplicitamente di togliere.
+/// `None` in `Facets` significa "non menzionato", non "togli": per questo
+/// serve un segnale separato quando il contesto va ripulito.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Cleared {
+    pub min_rating: bool,
+    pub max_rating: bool,
+    pub min_votes: bool,
+    pub runtime: bool,
+}
+
+impl Cleared {
+    pub fn is_empty(self) -> bool {
+        !(self.min_rating || self.max_rating || self.min_votes || self.runtime)
+    }
+}
+
 impl Intent {
     pub fn is_empty(&self) -> bool {
         self.facets.is_empty()
+            && self.cleared.is_empty()
             && self.themes.iter().all(Theme::is_empty)
             && self.free_text.is_none()
             && self.similar_to.is_none()
@@ -245,6 +263,8 @@ pub struct Intent {
     pub similar_to: Option<String>,
     /// Regista o attore citato esplicitamente («film di De Sica»).
     pub person: Option<String>,
+    /// Filtri scalari da togliere dal contesto attivo.
+    pub cleared: Cleared,
     /// Modalita dichiarata dall'interprete: «faceted», «title», «similar»,
     /// «mixed» oppure «reset» (in chat: ricominciare da zero).
     pub mode: String,
@@ -980,6 +1000,45 @@ impl RuleParser {
                 .unwrap_or(100);
             it.facets.runtime = Some((0, cap));
             matched_any = true;
+        }
+
+        // --- richieste di togliere un filtro scalare ---
+        let remove = ["togli", "rimuovi", "senza"]
+            .iter()
+            .any(|word| lower.contains(word));
+        if remove {
+            if lower.contains("voto minimo")
+                || lower.contains("voto piu basso")
+                || lower.contains("voto più basso")
+            {
+                it.cleared.min_rating = true;
+                it.facets.min_rating = None;
+                matched_any = true;
+            }
+            if lower.contains("voto massimo") {
+                it.cleared.max_rating = true;
+                it.facets.max_rating = None;
+                matched_any = true;
+            }
+            if lower.contains("voti minimi")
+                || lower.contains("minimo di voti")
+                || lower.contains("minimi di voti")
+                || lower.contains("soglia di voti")
+            {
+                it.cleared.min_votes = true;
+                it.facets.min_votes = None;
+                matched_any = true;
+            }
+            let duration = lower.contains("durata") || lower.contains("limite di durata");
+            if duration
+                && (lower.contains("togli")
+                    || lower.contains("rimuovi")
+                    || lower.contains("senza limit"))
+            {
+                it.cleared.runtime = true;
+                it.facets.runtime = None;
+                matched_any = true;
+            }
         }
 
         // --- feedback qualitativo ---
@@ -2302,6 +2361,7 @@ impl LlmProvider {
             free_text,
             similar_to: ans.similar_to.filter(|s| !s.trim().is_empty()),
             person: ans.person.filter(|s| !s.trim().is_empty()),
+            cleared: Cleared::default(),
             mode,
             action,
             notes,
@@ -2966,6 +3026,23 @@ mod tests {
         assert_eq!(it.facets.min_rating, Some(8.0));
         let it = RuleParser.parse_chat_rules_ctx("più corti", &tax, &active);
         assert_eq!(it.facets.runtime, Some((0, 100)));
+    }
+
+    #[test]
+    fn togli_il_voto_minimo_lo_segna_da_cancellare() {
+        let tax = Taxonomy::load();
+        let active = Intent {
+            facets: Facets {
+                min_rating: Some(8.0),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let it = RuleParser.parse_chat_rules_ctx("togli il voto minimo", &tax, &active);
+        assert_eq!(it.action, ChatAction::Refine);
+        assert!(it.cleared.min_rating);
+        assert!(it.facets.min_rating.is_none());
+        assert!(!it.is_empty(), "la richiesta di togliere non e' vuota");
     }
 
     #[test]

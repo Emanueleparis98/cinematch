@@ -22,12 +22,6 @@ impl Availability {
     }
 }
 
-impl Default for Availability {
-    fn default() -> Self {
-        Availability::ok()
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Prune {
     pub genres: BTreeMap<u32, Availability>,

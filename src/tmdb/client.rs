@@ -133,6 +133,11 @@ fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String
                 Some(g) if g.as_str() > today => g,
                 _ => today.to_string(),
             });
+            // Un periodo passato piu' "Prossimamente" non puo' produrre
+            // risultati: il limite superiore sarebbe prima di oggi.
+            if lte.as_deref().is_some_and(|l| l < today) {
+                lte = None;
+            }
         }
         _ => {
             lte = Some(match lte {
@@ -217,11 +222,6 @@ impl Tmdb {
             .is_some_and(|c| c.load(Ordering::Relaxed))
     }
 
-    /// Codice regione usato per le date di uscita e i titoli locali.
-    pub fn region(&self) -> &str {
-        &self.region
-    }
-
     /// Prova di lettura: conferma che la credenziale e valida e la rete funziona.
     pub fn ping(&self) -> Result<String, String> {
         let params: Vec<(String, String)> = vec![("page".to_string(), "1".to_string())];
@@ -269,7 +269,9 @@ impl Tmdb {
             let resp = match sent {
                 Ok(r) => r,
                 Err(e) => {
-                    last_err = format!("Errore di rete: {e}");
+                    // `reqwest` include l'URL completo nel Display: la chiave
+                    // v3 e' nella query string, quindi va rimossa.
+                    last_err = format!("Errore di rete: {}", e.without_url());
                     if attempt < 2 {
                         std::thread::sleep(Duration::from_millis(500 * (attempt as u64 + 1)));
                         continue;
@@ -329,7 +331,7 @@ impl Tmdb {
         let Some(cancel) = &self.cancel else {
             return resp
                 .text()
-                .map_err(|e| format!("Risposta TMDB non leggibile: {e}"));
+                .map_err(|e| format!("Risposta TMDB non leggibile: {}", e.without_url()));
         };
         let mut reader = CancelReader {
             inner: resp,
@@ -643,6 +645,18 @@ mod tests {
         let (gte, lte) = date_bounds(&q, "2026-10-28");
         assert_eq!(gte.as_deref(), Some("2026-10-28"));
         assert_eq!(lte, None);
+    }
+
+    #[test]
+    fn prossimamente_ignora_un_periodo_passato() {
+        let q = DiscoverQuery {
+            sort: Sort::Upcoming,
+            year: Some((1980, 1989)),
+            ..Default::default()
+        };
+        let (gte, lte) = date_bounds(&q, "2026-10-28");
+        assert_eq!(gte.as_deref(), Some("2026-10-28"));
+        assert_eq!(lte, None, "un limite superiore nel passato va tolto");
     }
 
     #[test]

@@ -435,10 +435,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.10.0 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.10.1 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.10.0.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.10.1.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 
@@ -462,8 +462,8 @@ Authenticode in formato PFX:
 3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
    viene comunque pubblicata e il workflow lascia un avviso nel summary.
 
-Per firmare la 0.10.0 gia pubblicata, dopo aver aggiunto i secret lancia
-Actions -> Release -> Run workflow con version `0.10.0`: la CI ricostruisce e
+Per firmare una release gia pubblicata, dopo aver aggiunto i secret lancia
+Actions -> Release -> Run workflow con la versione desiderata: la CI ricostruisce e
 sostituisce gli asset della release.
 
 L'updater e disattivato in debug, quando l'exe gira da `target` e quando e

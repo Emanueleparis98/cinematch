@@ -2,15 +2,21 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+
+/// Quanto aspettare prima di riprovare un poster fallito per rete o 5xx.
+const RETRY_AFTER: Duration = Duration::from_secs(60);
 
 /// Stato di una immagine remota.
 enum Slot {
     Loading,
     Ready(TextureHandle),
-    Failed,
+    /// Errore temporaneo: si puo' riprovare dopo `RETRY_AFTER`.
+    Failed(Instant),
+    /// 404 o altra risposta definitiva: non ha senso riprovare.
+    Missing,
 }
 
 fn hash(uri: &str) -> u64 {
@@ -95,8 +101,8 @@ fn decode(ctx: &Context, name: &str, bytes: &[u8]) -> Option<TextureHandle> {
 /// separato e cache su disco in %APPDATA%\CineMatch\cache.
 pub struct ImageStore {
     map: Mutex<HashMap<String, Slot>>,
-    tx: Sender<(String, Option<TextureHandle>)>,
-    rx: Receiver<(String, Option<TextureHandle>)>,
+    tx: Sender<(String, Option<TextureHandle>, bool)>,
+    rx: Receiver<(String, Option<TextureHandle>, bool)>,
     http: reqwest::blocking::Client,
 }
 
@@ -120,14 +126,14 @@ impl ImageStore {
     /// Ritorna la texture se gia pronta, altrimenti avvia il caricamento.
     pub fn texture(&self, ctx: &Context, uri: &str) -> Option<TextureHandle> {
         {
-            let map = self.map.lock().ok()?;
+            let mut map = self.map.lock().ok()?;
             match map.get(uri) {
                 Some(Slot::Ready(tex)) => return Some(tex.clone()),
-                Some(Slot::Loading) | Some(Slot::Failed) => return None,
-                None => {}
+                Some(Slot::Loading) | Some(Slot::Missing) => return None,
+                Some(Slot::Failed(at)) if at.elapsed() < RETRY_AFTER => return None,
+                Some(Slot::Failed(_)) | None => {}
             }
-        }
-        if let Ok(mut map) = self.map.lock() {
+            map.remove(uri);
             map.insert(uri.to_string(), Slot::Loading);
         }
         let ctx = ctx.clone();
@@ -135,21 +141,35 @@ impl ImageStore {
         let http = self.http.clone();
         let uri_owned = uri.to_string();
         std::thread::spawn(move || {
-            // Prima si decodifica, poi si mette in cache: un corpo HTTP non
-            // valido non deve restare su disco e bloccare il poster per sempre.
+            // Prima si prova il disco, poi la rete. Un errore di rete o un 5xx
+            // resta riprovabile; un 404 no.
+            let mut retry = true;
             let tex = from_disk(&uri_owned).and_then(|b| decode(&ctx, &uri_owned, &b));
-            let tex = tex.or_else(|| {
-                let b = match http.get(&uri_owned).send() {
-                    Ok(resp) if resp.status().is_success() => resp.bytes().ok()?.to_vec(),
-                    _ => return None,
-                };
-                let tex = decode(&ctx, &uri_owned, &b);
-                if tex.is_some() {
-                    to_disk(&uri_owned, &b);
-                }
-                tex
-            });
-            let _ = tx.send((uri_owned, tex));
+            let tex = match tex {
+                Some(tex) => Some(tex),
+                None => match http.get(&uri_owned).send() {
+                    Ok(resp) if resp.status().is_success() => {
+                        let bytes = resp.bytes().ok().map(|b| b.to_vec());
+                        match bytes {
+                            Some(bytes) => {
+                                let tex = decode(&ctx, &uri_owned, &bytes);
+                                if tex.is_some() {
+                                    to_disk(&uri_owned, &bytes);
+                                }
+                                tex
+                            }
+                            None => None,
+                        }
+                    }
+                    Ok(resp) => {
+                        retry =
+                            resp.status().as_u16() == 429 || resp.status().is_server_error();
+                        None
+                    }
+                    Err(_) => None,
+                },
+            };
+            let _ = tx.send((uri_owned, tex, retry));
             ctx.request_repaint();
         });
         None
@@ -158,14 +178,17 @@ impl ImageStore {
     /// Raccoglie i caricamenti conclusi. Ritorna true se qualcosa e cambiato.
     pub fn poll(&self) -> bool {
         let mut updated = false;
-        while let Ok((uri, tex)) = self.rx.try_recv() {
+        while let Ok((uri, tex, retry)) = self.rx.try_recv() {
             if let Ok(mut map) = self.map.lock() {
                 match tex {
                     Some(t) => {
                         map.insert(uri, Slot::Ready(t));
                     }
+                    None if retry => {
+                        map.insert(uri, Slot::Failed(Instant::now()));
+                    }
                     None => {
-                        map.insert(uri, Slot::Failed);
+                        map.insert(uri, Slot::Missing);
                     }
                 }
             }
@@ -179,17 +202,6 @@ impl ImageStore {
             }
         }
         updated
-    }
-
-    pub fn pending(&self) -> usize {
-        self.map
-            .lock()
-            .map(|m| {
-                m.values()
-                    .filter(|s| matches!(s, Slot::Loading))
-                    .count()
-            })
-            .unwrap_or(0)
     }
 }
 
