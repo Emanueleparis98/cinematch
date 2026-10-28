@@ -31,6 +31,23 @@ struct SystemTimeParts {
 unsafe extern "system" {
     fn FileTimeToLocalFileTime(in_time: *const FileTime, out_time: *mut FileTime) -> i32;
     fn FileTimeToSystemTime(file_time: *const FileTime, out_time: *mut SystemTimeParts) -> i32;
+    fn GetLocalTime(lpSystemTime: *mut SystemTimeParts);
+}
+
+/// Data locale di oggi in formato `YYYY-MM-DD`, per delimitare le uscite.
+pub fn today_iso() -> String {
+    let mut st = SystemTimeParts {
+        year: 0,
+        month: 0,
+        day_of_week: 0,
+        day: 0,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        milliseconds: 0,
+    };
+    unsafe { GetLocalTime(&mut st) };
+    format!("{:04}-{:02}-{:02}", st.year, st.month, st.day)
 }
 
 /// «gg/mm hh:mm» in ora locale dell'ultima modifica del binario in esecuzione;
@@ -91,5 +108,16 @@ mod tests {
             .iter()
             .enumerate()
             .all(|(i, c)| matches!(i, 2 | 5 | 8) || c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn oggi_e_una_data_iso() {
+        let s = today_iso();
+        assert_eq!(s.len(), 10, "formato inatteso: {s}");
+        assert_eq!(&s[4..5], "-");
+        assert_eq!(&s[7..8], "-");
+        assert!(s[..4].chars().all(|c| c.is_ascii_digit()));
+        assert!(s[5..7].chars().all(|c| c.is_ascii_digit()));
+        assert!(s[8..].chars().all(|c| c.is_ascii_digit()));
     }
 }

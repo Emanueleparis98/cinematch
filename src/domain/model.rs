@@ -4,15 +4,17 @@ pub enum Sort {
     Rating,
     Votes,
     Newest,
+    Upcoming,
     Oldest,
 }
 
 impl Sort {
-    pub const ALL: [Sort; 5] = [
+    pub const ALL: [Sort; 6] = [
         Sort::Popularity,
         Sort::Rating,
         Sort::Votes,
         Sort::Newest,
+        Sort::Upcoming,
         Sort::Oldest,
     ];
 
@@ -22,6 +24,7 @@ impl Sort {
             Sort::Rating => "Voto",
             Sort::Votes => "Numero di voti",
             Sort::Newest => "Piu recenti",
+            Sort::Upcoming => "Prossimamente",
             Sort::Oldest => "Piu vecchi",
         }
     }
@@ -32,6 +35,7 @@ impl Sort {
             Sort::Rating => "vote_average.desc",
             Sort::Votes => "vote_count.desc",
             Sort::Newest => "primary_release_date.desc",
+            Sort::Upcoming => "primary_release_date.asc",
             Sort::Oldest => "primary_release_date.asc",
         }
     }

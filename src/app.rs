@@ -5287,6 +5287,7 @@ fn wants_trending(f: &Facets) -> bool {
 fn sort_movies(movies: &mut [Movie], sort: Sort) {
     movies.sort_by(|a, b| match sort {
         Sort::Newest => b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)),
+        Sort::Upcoming => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
         Sort::Oldest => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
         Sort::Rating => b
             .rating
@@ -5548,6 +5549,7 @@ fn chat_theme_pool(
         let cb = b.matched.iter().filter(|m| **m).count();
         cb.cmp(&ca).then_with(|| match eff.sort {
             Sort::Newest => b.movie.year.cmp(&a.movie.year),
+            Sort::Upcoming => a.movie.year.cmp(&b.movie.year),
             Sort::Oldest => a.movie.year.cmp(&b.movie.year),
             Sort::Rating => b
                 .movie

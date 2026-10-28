@@ -122,6 +122,28 @@ pub fn describe_credential(raw: &str) -> (String, bool) {
     }
 }
 
+/// Limiti di uscita per la query: il periodo scelto e `today` si intersecano.
+/// Gli ordinamenti normali si fermano a oggi; `Upcoming` parte da oggi.
+fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String>) {
+    let mut gte = q.year.map(|(a, _)| format!("{a}-01-01"));
+    let mut lte = q.year.map(|(_, b)| format!("{b}-12-31"));
+    match q.sort {
+        Sort::Upcoming => {
+            gte = Some(match gte {
+                Some(g) if g.as_str() > today => g,
+                _ => today.to_string(),
+            });
+        }
+        _ => {
+            lte = Some(match lte {
+                Some(l) if l.as_str() < today => l,
+                _ => today.to_string(),
+            });
+        }
+    }
+    (gte, lte)
+}
+
 /// Client TMDB sincrono, con throttling, retry e cache in memoria.
 pub struct Tmdb {
     http: Client,
@@ -384,9 +406,15 @@ impl Tmdb {
         if !q.countries.is_empty() {
             p.push(("with_origin_country".into(), q.countries.join("|")));
         }
-        if let Some((a, b)) = q.year {
-            p.push(("primary_release_date.gte".into(), format!("{a}-01-01")));
-            p.push(("primary_release_date.lte".into(), format!("{b}-12-31")));
+        // Le date si intersecano con oggi: «Più recenti» e gli altri
+        // ordinamenti mostrano solo film già usciti; «Prossimamente» parte da
+        // oggi e ordina per data crescente.
+        let (gte, lte) = date_bounds(q, &crate::infra::winclock::today_iso());
+        if let Some(g) = gte {
+            p.push(("primary_release_date.gte".into(), g));
+        }
+        if let Some(l) = lte {
+            p.push(("primary_release_date.lte".into(), l));
         }
         if let Some(r) = q.min_rating {
             p.push(("vote_average.gte".into(), format!("{:.1}", r)));
@@ -582,9 +610,53 @@ fn keyword_variants(keyword: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{keyword_variants, Tmdb, CANCELLED};
+    use super::{date_bounds, keyword_variants, Tmdb, CANCELLED};
+    use crate::domain::constraints::DiscoverQuery;
+    use crate::domain::model::Sort;
     use crate::tmdb::models::{Person, PersonCredits};
     use std::sync::atomic::Ordering;
+
+    #[test]
+    fn piu_recenti_si_ferma_a_oggi() {
+        let q = DiscoverQuery {
+            sort: Sort::Newest,
+            ..Default::default()
+        };
+        let (gte, lte) = date_bounds(&q, "2026-10-28");
+        assert_eq!(gte, None);
+        assert_eq!(lte.as_deref(), Some("2026-10-28"));
+    }
+
+    #[test]
+    fn prossimamente_parte_da_oggi() {
+        let q = DiscoverQuery {
+            sort: Sort::Upcoming,
+            ..Default::default()
+        };
+        let (gte, lte) = date_bounds(&q, "2026-10-28");
+        assert_eq!(gte.as_deref(), Some("2026-10-28"));
+        assert_eq!(lte, None);
+    }
+
+    #[test]
+    fn il_periodo_si_interseca_con_oggi() {
+        let q = DiscoverQuery {
+            sort: Sort::Newest,
+            year: Some((1980, 1989)),
+            ..Default::default()
+        };
+        let (gte, lte) = date_bounds(&q, "2026-10-28");
+        assert_eq!(gte.as_deref(), Some("1980-01-01"));
+        assert_eq!(lte.as_deref(), Some("1989-12-31"));
+
+        let q = DiscoverQuery {
+            sort: Sort::Newest,
+            year: Some((2020, 2029)),
+            ..Default::default()
+        };
+        let (_, lte) = date_bounds(&q, "2026-10-28");
+        assert_eq!(lte.as_deref(), Some("2026-10-28"));
+    }
 
     #[test]
     fn persone_e_filmografie_restano_in_cache() {
