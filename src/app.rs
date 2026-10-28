@@ -22,7 +22,7 @@ use crate::tmdb::models::{PagedMovies, Person};
 use crate::ui::facets::{FacetAction, Section};
 use crate::update;
 use crate::ui::images::ImageStore;
-use crate::ui::{chat, detail, facets, fx, grid, lumen, theme};
+use crate::ui::{chat, detail, facets, fx, grid, lumen, theme, unlock};
 
 const MAX_QUERY_CHARS: usize = 300;
 
@@ -45,6 +45,9 @@ struct Results {
 
 enum Msg {
     Results { gen: u64, payload: Box<Results> },
+    /// Compromessi calcolati dopo i risultati: la griglia li mostra appena
+    /// arrivano, senza aspettare le chiamate TMDB aggiuntive.
+    Unlocks { gen: u64, unlocks: Vec<unlock::Unlock> },
     Details { gen: u64, res: Result<Details, String> },
     Check { res: Result<String, String> },
     Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
@@ -742,6 +745,8 @@ pub struct App {
     grid_reset_scroll: bool,
     loading: bool,
     headline: String,
+    /// Compromessi «Sblocca» per la ricerca corrente, se la griglia è quasi vuota.
+    unlocks: Vec<unlock::Unlock>,
 
     detail: Option<Details>,
     detail_loading: bool,
@@ -842,6 +847,7 @@ impl App {
             grid_reset_scroll: false,
             loading: false,
             headline: String::new(),
+            unlocks: Vec::new(),
             detail: None,
             detail_loading: false,
             detail_gen: 0,
@@ -957,6 +963,12 @@ impl App {
                         if self.movies.is_empty() {
                             self.toast("Nessun risultato: prova ad allargare i filtri.");
                         }
+                    }
+                }
+                Msg::Unlocks { gen, unlocks } => {
+                    if gen == self.gen {
+                        self.unlocks = unlocks;
+                        self.ctx.request_repaint();
                     }
                 }
                 Msg::Details { gen, res } => {
@@ -1344,6 +1356,7 @@ impl App {
         let gen = self.gen;
         self.loading = true;
         self.grid_reset_scroll = true;
+        self.unlocks.clear();
 
         let text = self
             .grid_query
@@ -1431,6 +1444,7 @@ impl App {
             let quality_visual = similar.is_none()
                 && title.is_none()
                 && matches!(eff.sort, Sort::Newest | Sort::Upcoming);
+            let mut discover_used = false;
             let outcome: Result<(Vec<Movie>, u32, u32, String), String> =
                 if let Some(name) = similar {
                     match tmdb.search(&name, 1) {
@@ -1501,6 +1515,7 @@ impl App {
                         Err(e) => Err(e),
                     }
                 } else {
+                    discover_used = true;
                     discover_with_relaxation(&tmdb, &tax, &eff, &kw, page, &mut payload.removed)
                 };
 
@@ -1543,10 +1558,28 @@ impl App {
                 }
             }
 
+            let grid_len = payload.movies.len();
+            let unlockable = discover_used
+                && page == 1
+                && payload.error.is_none()
+                // Se il motore ha già allentato qualcosa, la nota spiega il
+                // compromesso: qui si mostrano solo rinunce scelte dall'utente.
+                && payload.removed.is_empty()
+                && grid_len <= 3;
             let _ = tx.send(Msg::Results {
                 gen,
                 payload: Box::new(payload),
             });
+
+            // I risultati partono subito; i compromessi arrivano dopo, perché
+            // ogni variante è una chiamata TMDB. Meglio una griglia pronta e
+            // la striscia «Sblocca» un istante più tardi che il contrario.
+            if unlockable {
+                let unlocks = unlock_options(&tmdb, &tax, &eff, &kw);
+                if !unlocks.is_empty() {
+                    let _ = tx.send(Msg::Unlocks { gen, unlocks });
+                }
+            }
         });
         self.ctx.request_repaint();
     }
@@ -2850,6 +2883,7 @@ impl App {
     fn apply_actions(&mut self, actions: Vec<FacetAction>) {
         if !actions.is_empty() {
             // Toccare i filtri a mano e esplorazione: si torna alla griglia.
+            self.unlocks.clear();
             self.switch_mode(ViewMode::Griglia);
         }
         for action in actions {
@@ -2920,6 +2954,20 @@ impl App {
             return;
         }
         self.dirty = Some(Instant::now());
+    }
+
+    /// Applica un compromesso: toglie un solo vincolo e riparte subito.
+    fn apply_unlock(&mut self, index: usize) {
+        let Some(u) = self.unlocks.get(index).cloned() else {
+            return;
+        };
+        self.facets = u.facets;
+        self.unlocks.clear();
+        self.page = 1;
+        self.resanitize();
+        if self.tmdb.is_some() {
+            self.launch_search(false);
+        }
     }
 
     /// Verifica della credenziale AI: prova una vera interpretazione con il
@@ -3974,6 +4022,13 @@ impl App {
     /// Griglia a tutta altezza: conteggio e comandi stanno nella barra di
     /// comando, quindi qui restano i poster.
     fn grid_central(&mut self, ui: &mut egui::Ui) {
+        if !self.loading && self.movies.len() <= 3 && !self.unlocks.is_empty() {
+            if let Some(i) = unlock::strip(ui, &self.unlocks) {
+                self.apply_unlock(i);
+                return;
+            }
+            ui.add_space(12.0);
+        }
         let selected = self.detail.as_ref().map(|d| d.movie.id);
         let reset_scroll = std::mem::take(&mut self.grid_reset_scroll);
         let clicked = grid::grid(ui, &self.images, &self.movies, selected, reset_scroll);
@@ -5100,6 +5155,172 @@ fn local_filter_limits(tax: &Taxonomy, f: &Facets) -> Vec<&'static str> {
     out
 }
 
+/// Un solo vincolo tolto per volta: è il compromesso più piccolo che sblocca
+/// altri film. Le varianti si ordinano per risultati, così vince la rinuncia
+/// più leggera; le tre migliori bastano a scegliere senza una tabella.
+fn unlock_options(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    facets: &Facets,
+    kw: &[(String, u64)],
+) -> Vec<unlock::Unlock> {
+    let mut out = Vec::new();
+    for (label, relaxed) in unlock_candidates(tax, facets) {
+        let Ok(q) = constraints::to_discover(tax, &relaxed, kw, 1) else {
+            continue;
+        };
+        let Ok(page) = tmdb.discover(&q) else {
+            continue;
+        };
+        if page.total_results == 0 {
+            continue;
+        }
+        out.push(unlock::Unlock {
+            label,
+            facets: relaxed,
+            total: page.total_results,
+            preview: page
+                .results
+                .iter()
+                .take(2)
+                .map(|m| m.title.clone())
+                .collect(),
+        });
+    }
+    out.sort_by_key(|u| u.total);
+    out.truncate(3);
+    out
+}
+
+/// Le rinunce possibili: ognuna tocca una sola categoria di filtri.
+fn unlock_candidates(tax: &Taxonomy, f: &Facets) -> Vec<(String, Facets)> {
+    let mut out = Vec::new();
+    if let Some(v) = f.min_rating {
+        let mut c = f.clone();
+        c.min_rating = None;
+        out.push((format!("Voto minimo {v:.1}"), c));
+    }
+    if let Some(v) = f.max_rating {
+        let mut c = f.clone();
+        c.max_rating = None;
+        out.push((format!("Voto massimo {v:.1}"), c));
+    }
+    if let Some(v) = f.min_votes {
+        let mut c = f.clone();
+        c.min_votes = None;
+        out.push((format!("Voti minimi {}", theme::thousands(v)), c));
+    }
+    if let Some((a, b)) = f.runtime {
+        let mut c = f.clone();
+        c.runtime = None;
+        out.push((format!("Durata {}", runtime_label(a, b)), c));
+    }
+    if !f.without_genres.is_empty() {
+        let mut c = f.clone();
+        c.without_genres.clear();
+        let label = if f.without_genres.len() == 1 {
+            format!(
+                "Genere escluso {}",
+                tax.genre_name(f.without_genres[0])
+                    .unwrap_or_else(|| f.without_genres[0].to_string())
+            )
+        } else {
+            format!("Generi esclusi ({})", f.without_genres.len())
+        };
+        out.push((label, c));
+    }
+    if !f.genres.is_empty() {
+        let mut c = f.clone();
+        c.genres.clear();
+        let label = if f.genres.len() == 1 {
+            format!(
+                "Genere {}",
+                tax.genre_name(f.genres[0])
+                    .unwrap_or_else(|| f.genres[0].to_string())
+            )
+        } else {
+            format!("Generi scelti ({})", f.genres.len())
+        };
+        out.push((label, c));
+    }
+    if !f.decades.is_empty() {
+        let mut c = f.clone();
+        c.decades.clear();
+        let label = if f.decades.len() == 1 {
+            format!(
+                "Periodo {}",
+                tax.decade(&f.decades[0])
+                    .map(|d| d.label.clone())
+                    .unwrap_or_else(|| f.decades[0].clone())
+            )
+        } else {
+            format!("Periodi scelti ({})", f.decades.len())
+        };
+        out.push((label, c));
+    }
+    if !f.countries.is_empty() {
+        let mut c = f.clone();
+        c.countries.clear();
+        let label = if f.countries.len() == 1 {
+            format!("Paese {}", tax.country_label(&f.countries[0]))
+        } else {
+            format!("Paesi scelti ({})", f.countries.len())
+        };
+        out.push((label, c));
+    }
+    if !f.moods.is_empty() {
+        let mut c = f.clone();
+        c.moods.clear();
+        let label = if f.moods.len() == 1 {
+            format!(
+                "Mood {}",
+                tax.mood(&f.moods[0])
+                    .map(|m| m.label.clone())
+                    .unwrap_or_else(|| f.moods[0].clone())
+            )
+        } else {
+            format!("Mood scelti ({})", f.moods.len())
+        };
+        out.push((label, c));
+    }
+    if !f.keywords.is_empty() {
+        let mut c = f.clone();
+        c.keywords.clear();
+        let label = if f.keywords.len() == 1 {
+            format!("Tema {}", f.keywords[0])
+        } else {
+            format!("Temi scelti ({})", f.keywords.len())
+        };
+        out.push((label, c));
+    }
+    if !f.movements.is_empty() {
+        let mut c = f.clone();
+        c.movements.clear();
+        let label = if f.movements.len() == 1 {
+            format!(
+                "Corrente {}",
+                tax.movement(&f.movements[0])
+                    .map(|m| m.label.clone())
+                    .unwrap_or_else(|| f.movements[0].clone())
+            )
+        } else {
+            format!("Correnti scelte ({})", f.movements.len())
+        };
+        out.push((label, c));
+    }
+    out
+}
+
+fn runtime_label(a: u32, b: u32) -> String {
+    if a == 0 {
+        format!("fino a {b} min")
+    } else if b >= 600 {
+        format!("oltre {a} min")
+    } else {
+        format!("{a}–{b} min")
+    }
+}
+
 /// R5 · validazione sui dati reali. Se i vincoli chiesti producono zero titoli,
 /// li allento uno alla volta — voto, poi generi, poi parole chiave tematiche —
 /// e annoto esattamente cosa ho tolto, cosi l'utente vede il ragionamento.
@@ -6142,7 +6363,8 @@ fn open_url(url: &str) {
 mod tests {
     use super::{
         allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
-        resize_edge, side_panel_widths, sort_movies, wants_trending, Facets, Movie, Sort,
+        resize_edge, side_panel_widths, sort_movies, unlock_candidates, wants_trending, Facets,
+        Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
@@ -6153,6 +6375,35 @@ mod tests {
         assert!(wants_trending(&f));
         f.sort = Sort::Rating;
         assert!(!wants_trending(&f));
+    }
+
+    #[test]
+    fn ogni_sblocco_toglie_un_solo_vincolo() {
+        let tax = Taxonomy::load();
+        let f = Facets {
+            genres: vec![18],
+            min_votes: Some(500),
+            runtime: Some((90, 120)),
+            ..Default::default()
+        };
+        let options = unlock_candidates(&tax, &f);
+        assert_eq!(options.len(), 3, "una variante per vincolo");
+
+        let voti = options
+            .iter()
+            .find(|(l, _)| l.starts_with("Voti minimi"))
+            .expect("voti");
+        assert!(voti.1.min_votes.is_none());
+        assert_eq!(voti.1.runtime, f.runtime);
+        assert_eq!(voti.1.genres, f.genres);
+
+        let durata = options
+            .iter()
+            .find(|(l, _)| l.starts_with("Durata"))
+            .expect("durata");
+        assert!(durata.1.runtime.is_none());
+        assert_eq!(durata.1.min_votes, f.min_votes);
+        assert_eq!(durata.1.genres, f.genres);
     }
 
     #[test]
