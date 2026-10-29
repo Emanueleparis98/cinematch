@@ -1752,7 +1752,7 @@ fn composer_inner(
                 }
                 if send_button(
                     ui,
-                    !busy && (!draft.trim().is_empty() || wide_send),
+                    !busy && !draft.trim().is_empty(),
                     wide_send,
                 )
                 .clicked()

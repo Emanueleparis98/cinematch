@@ -165,7 +165,7 @@ struct PersonPool {
     person: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct SettingsDraft {
     tmdb_key: String,
     provider: String,
@@ -727,6 +727,8 @@ pub struct App {
     chat: Vec<chat::Entry>,
     chat_gen: u64,
     chat_busy: bool,
+    /// «Nuova» chiede conferma quando c'è una conversazione da perdere.
+    new_chat_confirm: bool,
     /// Token della risposta in corso: stop e «Nuova chat» lo alzano.
     chat_cancel: Option<Arc<AtomicBool>>,
     /// Contesto dei seguiti della chat: separato dai filtri della griglia.
@@ -870,6 +872,7 @@ impl App {
             chat: Vec::new(),
             chat_gen: 0,
             chat_busy: false,
+            new_chat_confirm: false,
             chat_cancel: None,
             chat_context: Intent::default(),
             chat_jump: false,
@@ -2754,10 +2757,10 @@ impl App {
         self.simkl_syncing = false;
         self.simkl_busy = false;
         self.simkl_pending = None;
-        self.simkl_store = simkl::Store::default();
+        // Scollegare non deve distruggere la cronologia locale: la copia
+        // resta e serve a ricollegare senza perdere visti e voti.
         self.simkl_cards = None;
-        let _ = simkl::save_store(&self.simkl_store);
-        self.simkl_status = Some("SIMKL scollegato: la copia locale è stata rimossa.".into());
+        self.simkl_status = Some("SIMKL scollegato: la copia locale resta sul PC.".into());
     }
 
     fn ensure_simkl_posters(&mut self) {
@@ -3666,8 +3669,12 @@ impl App {
                     switch = Some(ViewMode::Griglia);
                 }
                 if lumen::nav_item(ui, lumen::Icon::New, "Nuova", false).clicked() {
-                    new_chat = true;
-                    switch = Some(ViewMode::Chat);
+                    if self.chat.is_empty() && !self.chat_busy {
+                        new_chat = true;
+                        switch = Some(ViewMode::Chat);
+                    } else {
+                        self.new_chat_confirm = true;
+                    }
                 }
                 let settings_resp = lumen::nav_item(
                     ui,
@@ -4599,6 +4606,7 @@ impl App {
         let mut simkl_sync = false;
         let mut simkl_disconnect = false;
         let mut simkl_cancel = false;
+        let dirty = self.settings != SettingsDraft::from(&self.cfg);
         egui::ScrollArea::vertical()
             .id_salt("settings-scroll")
             .auto_shrink([false, false])
@@ -4662,12 +4670,25 @@ impl App {
                                     );
                                     ui.add_space(5.0);
                                     ui.label(lumen::display(30.0, "Impostazioni"));
+                                    if dirty {
+                                        ui.add_space(4.0);
+                                        ui.label(
+                                            lumen::mono(9.0, "● MODIFICHE NON SALVATE")
+                                                .color(lumen::EMBER),
+                                        );
+                                    }
                                 });
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
                                         if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
                                             close = true;
+                                        }
+                                        if dirty
+                                            && lumen::button_sized(ui, "Salva", true, 96.0)
+                                                .clicked()
+                                        {
+                                            save = true;
                                         }
                                     },
                                 );
@@ -4676,7 +4697,7 @@ impl App {
                             ui.label(
                                 lumen::body(
                                     11.5,
-                                    "Chiavi, interprete, tracciamento e aggiornamenti restano su questo PC.",
+                                    "Chiavi e preferenze restano su questo PC. SIMKL sincronizza visti, lista e voti solo quando lo chiedi.",
                                 )
                                 .color(lumen::MUTED),
                             );
@@ -4818,13 +4839,10 @@ impl App {
                                             .color(theme::DIM),
                                     );
                                 } else if ui
-                                    .add_enabled(
-                                        self.update.progress.is_none(),
-                                        egui::Button::new(
-                                            egui::RichText::new("Controlla").size(11.0),
-                                        )
-                                        .corner_radius(lumen::radius(9.0)),
-                                    )
+                                    .add_enabled_ui(self.update.progress.is_none(), |ui| {
+                                        lumen::button_sized(ui, "Controlla", false, 104.0)
+                                    })
+                                    .inner
                                     .clicked()
                                 {
                                     update_check = true;
@@ -4929,18 +4947,26 @@ impl App {
                     ui.add_space(8.0);
                     lumen::hairline(ui);
                 }
-                ui.label(lumen::mono(10.0, "TMDB").color(lumen::EMBER));
-                ui.add_space(2.0);
+                ui.label(lumen::mono(10.0, "TMDB").color(lumen::IVORY));
+                ui.add_space(10.0);
                 ui.label(
                     egui::RichText::new("Credenziale TMDB: API Key v3 (32 caratteri) oppure Read Access Token v4 (inizia con eyJ)")
                         .size(11.0)
                         .color(theme::DIM),
                 );
-                ui.add(
+                let tmdb_field = ui.add(
                     egui::TextEdit::singleline(&mut self.settings.tmdb_key)
                         .password(true)
+                        .hint_text("API Key v3 (32 caratteri) o Read Access Token v4 (eyJ…)")
                         .desired_width(f32::INFINITY),
                 );
+                tmdb_field.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::Role::TextInput,
+                        true,
+                        "Chiave API TMDB",
+                    )
+                });
                 {
                     let (hint, plausible) = describe_credential(&self.settings.tmdb_key);
                     let color = if self.settings.tmdb_key.trim().is_empty() {
@@ -4978,7 +5004,7 @@ impl App {
                 ui.add_space(8.0);
                 lumen::hairline(ui);
                 ui.add_space(4.0);
-                ui.label(lumen::display(24.0, "Interprete delle richieste"));
+                ui.label(lumen::mono(10.0, "INTERPRETE").color(lumen::IVORY));
                 ui.add_space(2.0);
                 ui.label(
                     lumen::body(
@@ -5018,11 +5044,19 @@ impl App {
                             .size(11.0)
                             .color(theme::DIM),
                     );
-                    ui.add(
+                    let field = ui.add(
                         egui::TextEdit::singleline(&mut self.settings.deepseek_key)
                             .password(true)
+                            .hint_text("sk-…")
                             .desired_width(f32::INFINITY),
                     );
+                    field.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::Role::TextInput,
+                            true,
+                            "Chiave API DeepSeek",
+                        )
+                    });
                     if ui
                         .hyperlink_to(
                             egui::RichText::new("Crea o copia la chiave su platform.deepseek.com")
@@ -5047,11 +5081,19 @@ impl App {
                             .size(11.0)
                             .color(theme::DIM),
                     );
-                    ui.add(
+                    let field = ui.add(
                         egui::TextEdit::singleline(&mut self.settings.openrouter_key)
                             .password(true)
+                            .hint_text("sk-or-…")
                             .desired_width(f32::INFINITY),
                     );
+                    field.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::Role::TextInput,
+                            true,
+                            "Chiave API OpenRouter",
+                        )
+                    });
                     if ui
                         .hyperlink_to(
                             egui::RichText::new("Crea o copia la chiave su openrouter.ai")
@@ -5333,6 +5375,53 @@ impl App {
         }
     }
 
+    fn new_chat_dialog(&mut self, ctx: &egui::Context) {
+        if !self.new_chat_confirm {
+            return;
+        }
+        let mut cancel = false;
+        let mut confirm = false;
+        let modal = egui::Modal::new(egui::Id::unique("new-chat-confirm"))
+            .backdrop_color(lumen::alpha(lumen::INK, 190))
+            .frame(
+                egui::Frame::NONE
+                    .fill(lumen::SURFACE)
+                    .stroke(egui::Stroke::new(1.0_f32, lumen::BORDER_HI))
+                    .corner_radius(lumen::radius(lumen::RADIUS))
+                    .inner_margin(egui::Margin::same(18)),
+            )
+            .show(ctx, |ui| {
+                ui.set_width(360.0);
+                ui.label(lumen::display(22.0, "Nuova chat?"));
+                ui.add_space(6.0);
+                ui.label(
+                    lumen::body(12.0, "La conversazione attuale verrà eliminata.")
+                        .color(lumen::MUTED),
+                );
+                ui.add_space(14.0);
+                ui.horizontal(|ui| {
+                    if lumen::button_sized(ui, "Annulla", false, 110.0).clicked() {
+                        cancel = true;
+                    }
+                    if lumen::button_sized(ui, "Nuova chat", true, 130.0).clicked() {
+                        confirm = true;
+                    }
+                });
+            });
+        if modal.should_close() {
+            cancel = true;
+        }
+        if cancel {
+            self.new_chat_confirm = false;
+        }
+        if confirm {
+            self.new_chat_confirm = false;
+            self.new_chat();
+            self.mode = ViewMode::Chat;
+            self.focus = Some(ViewMode::Chat);
+        }
+    }
+
     fn toast_overlay(&mut self, ctx: &egui::Context) {
         let Some((msg, at)) = self.toast.clone() else { return };
         let t = at.elapsed().as_secs_f32();
@@ -5427,6 +5516,7 @@ impl App {
         self.grid_pager(ui);
         self.central(ui);
         self.chat_detail_preview(&ctx);
+        self.new_chat_dialog(&ctx);
         if self.guide_open {
             let actions = facets::guide_window(&ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {

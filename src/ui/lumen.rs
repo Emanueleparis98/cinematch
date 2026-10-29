@@ -222,6 +222,9 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
         ink,
     );
     focus(ui, &resp, RADIUS_SM);
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, enabled, text)
+    });
     if enabled {
         resp.on_hover_cursor(egui::CursorIcon::PointingHand)
     } else {
