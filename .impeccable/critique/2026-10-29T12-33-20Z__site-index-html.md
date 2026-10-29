@@ -10,6 +10,7 @@ target_fingerprint: "sha256:eadd0e50825b556875eb8400be908a3a08aa79101ea581d7c379
 target_path: "C:\\Users\\emanu\\Desktop\\test\\cinematch\\site\\index.html"
 timestamp: 2026-10-29T12-33-20Z
 slug: site-index-html
+closed: true
 ---
 # Critique — CineMatch site (Persuade)
 
