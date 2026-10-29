@@ -68,11 +68,6 @@ pub fn header(
 
     ui.horizontal(|ui| {
         ui.label(lumen::mono(11.0, "FILTRI").color(lumen::IVORY));
-        if active > 0 {
-            let (w, _) = badge_size(ui, active);
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 15.0), Sense::hover());
-            paint_badge(ui.painter(), rect, active);
-        }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ghost(ui, "Azzera", active > 0).clicked() && active > 0 {
                 out.push(FacetAction::Clear(Section::All));
@@ -97,8 +92,8 @@ pub fn header(
 /// accesi non spariscono dalla vista mentre si guarda la griglia.
 pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
     let text = ui.painter().layout_no_wrap(
-        "Filtri".to_owned(),
-        FontId::proportional(11.5),
+        "FILTRI".to_owned(),
+        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let (badge_w, _) = if active > 0 {
@@ -106,12 +101,12 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
     } else {
         (0.0, 0.0)
     };
-    let pad = 9.0;
+    let pad = 12.0;
     let chev_w = 9.0;
     let gap = 4.0;
     let count_gap = if active > 0 { 6.0 } else { 0.0 };
     let w = pad + chev_w + gap + text.size().x + count_gap + badge_w + pad;
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 26.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 36.0), Sense::click());
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -119,7 +114,7 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
     let fill = if open {
         theme::alpha(theme::ACCENT_DIM, (60.0 + 40.0 * hover) as u8)
     } else {
-        theme::mix(theme::CARD, theme::CARD_HOVER, hover * 0.7)
+        theme::mix(lumen::DEEP, lumen::RAISED, hover * 0.7)
     };
     let stroke = theme::mix(
         if open {
@@ -170,6 +165,12 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
     } else {
         "Mostra il pannello dei filtri · Ctrl+B".to_owned()
     };
+    let a11y = if active > 0 {
+        format!("Filtri, {active} attivi")
+    } else {
+        "Filtri".to_owned()
+    };
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &a11y));
     theme::focus_ring(ui, &resp, 8.0);
     resp.on_hover_text(tip)
         .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -192,6 +193,28 @@ pub fn sections(
     let q = norm(query);
     let filtering = !q.is_empty();
     let mut drawn = 0usize;
+
+    // ---- metriche ----
+    // In cima: «ben votato e non troppo lungo» e' il caso d'uso centrale,
+    // mentre i generi restano un'esplorazione facoltativa piu' sotto.
+    let title_hit = wanted(&q, "Metriche", METRIC_ALIASES);
+    if !filtering || title_hit {
+        sep(ui, &mut drawn);
+        let metriche = f.min_rating.is_some() as usize
+            + f.max_rating.is_some() as usize
+            + f.min_votes.is_some() as usize
+            + f.runtime.is_some() as usize;
+        let acts = section(
+            ui,
+            "metriche",
+            "Metriche",
+            metriche,
+            true,
+            filtering,
+            |ui, out| metrics(ui, f, out),
+        );
+        out.extend(acts);
+    }
 
     // ---- periodo ----
     let (mlo, mhi) = movement_window(tax, f);
@@ -294,7 +317,7 @@ pub fn sections(
             "genere",
             "Genere",
             f.genres.len() + f.without_genres.len(),
-            true,
+            false,
             filtering,
             |ui, out| {
                 chip_row(ui, list, out, |label| {
@@ -308,7 +331,7 @@ pub fn sections(
                     FacetAction::Genre(id)
                 });
                 if !filtering && total > primary.len() {
-                    ui.add_space(1.0);
+                    ui.add_space(6.0);
                     let label = if show_all {
                         "Meno generi".to_string()
                     } else {
@@ -375,7 +398,7 @@ pub fn sections(
                     FacetAction::Country(code)
                 });
                 if !filtering && total > 8 {
-                    ui.add_space(1.0);
+                    ui.add_space(6.0);
                     let label = if show_all {
                         "Meno paesi".to_string()
                     } else {
@@ -454,26 +477,6 @@ pub fn sections(
         if ghost(ui, &label, true).clicked() {
             open_guide(ui, guide_open);
         }
-    }
-
-    // ---- metriche ----
-    let title_hit = wanted(&q, "Metriche", METRIC_ALIASES);
-    if !filtering || title_hit {
-        sep(ui, &mut drawn);
-        let metriche = f.min_rating.is_some() as usize
-            + f.max_rating.is_some() as usize
-            + f.min_votes.is_some() as usize
-            + f.runtime.is_some() as usize;
-        let acts = section(
-            ui,
-            "metriche",
-            "Metriche",
-            metriche,
-            false,
-            filtering,
-            |ui, out| metrics(ui, f, out),
-        );
-        out.extend(acts);
     }
 
     // ---- nessun risultato ----
@@ -1005,7 +1008,7 @@ fn section(
     if active > 0 {
         let cg = p.layout_no_wrap(
             "PULISCI".to_owned(),
-            FontId::new(8.5, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+            FontId::new(9.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
             Color32::PLACEHOLDER,
         );
         let cpos = egui::pos2(

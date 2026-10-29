@@ -3812,12 +3812,7 @@ impl App {
                                     }
                                 });
                             let active = self.facets.active_count();
-                            let label = if active > 0 {
-                                format!("Filtri {active}")
-                            } else {
-                                "Filtri".to_string()
-                            };
-                            if lumen::button_sized(ui, &label, false, 92.0).clicked() {
+                            if facets::panel_toggle(ui, self.filters_open, active).clicked() {
                                 toggle_filters = true;
                             }
                             if lumen::button_sized(ui, "Cerca", true, 80.0).clicked() {

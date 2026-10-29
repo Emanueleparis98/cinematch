@@ -85,10 +85,12 @@ fn card(
         &m.title,
         FontId::new(12.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
         width,
-        1,
+        2,
     ));
+    let title_y = poster_rect.bottom() + 6.0;
+    let title_h = title.size().y;
     ui.painter().galley(
-        egui::pos2(rect.left(), poster_rect.bottom() + 6.0),
+        egui::pos2(rect.left(), title_y),
         title,
         if m.track.watched {
             lumen::MUTED
@@ -106,13 +108,14 @@ fn card(
         year
     };
     ui.painter().text(
-        egui::pos2(rect.left(), poster_rect.bottom() + 23.0),
+        egui::pos2(rect.left(), title_y + title_h + 3.0),
         Align2::LEFT_TOP,
         sub,
         FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         if hovered { lumen::MUTED } else { lumen::FAINT },
     );
-    resp.clicked()
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &m.title));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
 }
 
 /// Griglia virtualizzata di poster. Ritorna l'id del film cliccato.
@@ -135,7 +138,7 @@ pub fn grid(
         2
     };
     let card_w = ((avail - GAP * (cols - 1) as f32) / cols as f32).floor();
-    let card_h = (card_w * 1.5).floor() + 38.0;
+    let card_h = (card_w * 1.5).floor() + 52.0;
     let rows = movies.len().div_ceil(cols);
     ui.spacing_mut().item_spacing.y = GAP;
     let mut area = egui::ScrollArea::vertical()
