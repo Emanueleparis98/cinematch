@@ -4541,7 +4541,7 @@ impl App {
                                     verify = true;
                                 }
                                 if self.onboarding_busy {
-                                    ui.spinner();
+                                    fx::dot(ui, lumen::EMBER, 0.0);
                                 }
                                 if lumen::link(
                                     ui,
@@ -4612,6 +4612,48 @@ impl App {
                         egui::vec2(width, 0.0),
                         egui::Layout::top_down(egui::Align::LEFT),
                         |ui| {
+                            // I widget nativi ereditano la pelle LUMEN: fondo,
+                            // bordi, raggi, selezione ember.
+                            {
+                                let v = ui.visuals_mut();
+                                v.override_text_color = Some(lumen::IVORY);
+                                v.widgets.noninteractive.bg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::BORDER);
+                                v.widgets.noninteractive.fg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::MUTED);
+                                v.widgets.inactive.bg_fill = lumen::DEEP;
+                                v.widgets.inactive.weak_bg_fill = lumen::DEEP;
+                                v.widgets.inactive.bg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::BORDER);
+                                v.widgets.inactive.fg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::MUTED);
+                                v.widgets.inactive.corner_radius =
+                                    lumen::radius(lumen::RADIUS_SM);
+                                v.widgets.hovered.bg_fill = lumen::RAISED;
+                                v.widgets.hovered.weak_bg_fill = lumen::RAISED;
+                                v.widgets.hovered.bg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI);
+                                v.widgets.hovered.fg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::IVORY);
+                                v.widgets.hovered.corner_radius =
+                                    lumen::radius(lumen::RADIUS_SM);
+                                v.widgets.active.bg_fill = lumen::SURFACE;
+                                v.widgets.active.weak_bg_fill = lumen::SURFACE;
+                                v.widgets.active.bg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::EMBER);
+                                v.widgets.active.fg_stroke =
+                                    egui::Stroke::new(1.0_f32, lumen::IVORY);
+                                v.widgets.active.corner_radius =
+                                    lumen::radius(lumen::RADIUS_SM);
+                                v.widgets.open = v.widgets.active;
+                                v.selection.bg_fill = lumen::EMBER;
+                                v.selection.stroke =
+                                    egui::Stroke::new(0.0_f32, lumen::INK);
+                                v.extreme_bg_color = lumen::DEEP;
+                                v.faint_bg_color = lumen::SURFACE;
+                                v.window_fill = lumen::SURFACE;
+                                v.panel_fill = lumen::INK;
+                            }
                             ui.add_space(24.0);
                             ui.horizontal(|ui| {
                                 ui.vertical(|ui| {
@@ -4678,7 +4720,7 @@ impl App {
                 }
                 if self.simkl_syncing {
                     ui.horizontal(|ui| {
-                        ui.spinner();
+                        fx::dot(ui, lumen::EMBER, 0.0);
                         ui.label(
                             egui::RichText::new("Sincronizzo la libreria…")
                                 .size(10.5)
@@ -4769,7 +4811,7 @@ impl App {
                             egui::Layout::right_to_left(egui::Align::Center),
                             |ui| {
                                 if self.update.checking {
-                                    ui.spinner();
+                                    fx::dot(ui, lumen::EMBER, 0.0);
                                     ui.label(
                                         egui::RichText::new("Controllo…")
                                             .size(10.5)
@@ -4885,7 +4927,7 @@ impl App {
                         );
                     }
                     ui.add_space(8.0);
-                    ui.separator();
+                    lumen::hairline(ui);
                 }
                 ui.label(lumen::mono(10.0, "TMDB").color(lumen::EMBER));
                 ui.add_space(2.0);
@@ -4934,7 +4976,7 @@ impl App {
                 }
 
                 ui.add_space(8.0);
-                ui.separator();
+                lumen::hairline(ui);
                 ui.add_space(4.0);
                 ui.label(lumen::display(24.0, "Interprete delle richieste"));
                 ui.add_space(2.0);
@@ -5125,7 +5167,7 @@ impl App {
                 }
 
                 ui.add_space(8.0);
-                ui.separator();
+                lumen::hairline(ui);
                 ui.horizontal(|ui| {
                     ui.label(lumen::label("Lingua"));
                     for (id, label) in [("it-IT", "Italiano"), ("en-US", "Inglese")] {
@@ -5139,7 +5181,7 @@ impl App {
 
                 // ---- dati locali: voti IMDb ----
                 ui.add_space(8.0);
-                ui.separator();
+                lumen::hairline(ui);
                 ui.add_space(4.0);
                 ui.label(lumen::mono(10.0, "DATI LOCALI").color(lumen::IVORY));
                 ui.add_space(2.0);
@@ -5183,7 +5225,7 @@ impl App {
                 });
                 if self.imdb_busy {
                     ui.horizontal(|ui| {
-                        ui.spinner();
+                        fx::dot(ui, lumen::EMBER, 0.0);
                         let text = match self.imdb_progress {
                             Some((done, total)) if total > 0 => format!(
                                 "scarico e scompato: {:.1} / {:.1} MB",
@@ -5221,7 +5263,7 @@ impl App {
                 });
 
                 ui.add_space(8.0);
-                ui.separator();
+                lumen::hairline(ui);
                 ui.horizontal_wrapped(|ui| {
                     ui.label(lumen::mono(9.0, format!("build {}", self.build)).color(lumen::FAINT));
                     ui.add_space(10.0);
