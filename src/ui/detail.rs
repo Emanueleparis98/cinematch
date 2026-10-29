@@ -11,6 +11,7 @@ pub enum DetailAction {
     MarkWatched,
     AddWatchlist,
     RemoveTracking,
+    RetryWrite,
     Rate(u8),
     ClearRating,
 }
@@ -23,6 +24,8 @@ pub struct TrackInfo {
     pub url: Option<String>,
     pub connected: bool,
     pub busy: bool,
+    /// Ultimo errore di scrittura per questo film, mostrato nella barra.
+    pub error: Option<String>,
 }
 
 fn label_list(items: &[String]) -> String {
@@ -331,17 +334,52 @@ fn simkl_bar(
         .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
+            if let Some(err) = &track.error {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(
+                        lumen::body(11.0, format!("Non salvato su SIMKL: {err}"))
+                            .color(lumen::DANGER),
+                    );
+                    if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
+                        actions.push(DetailAction::RetryWrite);
+                    }
+                });
+                ui.add_space(4.0);
+            }
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 ui.spacing_mut().item_spacing.y = 6.0;
                 rating_button(ui, movie_id, track, actions);
                 match status {
                     "completed" => {
-                        if lumen::link(ui, "Rimuovi dai visti", lumen::FAINT)
-                            .on_hover_text("Rimuove il film dalla cronologia SIMKL e cancella il voto")
+                        let confirm =
+                            egui::Id::unique(("simkl-remove-confirm", movie_id));
+                        let armed = ui
+                            .ctx()
+                            .memory(|m| m.data.get_temp::<bool>(confirm).unwrap_or(false));
+                        if armed {
+                            ui.label(
+                                lumen::body(11.0, "Toglie cronologia e voto.")
+                                    .color(lumen::MUTED),
+                            );
+                            if lumen::link(ui, "Conferma rimozione", lumen::DANGER).clicked() {
+                                actions.push(DetailAction::RemoveTracking);
+                                ui.ctx()
+                                    .memory_mut(|m| m.data.remove::<bool>(confirm));
+                            }
+                            if lumen::link(ui, "Annulla", lumen::FAINT).clicked() {
+                                ui.ctx()
+                                    .memory_mut(|m| m.data.remove::<bool>(confirm));
+                            }
+                        } else if lumen::link(ui, "Rimuovi dai visti", lumen::FAINT)
+                            .on_hover_text(
+                                "Rimuove il film dalla cronologia SIMKL e cancella il voto",
+                            )
                             .clicked()
                         {
-                            actions.push(DetailAction::RemoveTracking);
+                            ui.ctx()
+                                .memory_mut(|m| m.data.insert_temp(confirm, true));
                         }
                     }
                     "plantowatch" => {

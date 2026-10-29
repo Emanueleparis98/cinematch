@@ -774,6 +774,9 @@ pub struct App {
     grid_reset_scroll: bool,
     loading: bool,
     headline: String,
+    /// Ultimo errore della ricerca: distingue TMDB che non risponde da
+    /// zero risultati veri.
+    results_error: Option<String>,
     /// Ultimo esito di rete: None = non ancora provato, Some(false) = offline.
     net: Option<bool>,
     /// Compromessi «Sblocca» per la ricerca corrente, se la griglia è quasi vuota.
@@ -814,6 +817,9 @@ pub struct App {
     simkl_pending: Option<(u64, simkl::WriteOp)>,
     simkl_status: Option<String>,
     simkl_error: Option<String>,
+    /// Errore di scrittura legato a un film: la scheda lo mostra accanto
+    /// ai comandi, non solo nelle Impostazioni.
+    simkl_write_error: Option<(u64, String)>,
     update: UpdateUi,
     models: Vec<ModelInfo>,
     models_gen: u64,
@@ -890,6 +896,7 @@ impl App {
             grid_reset_scroll: false,
             loading: false,
             headline: String::new(),
+            results_error: None,
             net: None,
             unlocks: Vec::new(),
             detail: None,
@@ -915,6 +922,7 @@ impl App {
             simkl_pending: None,
             simkl_status: None,
             simkl_error: None,
+            simkl_write_error: None,
             update: UpdateUi::default(),
             models: Vec::new(),
             models_gen: 0,
@@ -1000,8 +1008,9 @@ impl App {
                         self.movies.clear();
                         self.total = 0;
                         self.total_pages = 0;
-                        self.toast(err);
+                        self.results_error = Some(err);
                     } else {
+                        self.results_error = None;
                         self.total = p.total;
                         self.total_pages = p.total_pages;
                         if self.total_pages <= 1 {
@@ -1326,6 +1335,7 @@ impl App {
                             }
                             self.simkl_tokens = Some(tokens);
                             self.simkl_error = None;
+                            self.simkl_write_error = None;
                             self.simkl_status = Some("Salvato su SIMKL.".into());
                             if let Some((id, op)) = pending {
                                 self.patch_track(id, op, &outcome);
@@ -1340,6 +1350,8 @@ impl App {
                             } else {
                                 self.reload_simkl_tokens();
                             }
+                            self.simkl_write_error = pending.map(|(id, _)| (id, e.clone()));
+                            self.simkl_pending = pending;
                             self.simkl_error = Some(e);
                         }
                     }
@@ -1478,6 +1490,7 @@ impl App {
         self.gen += 1;
         let gen = self.gen;
         self.loading = true;
+        self.results_error = None;
         self.grid_reset_scroll = true;
         self.unlocks.clear();
 
@@ -2682,6 +2695,7 @@ impl App {
         self.simkl_busy = true;
         self.simkl_pending = Some((movie.id, op));
         self.simkl_error = None;
+        self.simkl_write_error = None;
         self.simkl_status = Some("Salvo su SIMKL…".into());
         let gen = self.simkl_epoch;
         let target = simkl::WriteMovie::from_movie(movie);
@@ -2944,11 +2958,21 @@ impl App {
                 }),
                 connected: self.simkl_tokens.is_some(),
                 busy: self.simkl_busy || self.simkl_syncing,
+                error: self
+                    .simkl_write_error
+                    .as_ref()
+                    .filter(|(id, _)| *id == movie.id)
+                    .map(|(_, e)| e.clone()),
             },
             None => detail::TrackInfo {
                 url: Some(simkl::search_url(&movie.title)),
                 connected: self.simkl_tokens.is_some(),
                 busy: self.simkl_busy || self.simkl_syncing,
+                error: self
+                    .simkl_write_error
+                    .as_ref()
+                    .filter(|(id, _)| *id == movie.id)
+                    .map(|(_, e)| e.clone()),
                 ..Default::default()
             },
         }
@@ -2993,6 +3017,13 @@ impl App {
                 }
                 detail::DetailAction::RemoveTracking => {
                     self.simkl_write_current(simkl::WriteOp::Remove)
+                }
+                detail::DetailAction::RetryWrite => {
+                    if let Some((id, op)) = self.simkl_pending {
+                        if id == current_id {
+                            self.simkl_write_current(op);
+                        }
+                    }
                 }
                 detail::DetailAction::Rate(value) => {
                     self.simkl_write_current(simkl::WriteOp::Rate(value))
@@ -4281,21 +4312,35 @@ impl App {
             self.open_detail(id);
         }
         if self.movies.is_empty() && !self.loading {
+            let mut retry = false;
             ui.add_space(30.0);
             ui.vertical_centered(|ui| {
-                ui.label(
-                    egui::RichText::new("Nessun risultato con questi vincoli")
-                        .size(15.0)
+                if let Some(err) = &self.results_error {
+                    ui.label(lumen::display(20.0, "TMDB non risponde"));
+                    ui.add_space(6.0);
+                    ui.label(lumen::body(12.0, err).color(lumen::MUTED));
+                    ui.add_space(10.0);
+                    if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
+                        retry = true;
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new("Nessun risultato con questi vincoli")
+                            .size(15.0)
+                            .color(theme::DIM),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "Togli una faccia dal pannello: il motore di vincoli spiega cosa era in conflitto.",
+                        )
+                        .size(12.0)
                         .color(theme::DIM),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "Togli una faccia dal pannello: il motore di vincoli spiega cosa era in conflitto.",
-                    )
-                    .size(12.0)
-                    .color(theme::DIM),
-                );
+                    );
+                }
             });
+            if retry {
+                self.launch_search(false);
+            }
         }
     }
 
