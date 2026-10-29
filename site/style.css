@@ -398,6 +398,31 @@ h1 span { color: var(--ember); }
   color: var(--faint);
 }
 
+.facts-more {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.facts-more summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font: 400 10px/1.4 var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.facts-more summary::-webkit-details-marker { display: none; }
+.facts-more summary::before {
+  content: "+";
+  margin-right: 8px;
+  color: var(--ember);
+}
+.facts-more[open] summary::before { content: "−"; }
+.facts-more summary:hover { color: var(--ivory); }
+.facts-more .facts li:first-child { border-top: 0; }
+
 /* ---------------------------------------------------------------- cta ----- */
 
 .cta {
