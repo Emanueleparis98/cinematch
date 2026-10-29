@@ -787,6 +787,8 @@ pub struct App {
     /// Spiegazione della scelta: dalla card della chat (perché + consiglio)
     /// oppure dai criteri attivi della griglia.
     detail_why: Option<(String, String)>,
+    /// Al prossimo disegno della scheda chat porta il focus sulla chiusura.
+    detail_focus: bool,
     /// Generazioni delle richieste scheda: una risposta vecchia non
     /// deve sovrascrivere il film aperto dopo.
     detail_gen: u64,
@@ -905,6 +907,7 @@ impl App {
             detail: None,
             detail_loading: false,
             detail_why: None,
+            detail_focus: false,
             detail_gen: 0,
             keyword_map: Vec::new(),
             dirty: None,
@@ -3085,9 +3088,20 @@ impl App {
     }
 
     fn close_detail(&mut self) {
+        if let Some(d) = &self.detail {
+            let open = egui::Id::unique(("rating-open", d.movie.id));
+            let draft = egui::Id::unique(("rating-draft", d.movie.id));
+            self.ctx.data_mut(|data| {
+                data.remove_temp::<bool>(open);
+                data.remove_temp::<u8>(draft);
+            });
+        }
         self.detail = None;
         self.detail_loading = false;
         self.detail_gen = self.detail_gen.wrapping_add(1);
+        if self.mode == ViewMode::Chat {
+            self.focus = Some(ViewMode::Chat);
+        }
     }
 
     /// Un solo pannello laterale per volta: filtri e scheda non si contendono
@@ -3127,6 +3141,7 @@ impl App {
     fn open_detail(&mut self, id: u64) {
         let Some(tmdb) = self.tmdb.clone() else { return };
         self.detail_why = self.detail_context(id);
+        self.detail_focus = self.mode == ViewMode::Chat;
         self.close_detail();
         self.filters_open = false;
         self.detail_loading = true;
@@ -4063,6 +4078,7 @@ impl App {
                     &track,
                     why,
                     consiglio,
+                    false,
                 );
                 self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
             });
@@ -4093,6 +4109,10 @@ impl App {
             Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
             None => (None, None),
         };
+        let focus_close = d.is_some() && self.detail_focus;
+        if focus_close {
+            self.detail_focus = false;
+        }
         let mut actions = Vec::new();
         egui::Area::new(egui::Id::unique("chat-detail-preview"))
             .order(egui::Order::Foreground)
@@ -4108,7 +4128,7 @@ impl App {
                 let _ = ui.interact(
                     area_rect,
                     egui::Id::unique("chat-detail-scrim"),
-                    egui::Sense::click(),
+                    egui::Sense::CLICK,
                 );
                 ui.painter().rect_filled(
                     modal,
@@ -4134,6 +4154,7 @@ impl App {
                                 &track,
                                 why,
                                 consiglio,
+                                focus_close,
                             );
                         },
                     );
@@ -5420,7 +5441,18 @@ impl App {
             } else if self.show_settings {
                 self.show_settings = false;
             } else if self.detail.is_some() || self.detail_loading {
-                self.close_detail();
+                // Con il popover del voto aperto, Esc chiude prima quello.
+                let rating_open = self
+                    .detail
+                    .as_ref()
+                    .map(|d| {
+                        let id = egui::Id::unique(("rating-open", d.movie.id));
+                        ctx.data(|data| data.get_temp::<bool>(id).unwrap_or(false))
+                    })
+                    .unwrap_or(false);
+                if !rating_open {
+                    self.close_detail();
+                }
             } else if self.filters_open {
                 self.filters_open = false;
             } else if let Some(id) = ctx.memory(|m| m.focused()) {

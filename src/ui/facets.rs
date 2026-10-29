@@ -130,8 +130,8 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
         theme::ACCENT,
         hover * 0.65,
     );
-    p.rect_filled(rect, lumen::radius(8.0), fill);
-    p.rect_stroke(rect, lumen::radius(8.0), Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
+    p.rect_filled(rect, lumen::radius(lumen::RADIUS), fill);
+    p.rect_stroke(rect, lumen::radius(lumen::RADIUS), Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
     p.text(
         egui::pos2(rect.left() + pad, rect.center().y),
         Align2::LEFT_CENTER,
@@ -529,7 +529,7 @@ pub fn sections(
         Frame::NONE
             .fill(theme::CARD)
             .stroke(Stroke::new(1.0_f32, theme::BORDER))
-            .corner_radius(lumen::radius(10.0))
+            .corner_radius(lumen::radius(lumen::RADIUS))
             .inner_margin(Margin::same(9))
             .show(ui, |ui| {
                 ui.label(
@@ -694,7 +694,7 @@ fn paint_badge(painter: &egui::Painter, rect: egui::Rect, n: usize) {
         FontId::proportional(10.0),
         Color32::PLACEHOLDER,
     );
-    painter.rect_filled(rect, lumen::radius(rect.height() * 0.5), theme::ACCENT_DIM);
+    painter.rect_filled(rect, lumen::radius(lumen::RADIUS_SM), theme::ACCENT_DIM);
     painter.galley(
         egui::pos2(
             rect.center().x - galley.size().x * 0.5,
@@ -724,7 +724,7 @@ fn ghost(ui: &mut Ui, text: &str, enabled: bool) -> Response {
     if hover > 0.02 {
         ui.painter().rect_filled(
             rect,
-            lumen::radius(7.0),
+            lumen::radius(lumen::RADIUS_SM),
             theme::alpha(theme::ACCENT, (24.0 * hover) as u8),
         );
     }
@@ -1235,7 +1235,7 @@ fn menu_item(ui: &mut Ui, label: &str, selected: bool) -> bool {
         } else {
             theme::alpha(theme::CARD_HOVER, (150.0 * hover) as u8)
         };
-        ui.painter().rect_filled(rect, lumen::radius(7.0), fill);
+        ui.painter().rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
     }
     let p = ui.painter();
     let galley = p.layout_no_wrap(

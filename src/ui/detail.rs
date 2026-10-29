@@ -41,7 +41,7 @@ fn short_country(name: &str) -> &str {
     }
 }
 
-fn close_button(ui: &mut egui::Ui) -> bool {
+fn close_button(ui: &mut egui::Ui) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(26.0, 26.0), Sense::click());
     let hover = ui
         .ctx()
@@ -70,7 +70,6 @@ fn close_button(ui: &mut egui::Ui) -> bool {
     lumen::focus(ui, &resp, lumen::RADIUS_SM);
     resp.on_hover_text("Chiudi (Esc)")
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
 }
 
 fn avail_row(ui: &mut egui::Ui, label: &str, items: &[String], color: egui::Color32) {
@@ -433,6 +432,7 @@ fn simkl_bar(
         });
 }
 
+#[allow(clippy::too_many_arguments)] // scheda densa: contesto e focus restano espliciti
 pub fn panel(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -441,6 +441,7 @@ pub fn panel(
     track: &TrackInfo,
     why: Option<&str>,
     consiglio: Option<&str>,
+    focus_close: bool,
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
@@ -449,14 +450,18 @@ pub fn panel(
     let _ = ui.interact(
         ui.max_rect(),
         egui::Id::unique(("detail-bg", d.movie.id)),
-        egui::Sense::click(),
+        egui::Sense::CLICK,
     );
 
     // Intestazione fissa: la chiusura resta raggiungibile anche dopo lo scroll.
     ui.horizontal(|ui| {
         ui.label(lumen::mono(10.0, "SCHEDA FILM").color(lumen::IVORY));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if close_button(ui) {
+            let close = close_button(ui);
+            if focus_close {
+                close.request_focus();
+            }
+            if close.clicked() {
                 actions.push(DetailAction::Close);
             }
         });
