@@ -56,7 +56,7 @@
         <a href="https://github.com/Emanueleparis98/cinematch" rel="noopener">GitHub ↗</a>
       </nav>
       <a class="btn btn-small" href="https://github.com/Emanueleparis98/cinematch/releases/latest" data-download>
-        Scarica&nbsp;<span class="hide-sm">per Windows</span>
+        Scarica per Windows
       </a>
     </div>
   </header>
@@ -73,7 +73,17 @@
           </a>
           <a class="ghost" href="https://github.com/Emanueleparis98/cinematch" rel="noopener">Vedi su GitHub ↗</a>
         </div>
-        <p class="fineprint">Installer per-utente · <span data-size>~6 MB</span> · <span data-version>v0.10.3</span></p>
+        <p class="need-key">Serve una chiave <a href="https://www.themoviedb.org/settings/api" rel="noopener">TMDB gratuita</a> (2 minuti) al primo avvio. AI e SIMKL sono opzionali.</p>
+        <p class="fineprint">Installer per-utente · solo PC Windows 10/11 · <span data-size>~6 MB</span> · <span data-version>v0.10.4</span></p>
+        <details class="install-note">
+          <summary>Prima di installare</summary>
+          <ul>
+            <li>Installazione per-utente: nessun permesso di amministratore.</li>
+            <li>Solo Windows 10/11 a 64 bit. Non esiste per macOS, Linux o telefono.</li>
+            <li>L’installer non è firmato digitalmente: Windows può mostrare “Windows protected your PC”. Se il file corrisponde allo SHA-256 della release, puoi scegliere “Ulteriori informazioni” → “Esegui comunque”.</li>
+            <li>Per disinstallare: Impostazioni → App → CineMatch. Configurazione e cache restano in <code>%APPDATA%\CineMatch</code> finché non le rimuovi.</li>
+          </ul>
+        </details>
       </div>
       <figure class="shot">
         <img src="assets/app-chat.png" width="1200" height="675" alt="CineMatch: la home con le quattro piste, hero, composer e poster">
@@ -159,7 +169,7 @@
             <p>I film “Da vedere” compaiono sotto la chat: un clic e apri la scheda.</p>
           </li>
         </ul>
-        <p class="fineprint">Novità recenti: chiavi API nel Credential Manager, configurazione con backup, filtri più coerenti e composer della chat sempre pronto. “Più recenti” mostra solo film già usciti e nasconde corti e schede vuote; “Prossimamente” ordina i film futuri per popolarità, senza schede senza poster; con pochi risultati la striscia “Sblocca” mostra il compromesso più piccolo. <a href="https://github.com/Emanueleparis98/cinematch/releases" rel="noopener">Tutte le versioni ↗</a></p>
+        <p class="fineprint">Novità recenti: primo avvio guidato con verifica della chiave TMDB, chiavi API nel Credential Manager, configurazione con backup, filtri più coerenti e composer della chat sempre pronto. “Più recenti” mostra solo film già usciti e nasconde corti e schede vuote; “Prossimamente” ordina i film futuri per popolarità, senza schede senza poster; con pochi risultati la striscia “Sblocca” mostra il compromesso più piccolo. <a href="https://github.com/Emanueleparis98/cinematch/releases" rel="noopener">Tutte le versioni ↗</a></p>
       </div>
     </section>
 
@@ -181,7 +191,7 @@
 
   <footer class="site-footer wrap">
     <div class="foot-row">
-      <span>CineMatch <span data-version>v0.10.3</span></span>
+      <span>CineMatch <span data-version>v0.10.4</span></span>
       <span><a href="https://github.com/Emanueleparis98/cinematch" rel="noopener">GitHub</a> · <a href="https://www.themoviedb.org/" rel="noopener">TMDB</a></span>
     </div>
     <p class="tmdb">This product uses the TMDB API but is not endorsed or certified by TMDB.</p>

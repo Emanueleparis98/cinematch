@@ -60,6 +60,8 @@ enum Msg {
     Unlocks { gen: u64, unlocks: Vec<unlock::Unlock> },
     Details { gen: u64, res: Result<Details, String> },
     Check { res: Result<String, String> },
+    /// Verifica della chiave TMDB durante il primo avvio.
+    OnboardingChecked { key: String, res: Result<String, String> },
     Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
     AiCheck { res: Result<String, String> },
     /// Esito del download dei voti IMDb.
@@ -790,6 +792,9 @@ pub struct App {
     show_settings: bool,
     settings: SettingsDraft,
     settings_check: Option<String>,
+    /// Primo avvio: chiediamo la chiave TMDB prima delle impostazioni.
+    first_run: bool,
+    onboarding_busy: bool,
     /// Collegamento SIMKL: token (nel Credential Manager), libreria locale,
     /// codice di autorizzazione in corso e stato dell'ultima sincronizzazione.
     simkl_tokens: Option<simkl::Tokens>,
@@ -836,6 +841,7 @@ impl App {
         let facets = Facets::default();
         let prune = constraints::pruning(&tax, &facets);
         let settings = SettingsDraft::from(&cfg);
+        let first_run = !cfg.has_key();
         let simkl_tokens = simkl::load_tokens().ok().flatten();
         let simkl_store = simkl::load_store();
         let mut app = Self {
@@ -895,6 +901,8 @@ impl App {
             show_settings: false,
             settings,
             settings_check: None,
+            first_run,
+            onboarding_busy: false,
             simkl_tokens,
             simkl_store,
             simkl_cards: None,
@@ -1050,6 +1058,31 @@ impl App {
                         Ok(m) => format!("✔ {m}"),
                         Err(e) => format!("✕ {e}"),
                     });
+                }
+                Msg::OnboardingChecked { key, res } => {
+                    self.onboarding_busy = false;
+                    match res {
+                        Ok(msg) => {
+                            if self.settings.tmdb_key.trim() != key {
+                                self.settings_check =
+                                    Some("✕ La chiave è cambiata: verifica di nuovo.".into());
+                                continue;
+                            }
+                            self.settings_check = Some(format!("✔ {msg}"));
+                            if self.save_settings() {
+                                self.first_run = false;
+                                self.show_settings = false;
+                                self.mode = ViewMode::Chat;
+                                self.chat_draft = "Un film italiano degli anni '90, ben votato e non troppo lungo".into();
+                                self.focus = Some(ViewMode::Chat);
+                                self.toast("Chiave salvata. Scrivi cosa vuoi vedere.");
+                            } else {
+                                self.settings_check =
+                                    Some("✕ Non sono riuscito a salvare la chiave.".into());
+                            }
+                        }
+                        Err(e) => self.settings_check = Some(format!("✕ {e}")),
+                    }
                 }
                 Msg::Models { gen, res } => {
                     if gen != self.models_gen {
@@ -3243,6 +3276,29 @@ impl App {
         });
     }
 
+    /// Verifica la chiave TMDB e, se valida, salva e chiude il primo avvio.
+    fn start_onboarding(&mut self) {
+        if self.onboarding_busy {
+            return;
+        }
+        let key = self.settings.tmdb_key.trim().to_string();
+        if key.is_empty() {
+            self.settings_check = Some("✕ Incolla la chiave TMDB.".to_string());
+            return;
+        }
+        self.onboarding_busy = true;
+        self.settings_check = Some("Verifica in corso…".to_string());
+        let lang = self.settings.language.clone();
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let tmdb = Tmdb::new(key.clone(), lang);
+            let res = tmdb.ping();
+            let _ = tx.send(Msg::OnboardingChecked { key, res });
+            ctx.request_repaint();
+        });
+    }
+
     /// Scarica i voti IMDb in background e aggiorna la scheda delle Impostazioni.
     fn start_imdb_download(&mut self) {
         if self.imdb_busy {
@@ -3349,7 +3405,7 @@ impl App {
         }
     }
 
-    fn save_settings(&mut self) {
+    fn save_settings(&mut self) -> bool {
         let cfg = Config {
             tmdb_api_key: self.settings.tmdb_key.trim().to_string(),
             language: self.settings.language.clone(),
@@ -3389,8 +3445,12 @@ impl App {
                     self.page = 1;
                     self.launch_search(false);
                 }
+                true
             }
-            Err(e) => self.toast(e),
+            Err(e) => {
+                self.toast(e);
+                false
+            }
         }
     }
 
@@ -3437,7 +3497,9 @@ impl App {
                     ui.label(lumen::display(22.0, "CINE"));
                     ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
                     ui.add_space(18.0);
-                    let (kicker, title) = if self.show_settings {
+                    let (kicker, title) = if self.first_run {
+                        ("", "PRIMO AVVIO")
+                    } else if self.show_settings {
                         ("", "IMPOSTAZIONI")
                     } else if self.mode == ViewMode::Griglia {
                         ("SALA 02", "CATALOGO")
@@ -3536,8 +3598,8 @@ impl App {
                 let settings_resp = lumen::nav_item(
                     ui,
                     lumen::Icon::Settings,
-                    "Setup",
-                    self.show_settings,
+                    "Impostazioni",
+                    self.show_settings || self.first_run,
                 );
                 if self.update.available.is_some() {
                     let dot = settings_resp.rect.right_top() + egui::vec2(-10.0, 10.0);
@@ -4020,7 +4082,7 @@ impl App {
     }
 
     fn central(&mut self, ui: &mut egui::Ui) {
-        let chat = self.mode == ViewMode::Chat && !self.show_settings;
+        let chat = self.mode == ViewMode::Chat && !self.show_settings && !self.first_run;
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
@@ -4033,6 +4095,10 @@ impl App {
                     )),
             )
             .show(ui, |ui| {
+                if self.first_run {
+                    self.onboarding_page(ui);
+                    return;
+                }
                 if self.show_settings {
                     self.settings_page(ui);
                     return;
@@ -4040,39 +4106,27 @@ impl App {
                 if self.tmdb.is_none() {
                     ui.add_space(40.0);
                     ui.vertical_centered(|ui| {
-                        ui.label(
-                            egui::RichText::new("Serve la chiave API di TMDB")
-                                .size(20.0)
-                                .strong(),
-                        );
+                        ui.label(lumen::display(24.0, "Serve la chiave API di TMDB"));
                         ui.add_space(6.0);
                         ui.label(
-                            egui::RichText::new(
+                            lumen::body(
+                                12.5,
                                 "Serve una credenziale gratuita di TMDB: la API Key v3 (32 caratteri)\noppure il Read Access Token v4 (inizia con eyJ). La riconosco da sola.",
                             )
-                            .size(12.5)
-                            .color(theme::DIM),
+                            .color(lumen::MUTED),
                         );
                         ui.add_space(10.0);
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new("Apri impostazioni").size(13.0),
-                                )
-                                .fill(theme::ACCENT)
-                                .corner_radius(lumen::radius(10.0)),
-                            )
-                            .clicked()
+                        if theme::primary_button(
+                            ui,
+                            "Inserisci la chiave TMDB",
+                            egui::vec2(210.0, 36.0),
+                        )
+                        .clicked()
                         {
-                            self.show_settings = true;
+                            self.first_run = true;
+                            self.show_settings = false;
                         }
-                        if ui
-                            .hyperlink_to(
-                                egui::RichText::new("themoviedb.org → API").size(12.0),
-                                "https://www.themoviedb.org/settings/api",
-                            )
-                            .clicked()
-                        {
+                        if lumen::link(ui, "themoviedb.org → API", lumen::EMBER).clicked() {
                             open_url("https://www.themoviedb.org/settings/api");
                         }
                     });
@@ -4165,6 +4219,7 @@ impl App {
         if self.mode != ViewMode::Chat
             || self.chat.is_empty()
             || self.show_settings
+            || self.first_run
             || self.guide_open
         {
             return;
@@ -4303,8 +4358,124 @@ impl App {
         }
     }
 
+    fn onboarding_page(&mut self, ui: &mut egui::Ui) {
+        let mut verify = false;
+        let mut skip = false;
+        let mut open_api = false;
+        egui::ScrollArea::vertical()
+            .id_salt("onboarding-scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let width = ui.available_width().min(680.0);
+                let pad = ((ui.available_width() - width) * 0.5).max(0.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.add_space(pad);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            ui.add_space(42.0);
+                            ui.label(lumen::mono(10.0, "PRIMO AVVIO").color(lumen::EMBER));
+                            ui.add_space(8.0);
+                            ui.label(lumen::display(38.0, "Iniziamo da TMDB."));
+                            ui.add_space(12.0);
+                            ui.label(
+                                lumen::body(
+                                    13.0,
+                                    "CineMatch legge i film da TMDB. La chiave è gratuita e resta sul tuo PC, nel Windows Credential Manager. AI e SIMKL si collegano dopo: non servono per iniziare.",
+                                )
+                                .color(lumen::MUTED),
+                            );
+                            ui.add_space(22.0);
+                            ui.label(lumen::mono(9.5, "CHIAVE API TMDB").color(lumen::FAINT));
+                            ui.add_space(6.0);
+                            let resp = ui.add(
+                                egui::TextEdit::singleline(&mut self.settings.tmdb_key)
+                                    .password(true)
+                                    .hint_text("API Key v3 (32 caratteri) oppure token v4 (eyJ…)")
+                                    .desired_width(f32::INFINITY),
+                            );
+                            if resp.changed() {
+                                self.settings_check = None;
+                            }
+                            theme::focus_ring(ui, &resp, 2.0);
+                            let (hint, plausible) = describe_credential(&self.settings.tmdb_key);
+                            let color = if self.settings.tmdb_key.trim().is_empty() {
+                                theme::DIM
+                            } else if plausible {
+                                theme::OK
+                            } else {
+                                theme::WARN
+                            };
+                            ui.label(egui::RichText::new(hint).size(10.5).color(color));
+                            if let Some(check) = &self.settings_check {
+                                let color = if check.starts_with('✔') {
+                                    theme::OK
+                                } else if check.starts_with("Verifica") {
+                                    theme::DIM
+                                } else {
+                                    theme::DANGER
+                                };
+                                ui.label(egui::RichText::new(check).size(11.0).color(color));
+                            }
+                            ui.add_space(14.0);
+                            ui.horizontal(|ui| {
+                                if lumen::button_sized(
+                                    ui,
+                                    "Verifica e inizia",
+                                    !self.onboarding_busy,
+                                    196.0,
+                                )
+                                .clicked()
+                                {
+                                    verify = true;
+                                }
+                                if self.onboarding_busy {
+                                    ui.spinner();
+                                }
+                                if lumen::link(
+                                    ui,
+                                    "Ottieni una chiave gratuita ↗",
+                                    lumen::EMBER,
+                                )
+                                .clicked()
+                                {
+                                    open_api = true;
+                                }
+                            });
+                            ui.add_space(12.0);
+                            ui.label(
+                                lumen::body(
+                                    10.5,
+                                    "La chiave viene usata solo per TMDB e non viene inviata a CineMatch. AI e SIMKL sono opzionali.",
+                                )
+                                .color(lumen::FAINT),
+                            );
+                            ui.add_space(10.0);
+                            if lumen::link(ui, "Lo faccio dopo", lumen::MUTED).clicked() {
+                                skip = true;
+                            }
+                        },
+                    );
+                });
+            });
+        if verify {
+            self.start_onboarding();
+        }
+        if open_api {
+            open_url("https://www.themoviedb.org/settings/api");
+        }
+        if skip {
+            self.first_run = false;
+            self.show_settings = false;
+            self.mode = ViewMode::Chat;
+        }
+    }
+
     fn settings_page(&mut self, ui: &mut egui::Ui) {
         let mut close = false;
+        let mut onboarding = false;
         let mut save = false;
         let mut check = false;
         let mut detect = false;
@@ -4339,7 +4510,7 @@ impl App {
                                         lumen::mono(10.0, "IMPOSTAZIONI").color(lumen::EMBER),
                                     );
                                     ui.add_space(5.0);
-                                    ui.label(lumen::display(30.0, "Preferenze"));
+                                    ui.label(lumen::display(30.0, "Impostazioni"));
                                 });
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
@@ -4648,6 +4819,9 @@ impl App {
                     .clicked()
                 {
                     open_api_page = true;
+                }
+                if lumen::link(ui, "Rivedi il primo avvio", lumen::MUTED).clicked() {
+                    onboarding = true;
                 }
 
                 ui.add_space(8.0);
@@ -5001,6 +5175,11 @@ impl App {
         if close {
             self.show_settings = false;
         }
+        if onboarding {
+            self.first_run = true;
+            self.show_settings = false;
+            self.mode = ViewMode::Chat;
+        }
     }
 
     fn toast_overlay(&mut self, ctx: &egui::Context) {
@@ -5088,7 +5267,8 @@ impl App {
             if self.tmdb.is_some() {
                 self.load_trending();
             } else {
-                self.show_settings = true;
+                self.first_run = true;
+                self.show_settings = false;
             }
         }
         self.maybe_check_updates();

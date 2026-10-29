@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T12:15:59Z",
+  "title": "Design System: CineMatch",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#08090c",
+        "tonalRamp": ["#0a0b0d", "#232427", "#414246", "#616368", "#84868b", "#a9abaf", "#cfd1d5", "#edeef1"]
+      },
+      "deep": {
+        "role": "neutral",
+        "displayName": "Deep",
+        "canonical": "#0e1016",
+        "tonalRamp": ["#0a0b0f", "#22242a", "#3f424a", "#60636c", "#83868f", "#a7abb4", "#ced1d9", "#eceef4"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#151821",
+        "tonalRamp": ["#090b10", "#21242c", "#3e424d", "#5e6370", "#818693", "#a6aab7", "#cdd1dc", "#ebeef7"]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised",
+        "canonical": "#1c202b",
+        "tonalRamp": ["#090b11", "#20242d", "#3d424f", "#5d6372", "#808696", "#a5abba", "#ccd1de", "#ebeef8"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "#2a2f3a",
+        "tonalRamp": ["#090b11", "#20242d", "#3d424e", "#5d6371", "#7f8695", "#a4abb9", "#cbd1dd", "#eaeef8"]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Border Strong",
+        "canonical": "#3d4350",
+        "tonalRamp": ["#080b11", "#1f242e", "#3c4250", "#5c6373", "#7e8697", "#a3abbb", "#cbd1df", "#eaeff9"]
+      },
+      "ivory": {
+        "role": "neutral",
+        "displayName": "Ivory",
+        "canonical": "#f4eee2",
+        "tonalRamp": ["#0d0b06", "#27241c", "#474238", "#686357", "#8c8579", "#b0aa9e", "#d5d0c6", "#f2eee7"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#a7a399",
+        "tonalRamp": ["#0d0b07", "#27241d", "#464239", "#676358", "#8a867b", "#afaaa0", "#d4d1c8", "#f1eee8"]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint",
+        "canonical": "#918d84",
+        "tonalRamp": ["#0d0b07", "#27241d", "#46423a", "#676359", "#8a867c", "#afaaa1", "#d4d1c8", "#f1eee8"]
+      },
+      "faint-deep": {
+        "role": "neutral",
+        "displayName": "Faint Deep",
+        "canonical": "#6e6b64",
+        "tonalRamp": ["#0c0b08", "#26241f", "#45423b", "#66635b", "#89867e", "#aeaaa3", "#d4d1ca", "#f0eee9"]
+      },
+      "ember": {
+        "role": "primary",
+        "displayName": "Ember",
+        "canonical": "#ff5c35",
+        "tonalRamp": ["#2f0000", "#5f0000", "#940000", "#c60000", "#f22f00", "#ff6a41", "#ffa17f", "#ffcfb4"]
+      },
+      "ember-hi": {
+        "role": "primary",
+        "displayName": "Ember High",
+        "canonical": "#ff7a57",
+        "tonalRamp": ["#2a0000", "#570000", "#880000", "#b71d00", "#e24c21", "#ff7b56", "#ffac8c", "#ffd5bd"]
+      },
+      "celadon": {
+        "role": "secondary",
+        "displayName": "Celadon",
+        "canonical": "#8fe3c0",
+        "tonalRamp": ["#001206", "#00301a", "#005236", "#007654", "#349b77", "#67bf9c", "#9ce3c4", "#c9fce5"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger",
+        "canonical": "#ff4d5e",
+        "tonalRamp": ["#300000", "#610000", "#960000", "#c90020", "#f61444", "#ff5f6e", "#ff9a9e", "#ffcaca"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Solo hero e titoli di vista, massimo due righe." },
+      "headline": { "displayName": "Headline", "purpose": "Titoli di sezione e di pannello." },
+      "title": { "displayName": "Title", "purpose": "Sottotitoli dei passi e titoli di riga." },
+      "body": { "displayName": "Body", "purpose": "Testo corrente e lede." },
+      "label": { "displayName": "Label", "purpose": "Kicker, etichette di campo, metadati e comandi." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "state", "value": "120ms ease", "purpose": "Hover, focus e cambio colore di bottoni, chip e superfici." },
+      { "name": "card-hover", "value": "140ms ease", "purpose": "Bordo e filo ember delle card poster." }
+    ],
+    "breakpoints": [
+      { "name": "web-430", "value": "430px" },
+      { "name": "web-760", "value": "760px" },
+      { "name": "web-980", "value": "980px" },
+      { "name": "web-1080", "value": "1080px" },
+      { "name": "app-grid-3", "value": "560px" },
+      { "name": "app-grid-4", "value": "740px" },
+      { "name": "app-content", "value": "900px" },
+      { "name": "app-results", "value": "940px" },
+      { "name": "app-grid-5", "value": "1040px" },
+      { "name": "app-wide", "value": "1220px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Comando unico e raro: ember pieno, testo ink, etichetta mono maiuscola.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Scarica per Windows</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;background:var(--ember,#ff5c35);border:1px solid var(--ember,#ff5c35);border-radius:4px;color:var(--ink,#08090c);font-family:var(--mono,\"JetBrains Mono\",monospace);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background .12s ease,border-color .12s ease}.ds-btn-primary:hover{background:var(--ember-hi,#ff7a57);border-color:var(--ember-hi,#ff7a57)}.ds-btn-primary:active{background:#d14b2b}.ds-btn-primary:focus-visible{outline:1px solid var(--ivory,#f4eee2);outline-offset:3px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Azione di pari rango senza accento: deep, bordo da 1 px, avorio.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Vedi su GitHub ↗</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;background:var(--deep,#0e1016);border:1px solid var(--border,#2a2f3a);border-radius:4px;color:var(--ivory,#f4eee2);font-family:var(--mono,\"JetBrains Mono\",monospace);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background .12s ease,border-color .12s ease}.ds-btn-secondary:hover{background:var(--raised,#1c202b);border-color:var(--border-strong,#3d4350)}.ds-btn-secondary:focus-visible{outline:1px solid var(--ember,#ff5c35);outline-offset:3px}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Filtro piatto con bordo da 1 px; selezionato prende il bordo ember, non un riempimento.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip ds-chip-on\" type=\"button\">Neorealismo</button><button class=\"ds-chip\" type=\"button\">Commedia</button><button class=\"ds-chip\" type=\"button\" disabled>Anni 20 · nessun film</button></div>",
+      "css": ".ds-chips{display:flex;flex-wrap:wrap;gap:8px}.ds-chip{min-height:24px;padding:0 10px;background:var(--deep,#0e1016);border:1px solid var(--border,#2a2f3a);border-radius:2px;color:var(--ivory,#f4eee2);font-family:\"Instrument Sans\",system-ui,sans-serif;font-size:11.5px;line-height:1;cursor:pointer}.ds-chip:hover{border-color:var(--border-strong,#3d4350)}.ds-chip-on{border-color:var(--ember,#ff5c35);font-weight:600}.ds-chip:disabled{background:var(--ink,#08090c);border-color:var(--border,#2a2f3a);color:var(--faint,#918d84);cursor:not-allowed}.ds-chip:focus-visible{outline:1px solid var(--ember,#ff5c35);outline-offset:1px}"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "Campo della chat o della griglia: frame deep, focus ember, invio quadrato ember.",
+      "html": "<div class=\"ds-composer\"><input class=\"ds-composer-input\" type=\"text\" placeholder=\"Scrivi cosa vuoi vedere…\" aria-label=\"Richiesta\"><button class=\"ds-send\" type=\"button\" aria-label=\"Invia\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M3 10h13M11 5l5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></button></div>",
+      "css": ".ds-composer{display:flex;align-items:center;gap:8px;max-width:520px;padding:6px 12px;background:var(--deep,#0e1016);border:1px solid var(--border,#2a2f3a);border-radius:2px;font-family:\"Instrument Sans\",system-ui,sans-serif;transition:border-color .12s ease}.ds-composer:focus-within{border-color:var(--ember,#ff5c35)}.ds-composer-input{flex:1;height:40px;min-width:0;background:transparent;border:0;outline:0;color:var(--ivory,#f4eee2);font-family:inherit;font-size:13px}.ds-composer-input::placeholder{color:var(--faint,#918d84)}.ds-send{display:grid;place-items:center;width:40px;height:40px;background:var(--ember,#ff5c35);border:0;border-radius:2px;color:var(--ink,#08090c);cursor:pointer;transition:background .12s ease}.ds-send:hover{background:var(--ember-hi,#ff7a57)}.ds-send:focus-visible{outline:1px solid var(--ivory,#f4eee2);outline-offset:2px}"
+    },
+    {
+      "name": "Poster Card",
+      "kind": "card",
+      "refersTo": "poster-card",
+      "description": "Poster 2:3 a filo, titolo e metadati sotto; il filo ember segna hover e selezione.",
+      "html": "<figure class=\"ds-poster\"><div class=\"ds-poster-frame\"><span>POSTER 2:3</span></div><figcaption><strong>Il film giusto</strong><small>2026 · 7.8 ★</small></figcaption></figure>",
+      "css": ".ds-poster{width:180px;margin:0;font-family:\"Instrument Sans\",system-ui,sans-serif}.ds-poster-frame{position:relative;display:grid;place-items:center;aspect-ratio:2/3;background:var(--deep,#0e1016);border:1px solid var(--border,#2a2f3a);color:var(--faint-deep,#6e6b64);font-family:var(--mono,\"JetBrains Mono\",monospace);font-size:9px;letter-spacing:.08em}.ds-poster-frame::before{content:\"\";position:absolute;left:0;right:0;top:0;height:1.5px;background:linear-gradient(90deg,var(--ember,#ff5c35),transparent);opacity:0}.ds-poster:hover .ds-poster-frame{border-color:var(--border-strong,#3d4350)}.ds-poster:hover .ds-poster-frame::before{opacity:1}.ds-poster figcaption{margin-top:6px}.ds-poster strong{display:block;color:var(--ivory,#f4eee2);font-size:12px;font-weight:600;line-height:1.3}.ds-poster small{display:block;margin-top:2px;color:var(--faint,#918d84);font-family:var(--mono,\"JetBrains Mono\",monospace);font-size:9px;letter-spacing:.02em}"
+    },
+    {
+      "name": "Rail Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Voce della rail da 72 px: icona, etichetta mono, barra ember sullo stato attivo.",
+      "html": "<div class=\"ds-rail\"><button class=\"ds-nav ds-nav-on\" type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" aria-hidden=\"true\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"3\" y=\"3\" width=\"5.5\" height=\"5.5\"/><rect x=\"11.5\" y=\"3\" width=\"5.5\" height=\"5.5\"/><rect x=\"3\" y=\"11.5\" width=\"5.5\" height=\"5.5\"/><rect x=\"11.5\" y=\"11.5\" width=\"5.5\" height=\"5.5\"/></g></svg><span>Griglia</span></button></div>",
+      "css": ".ds-rail{display:flex;padding:4px;background:var(--ink,#08090c)}.ds-nav{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:72px;height:62px;background:transparent;border:0;border-left:2px solid transparent;color:var(--faint-deep,#6e6b64);font-family:var(--mono,\"JetBrains Mono\",monospace);font-size:9px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.ds-nav svg{width:20px;height:20px}.ds-nav:hover{background:rgba(21,24,33,.5);color:var(--ivory,#f4eee2)}.ds-nav-on{background:var(--surface,#151821);border-left-color:var(--ember,#ff5c35);color:var(--ivory,#f4eee2)}.ds-nav:focus-visible{outline:1px solid var(--ember,#ff5c35);outline-offset:-1px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Projection Booth",
+    "overview": "La cabina di proiezione: una stanza buia, una lampada calda, il film che conta. LUMEN non illumina se stessa. Il fondo è ink, le superfici salgono di un tono appena, il testo è avorio. L'ember è la lampada: compare solo dove si agisce o si è attivi, e proprio per questo conta. Chi guarda non deve vedere l'impianto, deve vedere i film.\n\nIl sistema è editoriale, non cinematografico di superficie: niente popcorn, niente bagliori, niente bolle. Il cinema entra dai poster 2:3, dal titolo in Fraunces e dai metadati in mono, come in una pagina di catalogo. La densità è da strumento: rail da 72 px, etichette da 9–10 px, hairline da 1 px. Il testo respira, i controlli stanno in fila.\n\nLa stessa lingua copre due superfici: l'app desktop egui e il sito statico. Cambiano solo le misure di servizio — 2 px di raggio e controlli da 36 px nell'app, 4 px e 44 px sul sito. Colori, font e regola della luce restano identici: una schermata nuova deve riconoscersi come LUMEN anche senza logo.",
+    "keyCharacteristics": [
+      "Ink caldo, mai nero puro; avorio per leggere, mai bianco puro.",
+      "Un solo accento: ember per comandi, selezione, focus e kicker.",
+      "Celadon riservato a disponibilità e stati positivi; danger solo a errore.",
+      "Superfici piatte, separate da hairline da 1 px e salti di tono; nessuna ombra.",
+      "Tre voci tipografiche: Fraunces per i titoli, Instrument Sans per il testo, JetBrains Mono per le etichette.",
+      "Poster 2:3 a filo; tutto il resto quasi squadrato, tra 0 e 4 px."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "L'ember occupa al massimo il 10% di una schermata. Se due elementi competono per lo stesso sguardo, uno dei due non è un comando.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Light Rule",
+        "body": "La luce è un filo o un pieno, mai un alone. Nessun gradiente decorativo, glow, bolla o ombra colorata. Restano due soli usi funzionali già in codice: lo scrim verticale trasparente→ink sopra i backdrop, per rendere leggibile il testo, e il filo ember da 1,5 px che sfuma a destra sulla card selezionata.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Voice Rule",
+        "body": "Fraunces e Instrument Sans leggono; JetBrains Mono non scrive mai una frase. Se una riga è più lunga di un'etichetta, non è mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Small Label Rule",
+        "body": "Le etichette mono sono maiuscole, tra 9 e 10,5 px, con tracking tra 0,08 e 0,14em. Sotto i 9 px si sconfina nel badge, non nel testo.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Le sezioni si separano con una linea da 1 px, non con un'ombra o un riquadro. Se serve più stacco, si aggiunge spazio.",
+        "section": "layout"
+      },
+      {
+        "name": "The Poster Rule",
+        "body": "Il poster è sempre 2:3, a filo, senza raggio. È l'unica immagine che può essere grande.",
+        "section": "layout"
+      },
+      {
+        "name": "The No-Shadow Rule",
+        "body": "Se un elemento deve staccarsi, sale di tono o prende un bordo. Mai un'ombra, mai un blur.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do usare l'ember solo su comandi, selezione, focus e kicker: un solo elemento ember per blocco d'azione.",
+      "Do separare con hairline da 1 px e salti di tono; il fondo resta ink.",
+      "Do scrivere le etichette in mono maiuscolo 9–10,5 px con tracking 0,08–0,14em.",
+      "Do tenere i poster 2:3, a filo, con bordo da 1 px che diventa border-strong in hover ed ember in selezione.",
+      "Do usare celadon per disponibilità e stati positivi, danger per errore e offline.",
+      "Do mantenere il focus visibile: anello ember da 1 px, offset 3 px sul sito, interno all'app; su un riempimento ember l'anello passa a ivory.",
+      "Do rispettare le altezze di controllo della superficie: 44 px sul sito, 36 px nell'app, 24 px per le chip."
+    ],
+    "donts": [
+      "Don't aggiungere ombre, glow, gradienti decorativi, aloni o bolle: restano solo lo scrim e il filo ember funzionali già in codice.",
+      "Don't usare l'ember come colore del testo corrente o per riempire aree grandi.",
+      "Don't usare celadon o danger come decorazione.",
+      "Don't arrotondare oltre 4 px né trasformare chip e bottoni in pillole.",
+      "Don't usare Fraunces sotto i 18 px o per il corpo del testo.",
+      "Don't usare JetBrains Mono per frasi intere.",
+      "Don't introdurre nuove tinte: la palette è chiusa.",
+      "Don't mettere un poster dentro un riquadro arrotondato o con ombra."
+    ]
+  }
+}
