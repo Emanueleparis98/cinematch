@@ -423,6 +423,22 @@ h1 span { color: var(--ember); }
 .facts-more summary:hover { color: var(--ivory); }
 .facts-more .facts li:first-child { border-top: 0; }
 
+.answer-proof {
+  margin: 0 auto 56px;
+  max-width: 760px;
+}
+.answer-proof img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--deep);
+}
+.answer-proof figcaption {
+  margin-top: 10px;
+  font: 400 9px/1.5 var(--mono);
+  color: var(--faint);
+}
+
 /* ---------------------------------------------------------------- cta ----- */
 
 .cta {
