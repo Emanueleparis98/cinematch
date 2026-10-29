@@ -4118,6 +4118,9 @@ impl App {
             .order(egui::Order::Foreground)
             .fixed_pos(area_rect.min)
             .show(ctx, |ui| {
+                // Limita Tab e focus alla scheda e ai suoi popover.
+                ui.ctx()
+                    .memory_mut(|m| m.set_modal_layer(ui.layer_id()));
                 ui.set_clip_rect(area_rect);
                 ui.painter().rect_filled(
                     area_rect,
