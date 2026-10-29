@@ -28,7 +28,7 @@ Il motore di vincoli: le combinazioni della tassonomia vengono validate, quelle 
 
 ## Capabilities and Constraints
 
-- Due viste: **Chat** (richiesta libera, fino a cinque film con perché e consiglio) e **Catalogo** (filtri per periodo, genere, paese/lingua, mood/temi, metriche e correnti).
+- Due viste centrali: **Chat** (richiesta libera, fino a cinque film con perché e consiglio) e **Catalogo** (filtri per periodo, genere, paese/lingua, mood/temi, metriche e correnti); la rail porta anche **Nuova chat** e **Impostazioni** (chiavi, interprete AI, SIMKL, lingua, voti IMDb).
 - "Sblocca" propone i compromessi più piccoli quando i risultati sono pochi; "Più recenti" e "Prossimamente" hanno regole proprie.
 - SIMKL: visti, "Da vedere", voto 1–10, Riprendi e "Dalla tua lista"; sincronizzazione incrementale, nessun polling in background.
 - Voti IMDb dai dati pubblici, accanto al voto TMDB.
@@ -44,8 +44,8 @@ Il motore di vincoli: le combinazioni della tassonomia vengono validate, quelle 
 ## Evidence on Hand
 
 - `README.md`: documentazione dettagliata di flussi, filtri, chat, AI e aggiornamenti.
-- Screenshot reali dell'app in `site/assets/`: `app-chat.png`, `app-simkl.png`, `app-simkl-shelf-hd.jpg`; logo `cinematch.png`; font in `site/assets/fonts/`.
-- Copy reale in `site/index.html`; cronologia release e repository GitHub pubblici.
+- Screenshot reali dell'app in `site/assets/`: `app-chat.png`, `app-answer.png`, `app-simkl.png`, `app-simkl-shelf-hd.jpg`; logo `cinematch.png`; font OFL in `site/assets/fonts/`.
+- Copy reale in `site/index.html`, online su https://emanueleparis98.github.io/cinematch/; codice e release su https://github.com/Emanueleparis98/cinematch.
 - Nessuna testimonianza, press, numero di utenti o prezzo: il lavoro futuro non deve inventarli.
 
 ## Product Principles
