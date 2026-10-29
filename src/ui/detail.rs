@@ -412,6 +412,8 @@ pub fn panel(
     d: &Details,
     compact: bool,
     track: &TrackInfo,
+    why: Option<&str>,
+    consiglio: Option<&str>,
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
@@ -546,6 +548,28 @@ pub fn panel(
                 ui.add_space(10.0);
                 if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
+                }
+            }
+
+            if let Some(perche) = why.filter(|p| !p.trim().is_empty()) {
+                ui.add_space(12.0);
+                lumen::hairline(ui);
+                ui.add_space(10.0);
+                ui.label(lumen::label("Perché è qui"));
+                ui.add_space(4.0);
+                ui.label(lumen::body(12.5, perche).color(lumen::IVORY));
+                if let Some(c) = consiglio.filter(|c| !c.trim().is_empty()) {
+                    ui.add_space(8.0);
+                    ui.horizontal_top(|ui| {
+                        let (bar, _) =
+                            ui.allocate_exact_size(egui::vec2(2.0, 22.0), egui::Sense::hover());
+                        ui.painter()
+                            .rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
+                        ui.add_space(7.0);
+                        ui.label(
+                            lumen::body(11.5, format!("Consiglio · {c}")).color(lumen::MUTED),
+                        );
+                    });
                 }
             }
 

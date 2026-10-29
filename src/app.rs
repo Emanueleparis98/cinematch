@@ -784,6 +784,9 @@ pub struct App {
 
     detail: Option<Details>,
     detail_loading: bool,
+    /// Spiegazione della scelta: dalla card della chat (perché + consiglio)
+    /// oppure dai criteri attivi della griglia.
+    detail_why: Option<(String, String)>,
     /// Generazioni delle richieste scheda: una risposta vecchia non
     /// deve sovrascrivere il film aperto dopo.
     detail_gen: u64,
@@ -901,6 +904,7 @@ impl App {
             unlocks: Vec::new(),
             detail: None,
             detail_loading: false,
+            detail_why: None,
             detail_gen: 0,
             keyword_map: Vec::new(),
             dirty: None,
@@ -3097,8 +3101,32 @@ impl App {
         }
     }
 
+    /// Contesto della scheda: la card della chat spiega perché il film è lì,
+    /// la griglia mostra i criteri che il risultato rispetta.
+    fn detail_context(&self, id: u64) -> Option<(String, String)> {
+        if let Some(card) = self
+            .chat
+            .iter()
+            .rev()
+            .flat_map(|a| a.answer.cards.iter())
+            .find(|c| c.movie.id == id)
+        {
+            if !card.perche.trim().is_empty() {
+                return Some((card.perche.clone(), card.consiglio.clone()));
+            }
+        }
+        if self.mode == ViewMode::Griglia && self.messages.is_empty() {
+            let desc = describe(&self.tax, &self.facets, None);
+            if desc != "Ricerca libera" {
+                return Some((format!("Rispetta i criteri attivi: {desc}."), String::new()));
+            }
+        }
+        None
+    }
+
     fn open_detail(&mut self, id: u64) {
         let Some(tmdb) = self.tmdb.clone() else { return };
+        self.detail_why = self.detail_context(id);
         self.close_detail();
         self.filters_open = false;
         self.detail_loading = true;
@@ -4023,12 +4051,18 @@ impl App {
                     egui::Stroke::new(1.0_f32, lumen::BORDER),
                 );
                 let track = self.simkl_track(&d.movie);
+                let (why, consiglio) = match &self.detail_why {
+                    Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
+                    None => (None, None),
+                };
                 let actions = detail::panel(
                     ui,
                     &self.images,
                     &d,
                     false,
                     &track,
+                    why,
+                    consiglio,
                 );
                 self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
             });
@@ -4055,6 +4089,10 @@ impl App {
             egui::vec2(modal_w, modal_h),
         );
         let d = self.detail.clone();
+        let (why, consiglio) = match &self.detail_why {
+            Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
+            None => (None, None),
+        };
         let mut actions = Vec::new();
         egui::Area::new(egui::Id::unique("chat-detail-preview"))
             .order(egui::Order::Foreground)
@@ -4094,6 +4132,8 @@ impl App {
                                 d,
                                 true,
                                 &track,
+                                why,
+                                consiglio,
                             );
                         },
                     );
