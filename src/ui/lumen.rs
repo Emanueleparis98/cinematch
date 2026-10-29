@@ -20,7 +20,7 @@ pub const BORDER: Color32 = Color32::from_rgb(42, 47, 58);
 pub const BORDER_HI: Color32 = Color32::from_rgb(61, 67, 80);
 pub const IVORY: Color32 = Color32::from_rgb(244, 238, 226);
 pub const MUTED: Color32 = Color32::from_rgb(167, 163, 153);
-pub const FAINT: Color32 = Color32::from_rgb(110, 107, 100);
+pub const FAINT: Color32 = Color32::from_rgb(145, 141, 132);
 pub const EMBER: Color32 = Color32::from_rgb(255, 92, 53);
 pub const EMBER_HI: Color32 = Color32::from_rgb(255, 122, 87);
 pub const CELADON: Color32 = Color32::from_rgb(143, 227, 192);
@@ -371,6 +371,9 @@ pub fn icon_button(
         mix(FAINT, IVORY, hover),
     );
     focus(ui, &resp, RADIUS_SM);
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tip)
+    });
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(tip)
 }
@@ -416,6 +419,14 @@ pub fn nav_item(ui: &mut egui::Ui, icon_kind: Icon, label_text: &str, active: bo
         if active { IVORY } else { FAINT },
     );
     focus(ui, &resp, 0.0);
+    resp.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::Role::Button,
+            ui.is_enabled(),
+            active,
+            label_text,
+        )
+    });
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -457,8 +468,10 @@ pub fn poster(
             );
         }
     }
-    let border = if selected || resp.hovered() {
+    let border = if selected {
         EMBER
+    } else if resp.hovered() {
+        BORDER_HI
     } else {
         BORDER
     };
@@ -466,13 +479,22 @@ pub fn poster(
         rect,
         egui::CornerRadius::ZERO,
         Stroke::new(1.0_f32, border), egui::StrokeKind::Inside);
-    if resp.hovered() || selected {
+    if selected {
         seam(
             ui.painter(),
             Rect::from_min_size(rect.min, egui::vec2(rect.width(), 1.5)),
         );
     }
     focus(ui, &resp, 0.0);
+    if let Some(m) = movie {
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::Role::Button,
+                ui.is_enabled(),
+                m.title.clone(),
+            )
+        });
+    }
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

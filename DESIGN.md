@@ -141,7 +141,7 @@ Un fondo notturno caldo, una sola fiamma, un verde di servizio. I neutri non son
 - **Border** (#2a2f3a): hairline a riposo. **Border Strong** (#3d4350): hover.
 - **Ivory** (#f4eee2): testo principale e titoli.
 - **Muted** (#a7a399): testo secondario, lede, metadati leggibili.
-- **Faint** (#918d84): etichette e note sul sito. **Faint Deep** (#6e6b64): la stessa voce nell'app, dove il fondo è più vicino e il contrasto va alzato.
+- **Faint** (#918d84): etichette e note sul sito e nell'app. **Faint Deep** (#6e6b64): riservato a superfici dense, mai a testo sotto i 12 px.
 
 ### Named Rules
 **The One Voice Rule.** L'ember occupa al massimo il 10% di una schermata. Se due elementi competono per lo stesso sguardo, uno dei due non è un comando.

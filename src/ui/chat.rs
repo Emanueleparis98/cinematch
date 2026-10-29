@@ -313,7 +313,7 @@ pub fn home(
                             &mut actions,
                         );
                         ui.add_space(20.0);
-                        poster_strip(ui, images, movies, width);
+                        poster_strip(ui, images, movies, width, &mut actions);
                     } else {
                         let left_w = (width * 0.56).floor();
                         let right_w = width - left_w - 30.0;
@@ -338,7 +338,7 @@ pub fn home(
                             ui.allocate_ui_with_layout(
                                 egui::vec2(right_w, 0.0),
                                 egui::Layout::top_down(egui::Align::LEFT),
-                                |ui| collage(ui, images, movies, right_w),
+                                |ui| collage(ui, images, movies, right_w, &mut actions),
                             );
                         });
                     }
@@ -349,7 +349,7 @@ pub fn home(
                         ui.with_layout(
                             egui::Layout::right_to_left(egui::Align::Center),
                             |ui| {
-                                if lumen::link(ui, "Sorprendimi ↗", lumen::EMBER)
+                                if lumen::link(ui, "Sorprendimi", lumen::EMBER)
                                     .clicked()
                                 {
                                     actions.surprise = true;
@@ -387,7 +387,7 @@ pub fn home(
                                         |ui| suggestion_card(ui, card_w, i, &pista),
                                     )
                                     .inner;
-                                actions.suggestions_hovered |= resp.hovered();
+                                actions.suggestions_hovered |= resp.hovered() || resp.has_focus();
                                 if resp.clicked() {
                                     actions.prefill = Some(pista.prompt.clone());
                                     actions.send = true;
@@ -525,7 +525,7 @@ fn personal_card(
         painter.rect_stroke(
             poster,
             egui::CornerRadius::ZERO,
-            Stroke::new(1.0_f32, lumen::EMBER), egui::StrokeKind::Inside);
+            Stroke::new(1.0_f32, lumen::BORDER_HI), egui::StrokeKind::Inside);
     }
     if let Some(progress) = card.progress {
         let track = Rect::from_min_size(
@@ -553,12 +553,19 @@ fn personal_card(
         egui::pos2(rect.left(), poster.bottom() + 27.0),
         Align2::LEFT_TOP,
         &card.meta,
-        FontId::new(8.5, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
     );
     if resp.clicked() {
         actions.open_detail = Some(card.movie_id);
     }
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::Role::Button,
+            ui.is_enabled(),
+            card.title.clone(),
+        )
+    });
     resp.on_hover_cursor(egui::CursorIcon::PointingHand);
 }
 
@@ -600,7 +607,28 @@ fn hero_left(
     }
 }
 
-fn collage(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
+fn clickable_poster(
+    ui: &mut egui::Ui,
+    images: &ImageStore,
+    movie: Option<&Movie>,
+    width: f32,
+    height: f32,
+    actions: &mut HomeActions,
+) {
+    if lumen::poster(ui, images, movie, width, height, false).clicked() {
+        if let Some(m) = movie {
+            actions.open_detail = Some(m.id);
+        }
+    }
+}
+
+fn collage(
+    ui: &mut egui::Ui,
+    images: &ImageStore,
+    movies: &[Movie],
+    width: f32,
+    actions: &mut HomeActions,
+) {
     let big_w = (width * 0.55).min(220.0);
     let gap = 8.0;
     let mut small_w = ((width - big_w - 12.0 - gap) / 2.0).min(100.0);
@@ -624,80 +652,86 @@ fn collage(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32)
     let grid_h = small_w * 3.0 + gap;
     ui.horizontal_top(|ui| {
         ui.add_space(offset);
-        lumen::poster(ui, images, movies.first(), big_w, big_h, true);
+        clickable_poster(ui, images, movies.first(), big_w, big_h, actions);
         ui.add_space(12.0);
         ui.vertical(|ui| {
             ui.add_space(((big_h - grid_h) * 0.5).max(0.0));
             if grid {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
-                    lumen::poster(
+                    clickable_poster(
                         ui,
                         images,
                         movies.get(1),
                         small_w,
                         small_w * 1.5,
-                        false,
+                        actions,
                     );
-                    lumen::poster(
+                    clickable_poster(
                         ui,
                         images,
                         movies.get(2),
                         small_w,
                         small_w * 1.5,
-                        false,
+                        actions,
                     );
                 });
                 ui.add_space(gap);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = gap;
-                    lumen::poster(
+                    clickable_poster(
                         ui,
                         images,
                         movies.get(3),
                         small_w,
                         small_w * 1.5,
-                        false,
+                        actions,
                     );
-                    lumen::poster(
+                    clickable_poster(
                         ui,
                         images,
                         movies.get(4),
                         small_w,
                         small_w * 1.5,
-                        false,
+                        actions,
                     );
                 });
             } else {
-                lumen::poster(
+                clickable_poster(
                     ui,
                     images,
                     movies.get(1),
                     small_w,
                     small_w * 1.5,
-                    false,
+                    actions,
                 );
                 ui.add_space(gap);
-                lumen::poster(
+                clickable_poster(
                     ui,
                     images,
                     movies.get(2),
                     small_w,
                     small_w * 1.5,
-                    false,
+                    actions,
                 );
             }
         });
     });
 }
 
-fn poster_strip(ui: &mut egui::Ui, images: &ImageStore, movies: &[Movie], width: f32) {
+fn poster_strip(
+    ui: &mut egui::Ui,
+    images: &ImageStore,
+    movies: &[Movie],
+    width: f32,
+    actions: &mut HomeActions,
+) {
     let gap = 8.0;
     let w = ((width - gap * 5.0) / 6.0).floor();
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
         for i in 0..6 {
-            lumen::poster(ui, images, movies.get(i), w, w * 1.5, i == 0);
+            clickable_poster(ui, images, movies.get(i), w, w * 1.5, actions);
         }
     });
 }
@@ -901,6 +935,13 @@ fn suggestion_card(
     const CARD_H: f32 = 150.0;
     let (rect, resp) =
         ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::click());
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(
+            egui::Role::Button,
+            ui.is_enabled(),
+            pista.title.clone(),
+        )
+    });
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -920,7 +961,7 @@ fn suggestion_card(
         Stroke::new(
             1.0_f32,
             if hover > 0.01 {
-                lumen::EMBER
+                lumen::BORDER_HI
             } else {
                 lumen::BORDER
             },

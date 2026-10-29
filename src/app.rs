@@ -5299,13 +5299,7 @@ impl App {
                 egui::Frame::NONE
                     .fill(theme::mix(theme::CARD_HOVER, theme::PANEL, 0.35))
                     .stroke(egui::Stroke::new(1.0_f32, theme::alpha(theme::ACCENT, 150)))
-                    .corner_radius(lumen::radius(13.0))
-                    .shadow(egui::epaint::Shadow {
-                        offset: [0, 12],
-                        blur: 34,
-                        spread: 0,
-                        color: egui::Color32::from_black_alpha(150),
-                    })
+                    .corner_radius(lumen::radius(lumen::RADIUS))
                     .inner_margin(egui::Margin::symmetric(14, 9))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {

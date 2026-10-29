@@ -125,15 +125,15 @@ fn status_pill(ui: &mut egui::Ui, status: &str) {
         "dropped" => ("ABBANDONATO", lumen::DANGER),
         _ => ("SU SIMKL", lumen::MUTED),
     };
-    let font = FontId::new(8.5, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into()));
+    let font = FontId::new(9.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into()));
     let galley = ui.painter().layout_no_wrap(label.to_string(), font, color);
-    let size = egui::vec2(galley.size().x + 25.0, 16.0);
+    let size = egui::vec2(galley.size().x + 25.0, 18.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter();
-    painter.rect_filled(rect, lumen::radius(8.0), lumen::alpha(color, 24));
+    painter.rect_filled(rect, lumen::radius(lumen::RADIUS), lumen::alpha(color, 24));
     painter.rect_stroke(
         rect,
-        lumen::radius(8.0),
+        lumen::radius(lumen::RADIUS),
         Stroke::new(1.0_f32, lumen::alpha(color, 80)), egui::StrokeKind::Inside);
     painter.circle_filled(
         egui::pos2(rect.left() + 8.0, rect.center().y),
@@ -191,6 +191,26 @@ fn rating_button(
         .max(screen.top() + 4.0)
         .min(screen.bottom() - popup_h - 4.0);
     let mut draft = ui.data(|d| d.get_temp::<u8>(draft_id).unwrap_or(8));
+    // Tastiera: 1–9 e 0 (=10). Non ruba i tasti a un campo di testo.
+    if !ui.ctx().egui_wants_keyboard_input() {
+        for (key, value) in [
+            (egui::Key::Num1, 1),
+            (egui::Key::Num2, 2),
+            (egui::Key::Num3, 3),
+            (egui::Key::Num4, 4),
+            (egui::Key::Num5, 5),
+            (egui::Key::Num6, 6),
+            (egui::Key::Num7, 7),
+            (egui::Key::Num8, 8),
+            (egui::Key::Num9, 9),
+            (egui::Key::Num0, 10),
+        ] {
+            if ui.ctx().input(|i| i.key_pressed(key)) {
+                draft = value;
+                ui.data_mut(|d| d.insert_temp(draft_id, draft));
+            }
+        }
+    }
     let mut close = false;
     let mut save = None;
     let mut clear = false;
@@ -271,7 +291,7 @@ fn rating_button(
                         center + egui::vec2(0.0, 20.0),
                         Align2::CENTER_CENTER,
                         "SU 10",
-                        FontId::new(8.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
+                        FontId::new(9.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
                         lumen::FAINT,
                     );
                     if resp.clicked() || resp.dragged() {
@@ -283,6 +303,13 @@ fn rating_button(
                             }
                         }
                     }
+                    resp.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::Role::Slider,
+                            true,
+                            format!("Voto: {draft} su 10"),
+                        )
+                    });
                     resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                     ui.add_space(2.0);
                     ui.horizontal(|ui| {
@@ -417,6 +444,14 @@ pub fn panel(
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
+    // La scheda copre la griglia: i click nello spazio vuoto non devono
+    // aprire il poster che sta dietro.
+    let _ = ui.interact(
+        ui.max_rect(),
+        egui::Id::unique(("detail-bg", d.movie.id)),
+        egui::Sense::click(),
+    );
+
     // Intestazione fissa: la chiusura resta raggiungibile anche dopo lo scroll.
     ui.horizontal(|ui| {
         ui.label(lumen::mono(10.0, "SCHEDA FILM").color(lumen::IVORY));
@@ -540,13 +575,13 @@ pub fn panel(
                 ui.label(
                     lumen::body(12.5, format!("«{}»", d.tagline))
                         .italics()
-                        .color(lumen::EMBER),
+                        .color(lumen::MUTED),
                 );
             }
 
             if let Some(link) = &d.provider_link {
                 ui.add_space(10.0);
-                if lumen::link(ui, "Dove vederlo ↗", lumen::EMBER).clicked() {
+                if lumen::link(ui, "Apri il link del provider ↗", lumen::EMBER).clicked() {
                     actions.push(DetailAction::OpenUrl(link.clone()));
                 }
             }
