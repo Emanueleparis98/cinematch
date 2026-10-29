@@ -459,16 +459,19 @@ pub fn poster(
     if !loaded {
         ui.painter().rect_filled(rect, egui::CornerRadius::ZERO, RAISED);
         if let Some(m) = movie {
-            ui.painter().text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                crate::ui::theme::truncate(&m.title, 20),
-                FontId::new(
-                    (width / 8.0).clamp(11.0, 20.0),
-                    FontFamily::Name(fonts::LUMEN_DISPLAY.into()),
-                ),
-                IVORY,
+            // Il titolo di ripiego va a capo e resta dentro il poster.
+            let font = FontId::new(
+                (width / 8.0).clamp(11.0, 20.0),
+                FontFamily::Name(fonts::LUMEN_DISPLAY.into()),
             );
+            let painter = ui.painter().with_clip_rect(rect);
+            let galley = painter.layout(
+                crate::ui::theme::truncate(&m.title, 40),
+                font,
+                IVORY,
+                width - 12.0,
+            );
+            painter.galley(rect.center() - galley.size() * 0.5, galley, IVORY);
         }
     }
     let border = if selected {

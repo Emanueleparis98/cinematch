@@ -42,29 +42,33 @@ fn short_country(name: &str) -> &str {
 }
 
 fn close_button(ui: &mut egui::Ui) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(26.0, 26.0), Sense::click());
+    // 36 px come i bottoni dell'app; il riquadro compare solo sotto il
+    // puntatore, così la testata resta una riga e non un bottone.
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(36.0, 36.0), Sense::click());
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    ui.painter().rect_stroke(
-        rect,
-        lumen::radius(lumen::RADIUS_SM),
-        Stroke::new(
-            1.0_f32,
-            if hover > 0.01 {
-                lumen::EMBER
-            } else {
-                lumen::BORDER
-            },
-        ), egui::StrokeKind::Inside);
+    if hover > 0.01 {
+        ui.painter().rect_filled(
+            rect,
+            lumen::radius(lumen::RADIUS_SM),
+            lumen::mix(lumen::INK, lumen::RAISED, hover),
+        );
+        ui.painter().rect_stroke(
+            rect,
+            lumen::radius(lumen::RADIUS_SM),
+            Stroke::new(1.0_f32, lumen::BORDER),
+            egui::StrokeKind::Inside,
+        );
+    }
     let c = rect.center();
     let color = lumen::mix(lumen::MUTED, lumen::IVORY, hover);
     ui.painter().line_segment(
-        [c + egui::vec2(-4.0, -4.0), c + egui::vec2(4.0, 4.0)],
+        [c + egui::vec2(-5.0, -5.0), c + egui::vec2(5.0, 5.0)],
         Stroke::new(1.2_f32, color),
     );
     ui.painter().line_segment(
-        [c + egui::vec2(4.0, -4.0), c + egui::vec2(-4.0, 4.0)],
+        [c + egui::vec2(5.0, -5.0), c + egui::vec2(-5.0, 5.0)],
         Stroke::new(1.2_f32, color),
     );
     lumen::focus(ui, &resp, lumen::RADIUS_SM);
@@ -76,10 +80,8 @@ fn avail_row(ui: &mut egui::Ui, label: &str, items: &[String], color: egui::Colo
     if items.is_empty() {
         return;
     }
-    ui.horizontal_top(|ui| {
-        let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 26.0), Sense::hover());
-        ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
-        ui.add_space(7.0);
+    let row = ui.horizontal_top(|ui| {
+        ui.add_space(9.0);
         ui.add(
             egui::Label::new(
                 lumen::mono(
@@ -94,19 +96,39 @@ fn avail_row(ui: &mut egui::Ui, label: &str, items: &[String], color: egui::Colo
             .wrap(),
         );
     });
+    // Il colore dice lo stato (abbonamento/noleggio/acquisto): l'ember
+    // resta per i comandi. La barra segue l'altezza del testo.
+    let r = row.response.rect;
+    ui.painter().rect_filled(
+        egui::Rect::from_min_size(
+            egui::pos2(r.left(), r.top()),
+            egui::vec2(2.0, r.height()),
+        ),
+        egui::CornerRadius::ZERO,
+        color,
+    );
 }
 
-fn field(ui: &mut egui::Ui, title: &str, value: &str) {
+/// Una riga di scheda: etichetta a colonna, valore che va a capo.
+fn fact(ui: &mut egui::Ui, title: &str, value: &str) {
     if value.is_empty() {
         return;
     }
-    ui.add_space(8.0);
-    ui.label(lumen::label(title));
     ui.add_space(2.0);
-    ui.add(
-        egui::Label::new(lumen::body(11.5, value).color(lumen::MUTED))
-            .wrap(),
-    );
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.allocate_ui_with_layout(
+            egui::vec2(58.0, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.label(lumen::label(title));
+            },
+        );
+        ui.add(
+            egui::Label::new(lumen::body(11.5, value).color(lumen::MUTED))
+                .wrap(),
+        );
+    });
 }
 
 fn dial_value(delta: egui::Vec2) -> u8 {
@@ -356,83 +378,89 @@ fn simkl_bar(
     actions: &mut Vec<DetailAction>,
 ) {
     let status = track.status.as_deref().unwrap_or("");
-    egui::Frame::NONE
-        .fill(lumen::DEEP)
-        .stroke(Stroke::new(1.0_f32, lumen::BORDER))
-        .corner_radius(lumen::radius(lumen::RADIUS))
-        .inner_margin(egui::Margin::symmetric(10, 6))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            if let Some(err) = &track.error {
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = 6.0;
-                    ui.label(
-                        lumen::body(11.0, format!("Non salvato su SIMKL: {err}"))
-                            .color(lumen::DANGER),
-                    );
-                    if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
-                        actions.push(DetailAction::RetryWrite);
-                    }
-                });
-                ui.add_space(4.0);
-            }
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                ui.spacing_mut().item_spacing.y = 6.0;
-                rating_button(ui, movie_id, track, actions);
-                match status {
-                    "completed" => {
-                        let confirm =
-                            egui::Id::unique(("simkl-remove-confirm", movie_id));
-                        let armed = ui
-                            .ctx()
-                            .memory(|m| m.data.get_temp::<bool>(confirm).unwrap_or(false));
-                        if armed {
-                            ui.label(
-                                lumen::body(11.0, "Toglie cronologia e voto.")
-                                    .color(lumen::MUTED),
-                            );
-                            if lumen::link(ui, "Conferma rimozione", lumen::DANGER).clicked() {
-                                actions.push(DetailAction::RemoveTracking);
-                                ui.ctx()
-                                    .memory_mut(|m| m.data.remove::<bool>(confirm));
-                            }
-                            if lumen::link(ui, "Annulla", lumen::FAINT).clicked() {
-                                ui.ctx()
-                                    .memory_mut(|m| m.data.remove::<bool>(confirm));
-                            }
-                        } else if lumen::link(ui, "Rimuovi dai visti", lumen::FAINT)
-                            .on_hover_text(
-                                "Rimuove il film dalla cronologia SIMKL e cancella il voto",
-                            )
-                            .clicked()
-                        {
-                            ui.ctx()
-                                .memory_mut(|m| m.data.insert_temp(confirm, true));
-                        }
-                    }
-                    "plantowatch" => {
-                        if lumen::button_sized(ui, "✓ Da vedere", false, 100.0)
-                            .on_hover_text("Rimuove il film da Da vedere")
-                            .clicked()
-                        {
-                            actions.push(DetailAction::RemoveTracking);
-                        }
-                        if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
-                            actions.push(DetailAction::MarkWatched);
-                        }
-                    }
-                    _ => {
-                        if lumen::button_sized(ui, "+ Da vedere", false, 100.0).clicked() {
-                            actions.push(DetailAction::AddWatchlist);
-                        }
-                        if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
-                            actions.push(DetailAction::MarkWatched);
-                        }
-                    }
+    ui.horizontal(|ui| {
+        ui.label(lumen::label("SIMKL"));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if let Some(url) = &track.url {
+                if lumen::link(ui, "SIMKL ↗", lumen::FAINT).clicked() {
+                    actions.push(DetailAction::OpenUrl(url.clone()));
                 }
-            });
+            }
+            if !status.is_empty() {
+                status_pill(ui, status);
+            }
         });
+    });
+    if let Some(err) = &track.error {
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.label(
+                lumen::body(11.0, format!("Non salvato su SIMKL: {err}"))
+                    .color(lumen::DANGER),
+            );
+            if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
+                actions.push(DetailAction::RetryWrite);
+            }
+        });
+    }
+    ui.add_space(6.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.spacing_mut().item_spacing.y = 6.0;
+        rating_button(ui, movie_id, track, actions);
+        match status {
+            "completed" => {
+                let confirm =
+                    egui::Id::unique(("simkl-remove-confirm", movie_id));
+                let armed = ui
+                    .ctx()
+                    .memory(|m| m.data.get_temp::<bool>(confirm).unwrap_or(false));
+                if armed {
+                    ui.label(
+                        lumen::body(11.0, "Toglie cronologia e voto.")
+                            .color(lumen::MUTED),
+                    );
+                    if lumen::link(ui, "Conferma rimozione", lumen::DANGER).clicked() {
+                        actions.push(DetailAction::RemoveTracking);
+                        ui.ctx()
+                            .memory_mut(|m| m.data.remove::<bool>(confirm));
+                    }
+                    if lumen::link(ui, "Annulla", lumen::FAINT).clicked() {
+                        ui.ctx()
+                            .memory_mut(|m| m.data.remove::<bool>(confirm));
+                    }
+                } else if lumen::link(ui, "Rimuovi dai visti", lumen::FAINT)
+                    .on_hover_text(
+                        "Rimuove il film dalla cronologia SIMKL e cancella il voto",
+                    )
+                    .clicked()
+                {
+                    ui.ctx()
+                        .memory_mut(|m| m.data.insert_temp(confirm, true));
+                }
+            }
+            "plantowatch" => {
+                if lumen::button_sized(ui, "✓ Da vedere", false, 100.0)
+                    .on_hover_text("Rimuove il film da Da vedere")
+                    .clicked()
+                {
+                    actions.push(DetailAction::RemoveTracking);
+                }
+                if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
+                    actions.push(DetailAction::MarkWatched);
+                }
+            }
+            _ => {
+                if lumen::button_sized(ui, "+ Da vedere", false, 100.0).clicked() {
+                    actions.push(DetailAction::AddWatchlist);
+                }
+                if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
+                    actions.push(DetailAction::MarkWatched);
+                }
+            }
+        }
+    });
 }
 
 #[allow(clippy::too_many_arguments)] // scheda densa: contesto e focus restano espliciti
@@ -457,18 +485,22 @@ pub fn panel(
     );
 
     // Intestazione fissa: la chiusura resta raggiungibile anche dopo lo scroll.
-    ui.horizontal(|ui| {
-        ui.label(lumen::mono(10.0, "SCHEDA FILM").color(lumen::IVORY));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let close = close_button(ui);
-            if focus_close {
-                close.request_focus();
-            }
-            if close.clicked() {
-                actions.push(DetailAction::Close);
-            }
-        });
-    });
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), 36.0),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.label(lumen::mono(10.0, "SCHEDA FILM").color(lumen::IVORY));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let close = close_button(ui);
+                if focus_close {
+                    close.request_focus();
+                }
+                if close.clicked() {
+                    actions.push(DetailAction::Close);
+                }
+            });
+        },
+    );
     ui.add_space(8.0);
     lumen::hairline(ui);
     ui.add_space(12.0);
@@ -505,6 +537,14 @@ pub fn panel(
                             lumen::mono(9.0, &d.movie.original_title).color(lumen::FAINT),
                         );
                     }
+                    if !d.tagline.is_empty() {
+                        ui.add_space(6.0);
+                        ui.label(
+                            lumen::body(12.5, format!("«{}»", d.tagline))
+                                .italics()
+                                .color(lumen::MUTED),
+                        );
+                    }
                     let mut meta: Vec<String> = Vec::new();
                     if let Some(y) = d.movie.year {
                         meta.push(y.to_string());
@@ -522,7 +562,7 @@ pub fn panel(
                         );
                     }
                     if !meta.is_empty() {
-                        ui.add_space(4.0);
+                        ui.add_space(if d.tagline.is_empty() { 4.0 } else { 8.0 });
                         ui.label(lumen::mono(9.0, meta.join(" · ")).color(lumen::FAINT));
                     }
                     let mut votes: Vec<String> = Vec::new();
@@ -542,32 +582,17 @@ pub fn panel(
                             ));
                         }
                     }
-                    if !votes.is_empty() || track.connected {
+                    if !votes.is_empty() {
                         ui.add_space(3.0);
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 4.0);
-                            if !votes.is_empty() {
-                                ui.label(
-                                    lumen::mono(9.0, votes.join(" · ")).color(lumen::MUTED),
-                                );
-                            }
-                            if let Some(status) =
-                                track.status.as_deref().filter(|s| !s.is_empty())
-                            {
-                                status_pill(ui, status);
-                            }
-                            if let Some(url) = &track.url {
-                                if lumen::link(ui, "SIMKL ↗", lumen::FAINT).clicked() {
-                                    actions.push(DetailAction::OpenUrl(url.clone()));
-                                }
-                            }
-                        });
+                        ui.label(lumen::mono(9.0, votes.join(" · ")).color(lumen::MUTED));
                     }
                 });
             });
 
             if track.connected {
                 ui.add_space(12.0);
+                lumen::hairline(ui);
+                ui.add_space(8.0);
                 if track.busy {
                     ui.horizontal(|ui| {
                         ui.spinner();
@@ -575,22 +600,6 @@ pub fn panel(
                     });
                 } else {
                     simkl_bar(ui, d.movie.id, track, &mut actions);
-                }
-            }
-
-            if !d.tagline.is_empty() {
-                ui.add_space(10.0);
-                ui.label(
-                    lumen::body(12.5, format!("«{}»", d.tagline))
-                        .italics()
-                        .color(lumen::MUTED),
-                );
-            }
-
-            if let Some(link) = &d.provider_link {
-                ui.add_space(10.0);
-                if lumen::link(ui, "Apri il link del provider ↗", lumen::EMBER).clicked() {
-                    actions.push(DetailAction::OpenUrl(link.clone()));
                 }
             }
 
@@ -603,20 +612,27 @@ pub fn panel(
                 ui.label(lumen::body(12.5, perche).color(lumen::IVORY));
                 if let Some(c) = consiglio.filter(|c| !c.trim().is_empty()) {
                     ui.add_space(8.0);
-                    ui.horizontal_top(|ui| {
-                        let (bar, _) =
-                            ui.allocate_exact_size(egui::vec2(2.0, 22.0), egui::Sense::hover());
-                        ui.painter()
-                            .rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
-                        ui.add_space(7.0);
+                    let row = ui.horizontal_top(|ui| {
+                        ui.add_space(9.0);
                         ui.add(
                             egui::Label::new(
                                 lumen::body(11.5, format!("Consiglio · {c}"))
                                     .color(lumen::MUTED),
                             )
-                            .wrap()
+                            .wrap(),
                         );
                     });
+                    // La barra segue l'altezza del testo: resta piena anche
+                    // quando il consiglio va a capo.
+                    let r = row.response.rect;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(r.left(), r.top()),
+                            egui::vec2(2.0, r.height()),
+                        ),
+                        egui::CornerRadius::ZERO,
+                        lumen::EMBER,
+                    );
                 }
             }
 
@@ -637,15 +653,20 @@ pub fn panel(
                 .map(|(_, n)| n.clone())
                 .collect::<Vec<_>>()
                 .join(" · ");
-            field(ui, "Generi", &genres);
+            fact(ui, "Generi", &genres);
             if let Some(dir) = &d.director {
-                field(ui, "Regia", dir);
+                fact(ui, "Regia", dir);
             }
             if !d.cast.is_empty() {
-                field(ui, "Cast", &label_list(&d.cast));
+                fact(ui, "Cast", &label_list(&d.cast));
             }
 
-            if !d.flatrate.is_empty() || !d.rent.is_empty() || !d.buy.is_empty() {
+            let provider = d.provider_link.as_deref().filter(|l| !l.trim().is_empty());
+            if !d.flatrate.is_empty()
+                || !d.rent.is_empty()
+                || !d.buy.is_empty()
+                || provider.is_some()
+            {
                 ui.add_space(12.0);
                 lumen::hairline(ui);
                 ui.add_space(10.0);
@@ -654,6 +675,12 @@ pub fn panel(
                 avail_row(ui, "IN ABBONAMENTO", &d.flatrate, lumen::CELADON);
                 avail_row(ui, "A NOLEGGIO", &d.rent, lumen::MUTED);
                 avail_row(ui, "ACQUISTO", &d.buy, lumen::MUTED);
+                if let Some(link) = provider {
+                    ui.add_space(8.0);
+                    if lumen::link(ui, "Apri il link del provider ↗", lumen::EMBER).clicked() {
+                        actions.push(DetailAction::OpenUrl(link.to_string()));
+                    }
+                }
             }
 
             ui.add_space(10.0);
