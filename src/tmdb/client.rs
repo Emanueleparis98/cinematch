@@ -522,6 +522,17 @@ impl Tmdb {
         Ok(res)
     }
 
+    /// Film attualmente in sala nella regione del client. Niente cache: la
+    /// home lo richiede al massimo una volta all'ora e vuole il cartellone
+    /// aggiornato.
+    pub fn now_playing(&self) -> Result<PagedMovies, String> {
+        let p = vec![
+            ("page".to_string(), "1".to_string()),
+            ("region".to_string(), self.region.clone()),
+        ];
+        self.get("/movie/now_playing", &p)
+    }
+
     pub fn similar(&self, id: u64, page: u32) -> Result<PagedMovies, String> {
         let p: Vec<(String, String)> = vec![("page".into(), page.to_string())];
         let key = Self::cache_key(&format!("/movie/{id}/recommendations"), &p);

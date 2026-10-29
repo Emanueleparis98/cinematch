@@ -27,6 +27,10 @@ use crate::ui::{chat, detail, facets, fx, grid, lumen, theme, unlock};
 const MAX_QUERY_CHARS: usize = 300;
 /// Pagine TMDB lette per una ricerca per titolo con filtri locali.
 const TITLE_PAGE_CAP: u32 = 3;
+/// Il cartellone "In sala" della home si aggiorna una volta all'ora.
+const IN_SALA_REFRESH: Duration = Duration::from_secs(60 * 60);
+/// Se il cartellone non arriva, riprova tra 15 minuti.
+const IN_SALA_RETRY: Duration = Duration::from_secs(15 * 60);
 
 struct Results {
     facets: Facets,
@@ -59,6 +63,8 @@ enum Msg {
     Imdb { res: Result<String, String> },
     /// Avanzamento del download dei voti IMDb (byte scompattati).
     ImdbProgress { done: u64 },
+    /// Film in sala per la home (indipendenti dalla griglia).
+    NowPlaying { gen: u64, res: Result<Vec<Movie>, String> },
     /// Frammento dell'intro della chat (effetto macchina da scrivere).
     ChatStream { gen: u64, index: usize, chunk: String },
     /// Avanzamento della pipeline di chat: 1 interprete, 2 TMDB, 3 curatela.
@@ -736,6 +742,11 @@ pub struct App {
     suggestion_next_at: f64,
     /// Se il mouse e' su una card, la rotazione aspetta.
     suggestion_hovered: bool,
+    /// Film in sala per la home: indipendenti dai risultati della griglia.
+    home_now_playing: Vec<Movie>,
+    home_now_playing_busy: bool,
+    home_now_playing_next: Option<Instant>,
+    home_now_playing_gen: u64,
     /// Ricerca TMDB della griglia: resta com'e quando si passa alla chat.
     grid_query: String,
     /// Ricerca dentro il pannello filtri (non tocca la ricerca TMDB).
@@ -852,6 +863,10 @@ impl App {
             suggestion_shown_at: 0.0,
             suggestion_next_at: 0.0,
             suggestion_hovered: false,
+            home_now_playing: Vec::new(),
+            home_now_playing_busy: false,
+            home_now_playing_next: None,
+            home_now_playing_gen: 0,
             grid_query: String::new(),
             facet_query: String::new(),
             guide_open: false,
@@ -1092,6 +1107,24 @@ impl App {
                 Msg::ImdbProgress { done } => {
                     if self.imdb_busy {
                         self.imdb_progress = Some((done, 0));
+                    }
+                }
+                Msg::NowPlaying { gen, res } => {
+                    if gen != self.home_now_playing_gen {
+                        continue;
+                    }
+                    self.home_now_playing_busy = false;
+                    match res {
+                        Ok(movies) => {
+                            if !movies.is_empty() {
+                                self.home_now_playing = movies;
+                            }
+                            self.home_now_playing_next =
+                                Some(Instant::now() + IN_SALA_REFRESH);
+                        }
+                        Err(_) => {
+                            self.home_now_playing_next = Some(Instant::now() + IN_SALA_RETRY);
+                        }
                     }
                 }
                 Msg::UpdateChecked(res) => {
@@ -2950,6 +2983,39 @@ impl App {
         }
     }
 
+    /// Carica il cartellone "In sala" se la lista e' scaduta. La home la
+    /// chiama a ogni frame, ma la richiesta parte solo ogni ora.
+    fn maybe_refresh_now_playing(&mut self) {
+        if self.home_now_playing_busy || self.tmdb.is_none() {
+            return;
+        }
+        if self
+            .home_now_playing_next
+            .is_some_and(|next| Instant::now() < next)
+        {
+            return;
+        }
+        self.start_now_playing();
+    }
+
+    fn start_now_playing(&mut self) {
+        let Some(tmdb) = self.tmdb.clone() else {
+            return;
+        };
+        self.home_now_playing_busy = true;
+        self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
+        let gen = self.home_now_playing_gen;
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let res = tmdb.now_playing().map(|p| {
+                in_sala_movies(p.results.into_iter().map(Movie::from).collect())
+            });
+            let _ = tx.send(Msg::NowPlaying { gen, res });
+            ctx.request_repaint();
+        });
+    }
+
     fn close_detail(&mut self) {
         self.detail = None;
         self.detail_loading = false;
@@ -3304,6 +3370,10 @@ impl App {
             Ok(()) => {
                 self.cfg = cfg.clone();
                 self.tmdb = Self::build_tmdb(&cfg);
+                self.home_now_playing.clear();
+                self.home_now_playing_busy = false;
+                self.home_now_playing_next = None;
+                self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
                 self.provider = build_provider(&cfg.ai);
                 self.keyword_map.clear();
                 self.ai_cache = None;
@@ -4026,6 +4096,7 @@ impl App {
         self.ensure_simkl_posters();
         let now = ctx.input(|i| i.time);
         if self.chat.is_empty() {
+            self.maybe_refresh_now_playing();
             self.refresh_home_suggestions(now);
             let want_focus = self.focus == Some(ViewMode::Chat);
             let resume_cards = self.simkl_resume_cards();
@@ -4033,7 +4104,7 @@ impl App {
             let actions = chat::home(
                 ui,
                 &self.images,
-                &self.movies,
+                &self.home_now_playing,
                 &mut self.chat_draft,
                 self.chat_busy,
                 self.provider.is_llm(),
@@ -5211,6 +5282,15 @@ fn search_title_pages(tmdb: &Tmdb, query: &str) -> Result<(Vec<Movie>, u32), Str
         }
     }
     Ok((dedupe(raw), total))
+}
+
+/// Il collage "In sala" usa solo film con poster, al massimo sei.
+fn in_sala_movies(movies: Vec<Movie>) -> Vec<Movie> {
+    movies
+        .into_iter()
+        .filter(|m| m.poster_path.is_some())
+        .take(6)
+        .collect()
 }
 
 fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
@@ -6546,9 +6626,9 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, describe, filter_movies, has_word, looks_like_question, merge_facets,
-        resize_edge, side_panel_widths, sort_movies, unlock_candidates, wants_trending, Cleared,
-        Facets, Movie, Sort,
+        allowed_url, describe, filter_movies, has_word, in_sala_movies, looks_like_question,
+        merge_facets, resize_edge, side_panel_widths, sort_movies, unlock_candidates,
+        wants_trending, Cleared, Facets, Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
@@ -6693,6 +6773,26 @@ mod tests {
         merge_facets(&mut base, &extra, &cleared);
         assert!(base.min_rating.is_none());
         assert_eq!(base.min_votes, Some(500), "gli altri filtri restano");
+    }
+
+    #[test]
+    fn in_sala_tiene_solo_i_film_con_poster_e_al_massimo_sei() {
+        let with_poster = |id: u64| Movie {
+            id,
+            poster_path: Some(format!("/{id}.jpg")),
+            ..Default::default()
+        };
+        let mut movies = vec![Movie {
+            id: 0,
+            ..Default::default()
+        }];
+        for id in 1..=8 {
+            movies.push(with_poster(id));
+        }
+        let out = in_sala_movies(movies);
+        assert_eq!(out.len(), 6);
+        assert!(out.iter().all(|m| m.poster_path.is_some()));
+        assert_eq!(out[0].id, 1, "i film senza poster non occupano un buco");
     }
 
     #[test]

@@ -268,6 +268,8 @@ fn availability(card: &Card) -> Option<String> {
 
 // -------------------------------------------------------------- casa -------
 
+/// `movies` e' il cartellone "In sala" della home, non i risultati della
+/// griglia: resta lo stesso mentre si cerca in Sala 02.
 #[allow(clippy::too_many_arguments)]
 pub fn home(
     ui: &mut egui::Ui,
