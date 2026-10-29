@@ -2060,7 +2060,7 @@ impl App {
         };
         let user = entry.user.clone();
         if !entry.answer.grid_ready || entry.answer.facets.is_empty() {
-            self.toast("Questa richiesta non si traduce in filtri di griglia.");
+            self.toast("Questa richiesta non si traduce in filtri del catalogo.");
             return;
         }
         let facets = entry.answer.facets.clone();
@@ -3658,7 +3658,7 @@ impl App {
                 if lumen::nav_item(
                     ui,
                     lumen::Icon::Grid,
-                    "Griglia",
+                    "Catalogo",
                     self.mode == ViewMode::Griglia && !self.show_settings,
                 )
                 .clicked()
@@ -3756,7 +3756,7 @@ impl App {
                                 ui,
                                 lumen::Icon::Refresh,
                                 34.0,
-                                "Aggiorna la griglia",
+                                "Aggiorna il catalogo",
                             )
                             .clicked()
                             {
@@ -4797,7 +4797,7 @@ impl App {
                 ui.add_space(6.0);
                 ui.checkbox(
                     &mut self.settings.simkl_hide_watched,
-                    egui::RichText::new("Nascondi i film già visti in griglia e chat")
+                    egui::RichText::new("Nascondi i film già visti nel catalogo e in chat")
                         .size(11.0)
                         .color(theme::DIM),
                 );

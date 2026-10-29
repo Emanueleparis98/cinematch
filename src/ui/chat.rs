@@ -1302,7 +1302,7 @@ fn answer_view(
         if a.grid_ready && total > 0 && !a.facets.is_empty()
             && link(
                 ui,
-                &format!("Vedi tutti i {} in griglia ↗", theme::thousands(total)),
+                &format!("Vedi tutti i {} nel catalogo →", theme::thousands(total)),
                 lumen::EMBER,
             )
             .clicked()
@@ -1398,7 +1398,7 @@ fn hero_card(
                         actions.open_detail = Some(card.movie.id);
                     }
                     if link(ui, "Film simili", lumen::MUTED)
-                        .on_hover_text("Cerca film simili a questo nella griglia")
+                        .on_hover_text("Cerca film simili a questo nel catalogo")
                         .clicked()
                     {
                         actions.similar_to = Some(card.movie.title.clone());

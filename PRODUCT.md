@@ -28,7 +28,7 @@ Il motore di vincoli: le combinazioni della tassonomia vengono validate, quelle 
 
 ## Capabilities and Constraints
 
-- Due viste: **Chat** (richiesta libera, fino a cinque film con perché e consiglio) e **Griglia** (filtri per periodo, genere, paese/lingua, mood/temi, metriche e correnti).
+- Due viste: **Chat** (richiesta libera, fino a cinque film con perché e consiglio) e **Catalogo** (filtri per periodo, genere, paese/lingua, mood/temi, metriche e correnti).
 - "Sblocca" propone i compromessi più piccoli quando i risultati sono pochi; "Più recenti" e "Prossimamente" hanno regole proprie.
 - SIMKL: visti, "Da vedere", voto 1–10, Riprendi e "Dalla tua lista"; sincronizzazione incrementale, nessun polling in background.
 - Voti IMDb dai dati pubblici, accanto al voto TMDB.
