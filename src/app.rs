@@ -27,6 +27,9 @@ use crate::ui::{chat, detail, facets, fx, grid, lumen, theme, unlock};
 const MAX_QUERY_CHARS: usize = 300;
 /// Pagine TMDB lette per una ricerca per titolo con filtri locali.
 const TITLE_PAGE_CAP: u32 = 3;
+/// Larghezza iniziale del pannello filtri. Egui ricorda poi l'eventuale
+/// ridimensionamento fatto dall'utente.
+const FILTERS_WIDTH: f32 = 360.0;
 /// Il cartellone "In sala" della home si aggiorna una volta all'ora.
 const IN_SALA_REFRESH: Duration = Duration::from_secs(60 * 60);
 /// Se il cartellone non arriva, riprova tra 15 minuti.
@@ -755,8 +758,6 @@ pub struct App {
     guide_open: bool,
     /// Pannello filtri visibile; il toggle sta nella barra di comando.
     filters_open: bool,
-    /// Ultima larghezza del pannello, ricordata quando lo si minimizza.
-    filters_width: f32,
     facets: Facets,
     prune: Prune,
     messages: Vec<String>,
@@ -871,7 +872,6 @@ impl App {
             facet_query: String::new(),
             guide_open: false,
             filters_open: true,
-            filters_width: 300.0,
             facets,
             prune,
             messages: Vec::new(),
@@ -3813,9 +3813,9 @@ impl App {
             return;
         }
         let (left_max, _) = side_panel_widths(ui.ctx().content_rect().width());
-        let panel = egui::Panel::left("facets")
+        egui::Panel::left("facets")
             .resizable(true)
-            .default_size(self.filters_width.min(left_max))
+            .default_size(FILTERS_WIDTH.min(left_max))
             .size_range(260.0..=left_max)
             .frame(
                 egui::Frame::NONE
@@ -3868,7 +3868,6 @@ impl App {
                     self.apply_actions(actions);
                 }
             });
-        self.filters_width = panel.response.rect.width();
     }
 
     fn right_panel(&mut self, ui: &mut egui::Ui) {

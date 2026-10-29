@@ -582,6 +582,8 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
         .collapsible(false)
         .resizable(true)
         .default_width(560.0)
+        .min_width(560.0)
+        .max_width(560.0)
         .show(ctx, |ui| {
             ui.label(
                 lumen::body(
@@ -775,7 +777,7 @@ fn text_input(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Respons
         .inner_margin(Margin::symmetric(8, 4));
     let inner = frame.show(ui, |ui| {
         ui.add_sized(
-            [width - 16.0, 20.0],
+            [width - 18.0, 20.0],
             egui::TextEdit::singleline(text)
                 .frame(egui::Frame::NONE)
                 .font(FontId::proportional(11.5))
@@ -1567,4 +1569,31 @@ mod tests {
     fn il_western_e_tra_i_generi_visibili() {
         assert!(PRIMARY_GENRES.contains(&37));
     }
+
+    #[test]
+    fn la_ricerca_non_allarga_il_pannello() {
+        let ctx = egui::Context::default();
+        let mut query = String::new();
+        let mut width = 0.0_f32;
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                ui.set_width(300.0);
+                let _ = search_field(ui, &mut query, "Cerca un filtro…");
+                width = ui.min_rect().width();
+            });
+            output.textures_delta.clear();
+        }
+        assert!(
+            width <= 300.5,
+            "il campo di ricerca sfora il pannello: {width}"
+        );
+    }
+
 }
