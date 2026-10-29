@@ -802,6 +802,9 @@ pub struct App {
     show_settings: bool,
     settings: SettingsDraft,
     settings_check: Option<String>,
+    /// Chiusura delle Impostazioni con modifiche non salvate.
+    settings_close_confirm: bool,
+    settings_after_close: Option<ViewMode>,
     /// Primo avvio: chiediamo la chiave TMDB prima delle impostazioni.
     first_run: bool,
     onboarding_busy: bool,
@@ -918,6 +921,8 @@ impl App {
             show_settings: false,
             settings,
             settings_check: None,
+            settings_close_confirm: false,
+            settings_after_close: None,
             first_run,
             onboarding_busy: false,
             simkl_tokens,
@@ -3707,16 +3712,27 @@ impl App {
                 );
             });
         if let Some(mode) = switch {
-            self.show_settings = false;
-            self.switch_mode(mode);
+            if self.show_settings {
+                self.request_close_settings(Some(mode));
+            } else {
+                self.switch_mode(mode);
+            }
         }
         if new_chat {
-            self.show_settings = false;
-            self.switch_mode(ViewMode::Chat);
-            self.new_chat();
+            if self.show_settings && self.settings_dirty() {
+                self.request_close_settings(None);
+            } else {
+                self.show_settings = false;
+                self.switch_mode(ViewMode::Chat);
+                self.new_chat();
+            }
         }
         if settings {
-            self.show_settings = !self.show_settings;
+            if self.show_settings {
+                self.request_close_settings(None);
+            } else {
+                self.show_settings = true;
+            }
         }
     }
 
@@ -4589,6 +4605,24 @@ impl App {
         }
     }
 
+    fn settings_dirty(&self) -> bool {
+        self.settings != SettingsDraft::from(&self.cfg)
+    }
+
+    /// Chiude le Impostazioni solo se non ci sono modifiche da perdere.
+    /// `after` è la vista da aprire subito dopo, se richiesta dal rail.
+    fn request_close_settings(&mut self, after: Option<ViewMode>) {
+        if self.settings_dirty() {
+            self.settings_close_confirm = true;
+            self.settings_after_close = after;
+        } else {
+            self.show_settings = false;
+            if let Some(mode) = after {
+                self.switch_mode(mode);
+            }
+        }
+    }
+
     fn settings_page(&mut self, ui: &mut egui::Ui) {
         let mut close = false;
         let mut onboarding = false;
@@ -4606,7 +4640,7 @@ impl App {
         let mut simkl_sync = false;
         let mut simkl_disconnect = false;
         let mut simkl_cancel = false;
-        let dirty = self.settings != SettingsDraft::from(&self.cfg);
+        let dirty = self.settings_dirty();
         egui::ScrollArea::vertical()
             .id_salt("settings-scroll")
             .auto_shrink([false, false])
@@ -5366,12 +5400,79 @@ impl App {
             self.cancel_simkl_auth();
         }
         if close {
-            self.show_settings = false;
+            self.request_close_settings(None);
         }
         if onboarding {
             self.first_run = true;
             self.show_settings = false;
             self.mode = ViewMode::Chat;
+        }
+    }
+
+    fn settings_close_dialog(&mut self, ctx: &egui::Context) {
+        if !self.settings_close_confirm {
+            return;
+        }
+        let mut cancel = false;
+        let mut discard = false;
+        let mut save = false;
+        let modal = egui::Modal::new(egui::Id::unique("settings-close-confirm"))
+            .backdrop_color(lumen::alpha(lumen::INK, 190))
+            .frame(
+                egui::Frame::NONE
+                    .fill(lumen::SURFACE)
+                    .stroke(egui::Stroke::new(1.0_f32, lumen::BORDER_HI))
+                    .corner_radius(lumen::radius(lumen::RADIUS))
+                    .inner_margin(egui::Margin::same(18)),
+            )
+            .show(ctx, |ui| {
+                ui.set_width(440.0);
+                ui.label(lumen::display(22.0, "Modifiche non salvate"));
+                ui.add_space(6.0);
+                ui.label(
+                    lumen::body(12.0, "Salva prima di uscire dalle Impostazioni?")
+                        .color(lumen::MUTED),
+                );
+                ui.add_space(14.0);
+                ui.horizontal_wrapped(|ui| {
+                    if lumen::button_sized(ui, "Annulla", false, 96.0).clicked() {
+                        cancel = true;
+                    }
+                    if lumen::button_sized(ui, "Esci senza salvare", false, 170.0).clicked() {
+                        discard = true;
+                    }
+                    if lumen::button_sized(ui, "Salva", true, 96.0).clicked() {
+                        save = true;
+                    }
+                });
+            });
+        if modal.should_close() {
+            cancel = true;
+        }
+        if cancel {
+            self.settings_close_confirm = false;
+            self.settings_after_close = None;
+        }
+        if discard {
+            self.settings_close_confirm = false;
+            self.show_settings = false;
+            if let Some(mode) = self.settings_after_close.take() {
+                self.switch_mode(mode);
+            }
+        }
+        if save {
+            if self.save_settings() {
+                self.settings_close_confirm = false;
+                self.show_settings = false;
+                if let Some(mode) = self.settings_after_close.take() {
+                    self.switch_mode(mode);
+                }
+                self.toast("Impostazioni salvate.");
+            } else {
+                // L'errore è già nel toast: la pagina resta aperta.
+                self.settings_close_confirm = false;
+                self.settings_after_close = None;
+            }
         }
     }
 
@@ -5517,6 +5618,7 @@ impl App {
         self.central(ui);
         self.chat_detail_preview(&ctx);
         self.new_chat_dialog(&ctx);
+        self.settings_close_dialog(&ctx);
         if self.guide_open {
             let actions = facets::guide_window(&ctx, &self.tax, &mut self.guide_open);
             if !actions.is_empty() {
@@ -5557,6 +5659,13 @@ impl App {
                     .retain(|e| !matches!(e, egui::Event::Text(_)));
             });
         }
+        if self.show_settings
+            && !self.settings_close_confirm
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S))
+            && self.save_settings()
+        {
+            self.toast("Impostazioni salvate.");
+        }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Num1)) {
             self.switch_mode(ViewMode::Chat);
         }
@@ -5574,7 +5683,17 @@ impl App {
             if self.guide_open {
                 self.guide_open = false;
             } else if self.show_settings {
-                self.show_settings = false;
+                if self.settings_close_confirm {
+                    // Il dialogo gestisce Esc.
+                } else if self.settings_dirty() {
+                    self.settings_close_confirm = true;
+                    self.settings_after_close = None;
+                    ctx.input_mut(|i| {
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+                    });
+                } else {
+                    self.show_settings = false;
+                }
             } else if self.detail.is_some() || self.detail_loading {
                 // Con il popover del voto aperto, Esc chiude prima quello.
                 let rating_open = self
