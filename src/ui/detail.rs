@@ -103,7 +103,10 @@ fn field(ui: &mut egui::Ui, title: &str, value: &str) {
     ui.add_space(8.0);
     ui.label(lumen::label(title));
     ui.add_space(2.0);
-    ui.label(lumen::body(11.5, value).color(lumen::MUTED));
+    ui.add(
+        egui::Label::new(lumen::body(11.5, value).color(lumen::MUTED))
+            .wrap(),
+    );
 }
 
 fn dial_value(delta: egui::Vec2) -> u8 {
@@ -606,8 +609,12 @@ pub fn panel(
                         ui.painter()
                             .rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
                         ui.add_space(7.0);
-                        ui.label(
-                            lumen::body(11.5, format!("Consiglio · {c}")).color(lumen::MUTED),
+                        ui.add(
+                            egui::Label::new(
+                                lumen::body(11.5, format!("Consiglio · {c}"))
+                                    .color(lumen::MUTED),
+                            )
+                            .wrap()
                         );
                     });
                 }
