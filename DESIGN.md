@@ -8,10 +8,10 @@ colors:
   raised: "#1c202b"
   border: "#2a2f3a"
   border-strong: "#3d4350"
+  skeleton: "#1a1e27"
   ivory: "#f4eee2"
   muted: "#a7a399"
   faint: "#918d84"
-  faint-deep: "#6e6b64"
   ember: "#ff5c35"
   ember-hi: "#ff7a57"
   celadon: "#8fe3c0"
@@ -97,6 +97,18 @@ components:
     rounded: "{rounded.none}"
     width: "72px"
     height: "62px"
+  dialog:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ivory}"
+    rounded: "{rounded.md}"
+    padding: "18px"
+    width: "440px"
+  disclosure:
+    backgroundColor: "{colors.deep}"
+    textColor: "{colors.ivory}"
+    rounded: "{rounded.md}"
+    padding: "0 12px"
+    height: "44px"
 ---
 
 # Design System: CineMatch
@@ -139,9 +151,10 @@ Un fondo notturno caldo, una sola fiamma, un verde di servizio. I neutri non son
 - **Surface** (#151821): pannelli, rail attiva, card rialzate di un tono.
 - **Raised** (#1c202b): hover di superfici e controlli.
 - **Border** (#2a2f3a): hairline a riposo. **Border Strong** (#3d4350): hover.
+- **Skeleton** (#1a1e27): riempimento piatto dei placeholder di caricamento, appena sopra raised.
 - **Ivory** (#f4eee2): testo principale e titoli.
 - **Muted** (#a7a399): testo secondario, lede, metadati leggibili.
-- **Faint** (#918d84): etichette e note sul sito e nell'app. **Faint Deep** (#6e6b64): riservato a superfici dense, mai a testo sotto i 12 px.
+- **Faint** (#918d84): etichette e note sul sito e nell'app.
 
 ### Named Rules
 **The One Voice Rule.** L'ember occupa al massimo il 10% di una schermata. Se due elementi competono per lo stesso sguardo, uno dei due non è un comando.
@@ -215,21 +228,35 @@ Strumenti, non pastiglie: piatti, etichettati, con un bordo da 1 px.
 - **Visto:** velo grigio al 67% sul poster (20% in hover) e badge ink con bordo border-strong, testo celadon 8 px.
 - **Mini card:** fondo surface, raggio 2 px, hover raised; miniatura 43×64 a filo, titolo 12 px, metadati 9 px mono.
 - **Figure del sito:** fondo deep, bordo 1 px, raggio 4 px, didascalia mono 9 px faint.
+- **Skeleton:** rettangoli piatti su fondo skeleton (#1a1e27), stesso raggio dell'elemento che sostituiscono; nessun shimmer, nessuna pulsazione.
 
 ### Inputs / Fields
 - **Composer:** frame deep, bordo 1 px, raggio 2 px, padding 6/12; il bordo diventa ember al focus, senza glow. Testo avorio 13 px, hint muted.
 - **Send:** quadrato ember 40×40, raggio 2 px, icona freccia ink; nella hero diventa 100×40 con l'etichetta «CERCA». Hover ember-high.
 - **Select / search:** stessa ricetta del composer; nessuna ombra, nessun riempimento chiaro.
 
+### Disclosure (sito)
+Riga `details` alta 44 px. Il summary è mono 10 px maiuscolo, tracking 0,08em, muted che vira a avorio; il segno «+» è ember e diventa «−» quando è aperto. Il contenuto sta in un frame deep da 1 px con raggio 4 px (la variante «Dettagli» tiene solo l'hairline superiore), testo 11,5–13,5 px muted. Due usi: «Prima di installare» nella hero e «Dettagli su catalogo, dati locali e IMDb».
+
 ### Navigation
+- **Barra superiore app:** 48 px, fondo ink, hairline in basso. Brand Fraunces 22 px con «MATCH» in ember; kicker mono 9 px faint e titolo di vista mono 9 px avorio. I comandi di finestra sono aree 38×40 px, bordo mai visibile: hover su raised, la chiusura vira a danger.
 - **Rail app:** 72 px, voce 72×62 con icona 20 px a tratto 1,5 e label mono 9 px maiuscolo. Attiva: fondo surface, barra ember da 2 px a sinistra, icona e testo avorio. Hover: surface al 50%.
 - **Header sito:** 68 px, hairline in basso; link mono 10 px maiuscolo, tracking 0,08em, muted → avorio. Brand Fraunces 20 px, con «MATCH» in ember. Il bottone di download è la variante small da 34 px.
 
 ### Film Sheet
-Pannello laterale fisso da 260–420 px, fondo surface con hairline. Backdrop con scrim, poster a filo, titolo Fraunces 24 px, titolo originale 9 px mono faint, fatti uniti da «·», disponibilità in celadon, stato SIMKL celadon o danger. Chiude con Esc. Nessuna ombra: è una superficie, non un foglio sospeso.
+Pannello laterale fisso da 260–420 px, fondo surface con hairline. Backdrop con scrim, poster a filo, titolo Fraunces 24 px, titolo originale 9 px mono faint, fatti uniti da «·», disponibilità in celadon, stato SIMKL celadon o danger. Lo stato è un badge alto 18 px: fondo del colore allo stato al 9%, bordo allo stesso colore al 31%, punto da 4,4 px e testo mono 9 px. Chiude con Esc. Nessuna ombra: è una superficie, non un foglio sospeso.
+
+### Dialogs
+Superfici che fermano il lavoro: fondo surface, bordo border-strong da 1 px, raggio 4 px, padding 18 px, larghezza 360–440 px. Nessuna ombra; il velo è l'ink al 75% sopra tutto. Titolo Fraunces 22 px, corpo 12 px muted, comandi in fila a sinistra, larghi 96–170 px: il secondario annulla o esce senza salvare, il primario conferma. Si chiudono con Esc, clic sul velo o «Annulla». L'anteprima della scheda in chat usa lo stesso velo (più denso, alpha 205) e la stessa hairline, con il pannello tra 300 e 440 px.
+
+### Primo avvio
+Una colonna centrata larga al massimo 680 px, 42 px sotto la barra: kicker mono 10 px ember «PRIMO AVVIO», titolo Fraunces 38 px, corpo 13 px muted. L'unico campo è la chiave TMDB (etichetta mono 9,5 px faint, frame deep, focus ember); il primario «Verifica e inizia» è largo 196 px e il link «Lo faccio dopo» resta muted. Rail e barra superiore restano al loro posto; il resto del contenuto centrale non esiste finché la chiave non è verificata o saltata.
 
 ### Status Bar
 28 px, fondo ink, etichette mono 9 px. «PRONTO» celadon solo dopo una richiesta di rete riuscita, «LAVORO» ember durante le operazioni, «OFFLINE» danger quando l'ultima richiesta fallisce. Versione e sorgente in faint.
+
+### Toast
+Avviso breve in basso al centro, sopra il composer: fondo tra raised e surface, bordo ember al 59%, raggio 4 px, padding 14/9, punto ember da 6 px e testo 12 px avorio. Entra in 220 ms, esce in dissolvenza; da fermo non ridisegna.
 
 ## Do's and Don'ts
 
