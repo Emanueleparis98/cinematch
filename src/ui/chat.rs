@@ -300,7 +300,7 @@ pub fn home(
                     egui::vec2(width, 0.0),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
-                    ui.add_space(24.0);
+                    ui.add_space(20.0);
                     if compact {
                         hero_left(
                             ui,
@@ -315,7 +315,7 @@ pub fn home(
                         ui.add_space(20.0);
                         poster_strip(ui, images, movies, width, &mut actions);
                     } else {
-                        let left_w = (width * 0.56).floor();
+                        let left_w = (width * 0.59).floor();
                         let right_w = width - left_w - 30.0;
                         ui.horizontal_top(|ui| {
                             ui.allocate_ui_with_layout(
@@ -343,7 +343,7 @@ pub fn home(
                         });
                     }
 
-                    ui.add_space(26.0);
+                    ui.add_space(24.0);
                     ui.horizontal(|ui| {
                         ui.label(lumen::label("Parti da"));
                         ui.with_layout(
@@ -366,7 +366,7 @@ pub fn home(
                     hairline(ui);
                     ui.add_space(12.0);
 
-                    let gap = 10.0;
+                    let gap = 12.0;
                     let cols = if width >= 1000.0 { 4 } else { 2 };
                     let card_w =
                         ((width - gap * (cols - 1) as f32) / cols as f32).floor();
@@ -589,12 +589,18 @@ fn hero_left(
             .line_height(Some(size * 0.94)),
     );
     ui.add_space(12.0);
-    ui.label(
-        lumen::body(
-            if compact { 12.0 } else { 13.0 },
-            "Descrivi un’atmosfera, un regista o un dettaglio. CineMatch cerca film reali su TMDB e ti mostra perché sono lì.",
-        )
-        .color(lumen::MUTED),
+    ui.allocate_ui_with_layout(
+        egui::vec2(width.min(470.0), 0.0),
+        egui::Layout::top_down(egui::Align::LEFT),
+        |ui| {
+            ui.label(
+                lumen::body(
+                    if compact { 12.0 } else { 13.0 },
+                    "Descrivi un’atmosfera, un regista o un dettaglio. CineMatch cerca film reali su\u{a0}TMDB e ti mostra perché sono lì.",
+                )
+                .color(lumen::MUTED),
+            );
+        },
     );
     ui.add_space(20.0);
     let hint = if compact {
@@ -629,12 +635,14 @@ fn collage(
     width: f32,
     actions: &mut HomeActions,
 ) {
-    let big_w = (width * 0.55).min(220.0);
+    // Il cartellone resta più basso della colonna di testo: le piste entrano
+    // nella prima schermata anche sulle finestre basse.
+    let big_w = (width * 0.55).min(180.0);
     let gap = 8.0;
-    let mut small_w = ((width - big_w - 12.0 - gap) / 2.0).min(100.0);
+    let mut small_w = ((width - big_w - 12.0 - gap) / 2.0).min(84.0);
     let grid = small_w >= 72.0;
     if !grid {
-        small_w = (width - big_w - 12.0).min(100.0);
+        small_w = (width - big_w - 12.0).min(84.0);
     }
     let grid_w = if grid {
         small_w * 2.0 + gap
