@@ -15,7 +15,6 @@ use crate::domain::model::{toggle, Details, Facets, Movie, Sort, TrackState};
 use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
-use crate::infra::winclock;
 use crate::integrations::simkl;
 use crate::tmdb::client::{describe_credential, poster_url, Tmdb};
 use crate::tmdb::models::{PagedMovies, Person};
@@ -714,9 +713,6 @@ pub struct App {
     tmdb: Option<Arc<Tmdb>>,
     provider: Arc<dyn IntentProvider>,
     cfg: Config,
-    /// «gg/mm hh:mm» del binario in esecuzione: si vede subito se la finestra
-    /// in Impostazioni si distingue subito la build appena fatta da una vecchia.
-    build: String,
     rx: Receiver<Msg>,
     tx: Sender<Msg>,
     gen: u64,
@@ -866,7 +862,6 @@ impl App {
             tmdb,
             provider,
             cfg,
-            build: winclock::build_stamp(),
             rx,
             tx,
             gen: 0,
@@ -5017,15 +5012,23 @@ impl App {
                     };
                     ui.label(egui::RichText::new(theme::truncate(check, 150)).size(10.5).color(color));
                 }
-                if ui
-                    .hyperlink_to(
-                        egui::RichText::new("Ottieni una chiave gratuita ↗").size(11.0),
-                        "https://www.themoviedb.org/settings/api",
-                    )
-                    .clicked()
-                {
-                    open_api_page = true;
-                }
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    if lumen::button_sized(ui, "Verifica credenziale", false, 160.0)
+                        .clicked()
+                    {
+                        check = true;
+                    }
+                    if ui
+                        .hyperlink_to(
+                            egui::RichText::new("Ottieni una chiave gratuita ↗").size(11.0),
+                            "https://www.themoviedb.org/settings/api",
+                        )
+                        .clicked()
+                    {
+                        open_api_page = true;
+                    }
+                });
                 if lumen::link(ui, "Rivedi il primo avvio", lumen::MUTED).clicked() {
                     onboarding = true;
                 }
@@ -5323,29 +5326,17 @@ impl App {
                     if lumen::button_sized(ui, "Salva", true, 100.0).clicked() {
                         save = true;
                     }
-                    if lumen::button_sized(ui, "Verifica credenziale", false, 160.0).clicked()
-                    {
-                        check = true;
-                    }
-                    ui.label(
-                        lumen::mono(9.0, format!("config: {}", Config::path().display()))
-                            .color(lumen::FAINT),
-                    );
                 });
 
                 ui.add_space(8.0);
                 lumen::hairline(ui);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(lumen::mono(9.0, format!("build {}", self.build)).color(lumen::FAINT));
-                    ui.add_space(10.0);
-                    ui.label(
-                        lumen::mono(
-                            9.0,
-                            "This product uses the TMDB API but is not endorsed or certified by TMDB.",
-                        )
-                        .color(lumen::MUTED),
-                    );
-                });
+                ui.label(
+                    lumen::mono(
+                        9.0,
+                        "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+                    )
+                    .color(lumen::MUTED),
+                );
                 ui.add_space(24.0);
                         },
                     );

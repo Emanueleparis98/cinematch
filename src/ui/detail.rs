@@ -388,6 +388,8 @@ fn simkl_bar(
             status_pill(ui, status);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Stesso margine della testata: la barra non copre “Apri”.
+            ui.add_space(10.0);
             if let Some(url) = &track.url {
                 if lumen::link(ui, "Apri ↗", lumen::FAINT)
                     .on_hover_text("Apri su SIMKL")
@@ -426,7 +428,7 @@ fn simkl_bar(
 
     // Le azioni occupano tutta la larghezza della scheda: la riga finisce
     // sul filo destro, senza il vuoto che spezzava il blocco.
-    let avail = ui.available_width();
+    let avail = (ui.available_width() - 10.0).max(0.0);
     let gap = 6.0;
     let inner = (avail - gap * 2.0).max(0.0);
     let rating_w = inner * 0.24;
@@ -524,6 +526,8 @@ pub fn panel(
         |ui| {
             ui.label(lumen::mono(10.0, "SCHEDA FILM").color(lumen::IVORY));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Lascia il posto alla barra di scorrimento della scheda.
+                ui.add_space(10.0);
                 let close = close_button(ui);
                 if focus_close {
                     close.request_focus();

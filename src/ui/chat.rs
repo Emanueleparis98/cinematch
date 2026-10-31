@@ -367,7 +367,7 @@ pub fn home(
                     ui.add_space(12.0);
 
                     let gap = 12.0;
-                    let cols = if width >= 1000.0 { 4 } else { 2 };
+                    let cols = if width >= 900.0 { 4 } else { 2 };
                     let card_w =
                         ((width - gap * (cols - 1) as f32) / cols as f32).floor();
                     let rows = 4usize.div_ceil(cols);
@@ -736,6 +736,15 @@ fn poster_strip(
 ) {
     let gap = 8.0;
     let w = ((width - gap * 5.0) / 6.0).floor();
+    ui.label(lumen::label("In sala"));
+    ui.add_space(8.0);
+    if movies.is_empty() {
+        ui.label(
+            lumen::body(11.0, "Nessun film in sala disponibile.")
+                .color(lumen::MUTED),
+        );
+        return;
+    }
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
         for i in 0..6 {
