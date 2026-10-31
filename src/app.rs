@@ -2553,7 +2553,11 @@ impl App {
             self.show_all_in_grid(i);
         }
         if a.new_chat {
-            self.new_chat();
+            if self.chat.is_empty() && !self.chat_busy {
+                self.new_chat();
+            } else {
+                self.new_chat_confirm = true;
+            }
         }
     }
 
@@ -3632,10 +3636,9 @@ impl App {
             });
     }
 
-    /// Rail LUMEN: Chat, Griglia, Nuova chat, Impostazioni.
+    /// Rail LUMEN: Chat, Catalogo, Impostazioni.
     fn rail(&mut self, ui: &mut egui::Ui) {
         let mut switch = None;
-        let mut new_chat = false;
         let mut settings = false;
         egui::Panel::left("rail")
             .exact_size(72.0)
@@ -3667,14 +3670,6 @@ impl App {
                 .clicked()
                 {
                     switch = Some(ViewMode::Griglia);
-                }
-                if lumen::nav_item(ui, lumen::Icon::New, "Nuova", false).clicked() {
-                    if self.chat.is_empty() && !self.chat_busy {
-                        new_chat = true;
-                        switch = Some(ViewMode::Chat);
-                    } else {
-                        self.new_chat_confirm = true;
-                    }
                 }
                 let settings_resp = lumen::nav_item(
                     ui,
@@ -3713,15 +3708,6 @@ impl App {
                 self.switch_mode(mode);
             }
         }
-        if new_chat {
-            if self.show_settings && self.settings_dirty() {
-                self.request_close_settings(None);
-            } else {
-                self.show_settings = false;
-                self.switch_mode(ViewMode::Chat);
-                self.new_chat();
-            }
-        }
         if settings {
             if self.show_settings {
                 self.request_close_settings(None);
@@ -3736,7 +3722,7 @@ impl App {
         if self.mode != ViewMode::Griglia || self.show_settings {
             return;
         }
-        let compact = ui.ctx().content_rect().width() < 1000.0;
+        let compact = ui.ctx().content_rect().width() < 1150.0;
         let want_focus = self.focus == Some(ViewMode::Griglia);
         let sort_before = self.facets.sort;
         let mut do_search = false;
@@ -4631,6 +4617,59 @@ impl App {
         let mut simkl_disconnect = false;
         let mut simkl_cancel = false;
         let dirty = self.settings_dirty();
+        // Testata fissa: titolo, stato e comandi restano visibili mentre il
+        // form scorre. Il corpo parte subito sotto l'hairline.
+        let header_w = ui.available_width().min(760.0);
+        let header_pad = ((ui.available_width() - header_w) * 0.5).max(0.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.add_space(header_pad);
+            ui.allocate_ui_with_layout(
+                egui::vec2(header_w, 0.0),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    ui.add_space(18.0);
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(lumen::mono(10.0, "IMPOSTAZIONI").color(lumen::EMBER));
+                            ui.add_space(5.0);
+                            ui.label(lumen::display(30.0, "Impostazioni"));
+                            if dirty {
+                                ui.add_space(4.0);
+                                ui.label(
+                                    lumen::mono(9.0, "● MODIFICHE NON SALVATE")
+                                        .color(lumen::EMBER),
+                                );
+                            }
+                        });
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
+                                    close = true;
+                                }
+                                if dirty
+                                    && lumen::button_sized(ui, "Salva", true, 96.0).clicked()
+                                {
+                                    save = true;
+                                }
+                            },
+                        );
+                    });
+                    ui.add_space(4.0);
+                    ui.label(
+                        lumen::body(
+                            11.5,
+                            "Chiavi e preferenze restano su questo PC. SIMKL sincronizza visti, lista e voti solo quando lo chiedi.",
+                        )
+                        .color(lumen::MUTED),
+                    );
+                    ui.add_space(12.0);
+                    lumen::hairline(ui);
+                    ui.add_space(12.0);
+                },
+            );
+        });
         egui::ScrollArea::vertical()
             .id_salt("settings-scroll")
             .auto_shrink([false, false])
@@ -4686,48 +4725,6 @@ impl App {
                                 v.window_fill = lumen::SURFACE;
                                 v.panel_fill = lumen::INK;
                             }
-                            ui.add_space(24.0);
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        lumen::mono(10.0, "IMPOSTAZIONI").color(lumen::EMBER),
-                                    );
-                                    ui.add_space(5.0);
-                                    ui.label(lumen::display(30.0, "Impostazioni"));
-                                    if dirty {
-                                        ui.add_space(4.0);
-                                        ui.label(
-                                            lumen::mono(9.0, "● MODIFICHE NON SALVATE")
-                                                .color(lumen::EMBER),
-                                        );
-                                    }
-                                });
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if lumen::link(ui, "Chiudi ×", lumen::MUTED).clicked() {
-                                            close = true;
-                                        }
-                                        if dirty
-                                            && lumen::button_sized(ui, "Salva", true, 96.0)
-                                                .clicked()
-                                        {
-                                            save = true;
-                                        }
-                                    },
-                                );
-                            });
-                            ui.add_space(4.0);
-                            ui.label(
-                                lumen::body(
-                                    11.5,
-                                    "Chiavi e preferenze restano su questo PC. SIMKL sincronizza visti, lista e voti solo quando lo chiedi.",
-                                )
-                                .color(lumen::MUTED),
-                            );
-                            ui.add_space(14.0);
-                            lumen::hairline(ui);
-                            ui.add_space(14.0);
                 let connected = self.simkl_tokens.is_some();
                 ui.horizontal(|ui| {
                     ui.label(lumen::mono(10.0, "TRACCIAMENTO").color(lumen::IVORY));

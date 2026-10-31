@@ -343,7 +343,7 @@ pub fn home(
                         });
                     }
 
-                    ui.add_space(24.0);
+                    ui.add_space(16.0);
                     ui.horizontal(|ui| {
                         ui.label(lumen::label("Parti da"));
                         ui.with_layout(
@@ -583,7 +583,13 @@ fn hero_left(
     let _ = ai;
     ui.label(lumen::mono(10.0, "SALA 01 / RICERCA").color(lumen::EMBER));
     ui.add_space(8.0);
-    let size = if compact { 38.0 } else { 56.0 };
+    let size = if compact {
+        if width >= 600.0 { 44.0 } else { 38.0 }
+    } else if width < 600.0 {
+        48.0
+    } else {
+        56.0
+    };
     ui.label(
         lumen::display(size, "Cosa guardiamo\nstasera?")
             .line_height(Some(size * 0.94)),
@@ -1109,6 +1115,17 @@ pub fn view(
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         ui.set_max_width(width);
+                        ui.horizontal(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if lumen::link(ui, "Nuova chat", lumen::MUTED).clicked() {
+                                        actions.new_chat = true;
+                                    }
+                                },
+                            );
+                        });
+                        ui.add_space(10.0);
                         for (index, entry) in entries.iter().enumerate() {
                             user_message(ui, &entry.user);
                             ui.add_space(18.0);
