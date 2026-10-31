@@ -1,11 +1,11 @@
 ﻿; CineMatch - installer Windows per-utente (nessun UAC).
 ; Compilare dalla root del progetto:
-;   ISCC.exe /DMyAppVersion=0.10.14 installer\cinematch.iss
+;   ISCC.exe /DMyAppVersion=0.10.15 installer\cinematch.iss
 ; Il setup completo aggiorna l'installazione esistente e non tocca
 ; %APPDATA%\CineMatch (configurazione, chiavi e cache).
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.10.14"
+  #define MyAppVersion "0.10.15"
 #endif
 
 #define MyAppName "CineMatch"

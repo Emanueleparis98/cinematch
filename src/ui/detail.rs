@@ -178,6 +178,7 @@ fn rating_button(
     ui: &mut egui::Ui,
     movie_id: u64,
     track: &TrackInfo,
+    width: f32,
     actions: &mut Vec<DetailAction>,
 ) {
     let popup_id = egui::Id::unique(("rating-open", movie_id));
@@ -187,7 +188,7 @@ fn rating_button(
         Some(value) => format!("★ {value}/10"),
         None => "Vota".to_string(),
     };
-    let button = lumen::button_sized(ui, &label, false, 88.0);
+    let button = lumen::button_sized(ui, &label, false, width);
     if button.clicked() {
         open = !open;
         if open {
@@ -378,16 +379,22 @@ fn simkl_bar(
     actions: &mut Vec<DetailAction>,
 ) {
     let status = track.status.as_deref().unwrap_or("");
+    // Stato e fonte restano un solo gruppo a sinistra; a destra c'è solo
+    // l'uscita verso SIMKL, senza ripetere il nome.
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
         ui.label(lumen::label("SIMKL"));
+        if !status.is_empty() {
+            status_pill(ui, status);
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(url) = &track.url {
-                if lumen::link(ui, "SIMKL ↗", lumen::FAINT).clicked() {
+                if lumen::link(ui, "Apri ↗", lumen::FAINT)
+                    .on_hover_text("Apri su SIMKL")
+                    .clicked()
+                {
                     actions.push(DetailAction::OpenUrl(url.clone()));
                 }
-            }
-            if !status.is_empty() {
-                status_pill(ui, status);
             }
         });
     });
@@ -396,71 +403,97 @@ fn simkl_bar(
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             ui.label(
-                lumen::body(11.0, format!("Non salvato su SIMKL: {err}"))
-                    .color(lumen::DANGER),
+                lumen::body(11.0, format!("Non salvato su SIMKL: {err}")).color(lumen::DANGER),
             );
             if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
                 actions.push(DetailAction::RetryWrite);
             }
         });
     }
-    ui.add_space(6.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        ui.spacing_mut().item_spacing.y = 6.0;
-        rating_button(ui, movie_id, track, actions);
+    ui.add_space(8.0);
+    if track.busy {
+        // La testata resta ferma: cambia solo la riga delle azioni.
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), 36.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.spinner();
+                ui.label(lumen::mono(9.5, "SALVO SU SIMKL…").color(lumen::MUTED));
+            },
+        );
+        return;
+    }
+
+    // Le azioni occupano tutta la larghezza della scheda: la riga finisce
+    // sul filo destro, senza il vuoto che spezzava il blocco.
+    let avail = ui.available_width();
+    let gap = 6.0;
+    let inner = (avail - gap * 2.0).max(0.0);
+    let rating_w = inner * 0.24;
+    let track_w = (avail - rating_w - gap * 2.0).max(0.0) * 0.5;
+    let confirm = egui::Id::unique(("simkl-remove-confirm", movie_id));
+    let armed = status == "completed"
+        && ui
+            .ctx()
+            .memory(|m| m.data.get_temp::<bool>(confirm).unwrap_or(false));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        rating_button(ui, movie_id, track, rating_w, actions);
         match status {
             "completed" => {
-                let confirm =
-                    egui::Id::unique(("simkl-remove-confirm", movie_id));
-                let armed = ui
-                    .ctx()
-                    .memory(|m| m.data.get_temp::<bool>(confirm).unwrap_or(false));
-                if armed {
-                    ui.label(
-                        lumen::body(11.0, "Toglie cronologia e voto.")
-                            .color(lumen::MUTED),
-                    );
-                    if lumen::link(ui, "Conferma rimozione", lumen::DANGER).clicked() {
+                let remove_w = (avail - rating_w - gap).max(0.0);
+                let label = if armed {
+                    "Conferma rimozione"
+                } else {
+                    "Rimuovi dai visti"
+                };
+                let remove = lumen::button_sized(ui, label, false, remove_w);
+                let remove = if armed {
+                    remove
+                } else {
+                    remove
+                        .on_hover_text("Rimuove il film dalla cronologia SIMKL e cancella il voto")
+                };
+                if remove.clicked() {
+                    if armed {
                         actions.push(DetailAction::RemoveTracking);
-                        ui.ctx()
-                            .memory_mut(|m| m.data.remove::<bool>(confirm));
+                        ui.ctx().memory_mut(|m| m.data.remove::<bool>(confirm));
+                    } else {
+                        ui.ctx().memory_mut(|m| m.data.insert_temp(confirm, true));
                     }
-                    if lumen::link(ui, "Annulla", lumen::FAINT).clicked() {
-                        ui.ctx()
-                            .memory_mut(|m| m.data.remove::<bool>(confirm));
-                    }
-                } else if lumen::link(ui, "Rimuovi dai visti", lumen::FAINT)
-                    .on_hover_text(
-                        "Rimuove il film dalla cronologia SIMKL e cancella il voto",
-                    )
-                    .clicked()
-                {
-                    ui.ctx()
-                        .memory_mut(|m| m.data.insert_temp(confirm, true));
                 }
             }
             "plantowatch" => {
-                if lumen::button_sized(ui, "✓ Da vedere", false, 100.0)
+                if lumen::button_sized(ui, "✓ Da vedere", false, track_w)
                     .on_hover_text("Rimuove il film da Da vedere")
                     .clicked()
                 {
                     actions.push(DetailAction::RemoveTracking);
                 }
-                if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
+                if lumen::button_sized(ui, "Segna visto", true, track_w).clicked() {
                     actions.push(DetailAction::MarkWatched);
                 }
             }
             _ => {
-                if lumen::button_sized(ui, "+ Da vedere", false, 100.0).clicked() {
+                if lumen::button_sized(ui, "+ Da vedere", false, track_w).clicked() {
                     actions.push(DetailAction::AddWatchlist);
                 }
-                if lumen::button_sized(ui, "Segna visto", true, 100.0).clicked() {
+                if lumen::button_sized(ui, "Segna visto", true, track_w).clicked() {
                     actions.push(DetailAction::MarkWatched);
                 }
             }
         }
     });
+    if armed {
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.label(lumen::body(11.0, "Toglie cronologia e voto.").color(lumen::MUTED));
+            if lumen::link(ui, "Annulla", lumen::FAINT).clicked() {
+                ui.ctx().memory_mut(|m| m.data.remove::<bool>(confirm));
+            }
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)] // scheda densa: contesto e focus restano espliciti
@@ -593,14 +626,7 @@ pub fn panel(
                 ui.add_space(12.0);
                 lumen::hairline(ui);
                 ui.add_space(8.0);
-                if track.busy {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(lumen::mono(9.5, "Salvo su SIMKL…").color(lumen::MUTED));
-                    });
-                } else {
-                    simkl_bar(ui, d.movie.id, track, &mut actions);
-                }
+                simkl_bar(ui, d.movie.id, track, &mut actions);
             }
 
             if let Some(perche) = why.filter(|p| !p.trim().is_empty()) {
