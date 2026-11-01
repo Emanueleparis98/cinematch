@@ -2,3 +2,6 @@
 /dist
 *.pdb
 .env
+
+# Impeccable (installazione locale OpenCode)
+.opencode/
