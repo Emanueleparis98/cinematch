@@ -552,6 +552,7 @@ pub fn panel(
             let width = ui.available_width();
             let poster_w = (if compact { 92.0_f32 } else { 104.0 }).min(width * 0.34);
             ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 12.0;
                 let _ = lumen::poster(
                     ui,
                     images,
@@ -560,10 +561,11 @@ pub fn panel(
                     poster_w * 1.5,
                     true,
                 );
-                ui.add_space(12.0);
-                ui.vertical(|ui| {
-                    ui.set_max_width((width - poster_w - 20.0).max(80.0));
-                    ui.label(lumen::display(24.0, &d.movie.title));
+                let text_w = (width - poster_w - 12.0).max(0.0);
+                ui.allocate_ui_with_layout(egui::vec2(text_w, 0.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                    ui.set_width(text_w);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    ui.label(lumen::display(if width < 300.0 { 20.0 } else { 24.0 }, &d.movie.title));
                     if !d.movie.original_title.is_empty()
                         && d.movie.original_title != d.movie.title
                     {
@@ -753,6 +755,40 @@ fn compact_votes(v: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::dial_value;
+
+    #[test]
+    fn la_scheda_ripiega_titoli_e_metadati_nella_propria_colonna() {
+        use crate::domain::model::{Details, ImdbRating, Movie};
+        use crate::ui::{images::ImageStore, layout_test_support::*, lumen};
+        let images = ImageStore::new();
+        let details = Details {
+            movie: Movie { title: "L'isola dei ricordi e altre storie dal titolo particolarmente lungo".into(), original_title: "Forgotten Island and other stories with a particularly long title".into(), year: Some(2026), votes: 16800, rating: 7.7, overview: "Una descrizione lunga che deve scorrere dentro la scheda senza spostare il pulsante di chiusura. ".repeat(12), ..Default::default() },
+            countries: vec!["United States of America".into(), "Repubblica Democratica del Congo".into()],
+            runtime: Some(109), imdb: Some(ImdbRating { rating: 7.6, votes: 91000 }),
+            ..Default::default()
+        };
+        for scale in [1.0, 1.5, 2.0] {
+            for width in [250.0, 320.0, 440.0, 488.0] {
+                let ctx = egui::Context::default();
+                lumen::install(&ctx);
+                ctx.set_pixels_per_point(scale);
+                let render = || frame(&ctx, egui::vec2(width, 650.0), |ui| {
+                    super::panel(ui, &images, &details, true, &super::TrackInfo::default(), None, None, false);
+                });
+                let _ = render();
+                let output = render();
+                let heading = text_rect(&output, "SCHEDA FILM");
+                assert!(heading.top() >= 0.0 && heading.bottom() <= 36.5);
+                for shape in &output.shapes {
+                    if let egui::epaint::Shape::Text(text) = &shape.shape {
+                        let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                        assert!(bounds.right() <= width + 0.5, "scheda larga {width} scala {scale}: {} {bounds:?}", text.galley.text());
+                        assert!(!text.galley.elided);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn la_disponibilita_distingue_dati_assenti_e_provider_presenti() {

@@ -3557,7 +3557,7 @@ impl App {
                     );
                 }
 
-                ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(r.size(), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     ui.add_space(20.0);
                     ui.label(lumen::display(22.0, "CINE"));
                     ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
@@ -3862,7 +3862,7 @@ impl App {
                     [r.left_top(), r.right_top()],
                     egui::Stroke::new(1.0_f32, lumen::BORDER),
                 );
-                ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(r.size(), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
                     ui.add_space(14.0);
                     let busy = self.loading
@@ -4077,17 +4077,7 @@ impl App {
         if self.detail.is_none() && !self.detail_loading {
             return;
         }
-        let screen = ctx.content_rect();
-        let area_rect = egui::Rect::from_min_max(
-            egui::pos2(screen.left() + lumen::RAIL_WIDTH, screen.top() + 48.0),
-            egui::pos2(screen.right(), screen.bottom() - 28.0),
-        );
-        let modal_w = (area_rect.width() - 48.0).clamp(300.0, 440.0);
-        let modal_h = (area_rect.height() - 24.0).clamp(280.0, 520.0);
-        let modal = egui::Rect::from_center_size(
-            area_rect.center(),
-            egui::vec2(modal_w, modal_h),
-        );
+        let (area_rect, modal) = detail_preview_rect(ctx.content_rect());
         let d = self.detail.clone();
         let (why, consiglio) = match &self.detail_why {
             Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
@@ -4132,7 +4122,9 @@ impl App {
                     ui.scope_builder(
                         egui::UiBuilder::new().max_rect(inner),
                         |ui| {
-                            ui.set_min_height(inner.height());
+                            ui.set_min_size(inner.size());
+                            ui.set_max_size(inner.size());
+                            ui.set_clip_rect(inner);
                             actions = detail::panel(
                                 ui,
                                 &self.images,
@@ -4307,37 +4299,8 @@ impl App {
         {
             return;
         }
-        let avail = (ui.ctx().content_rect().width() - lumen::RAIL_WIDTH).max(200.0);
-        let pad = if avail < 900.0 { 20.0 } else { 34.0 };
-        let width = (avail - pad * 2.0).min(1100.0);
         let want_focus = self.focus == Some(ViewMode::Chat);
-        let mut send = false;
-        // ID diverso dal TextEdit "chat-composer": se coincidono, lo stato del
-        // pannello sovrascrive il fuoco del campo e non si riesce piu a scrivere.
-        egui::Panel::bottom("chat-composer-panel")
-            .exact_size(64.0)
-            .frame(egui::Frame::NONE.fill(lumen::INK))
-            .show(ui, |ui| {
-                let r = ui.max_rect();
-                ui.painter().line_segment(
-                    [r.left_top(), r.right_top()],
-                    egui::Stroke::new(1.0_f32, lumen::BORDER),
-                );
-                ui.add_space(11.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.add_space(pad);
-                    if chat::composer(
-                        ui,
-                        &mut self.chat_draft,
-                        self.chat_busy,
-                        want_focus,
-                        width,
-                    ) {
-                        send = true;
-                    }
-                });
-            });
+        let send = chat::docked_composer(ui, &mut self.chat_draft, self.chat_busy, want_focus);
         if want_focus {
             self.focus = None;
         }
@@ -4617,6 +4580,8 @@ impl App {
                 egui::vec2(header_w, 0.0),
                 egui::Layout::top_down(egui::Align::LEFT),
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    ui.set_width(header_w);
                     ui.add_space(18.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
@@ -4672,6 +4637,8 @@ impl App {
                         egui::vec2(width, 0.0),
                         egui::Layout::top_down(egui::Align::LEFT),
                         |ui| {
+                            ui.set_width(width);
+                            ui.spacing_mut().item_spacing.x = 8.0;
                             // I widget nativi ereditano la pelle LUMEN: fondo,
                             // bordi, raggi, selezione ember.
                             {
@@ -5228,16 +5195,7 @@ impl App {
 
                 ui.add_space(8.0);
                 lumen::hairline(ui);
-                ui.horizontal(|ui| {
-                    ui.label(lumen::label("Lingua"));
-                    for (id, label) in [("it-IT", "Italiano"), ("en-US", "Inglese")] {
-                        ui.selectable_value(
-                            &mut self.settings.language,
-                            id.to_string(),
-                            egui::RichText::new(label).size(11.5),
-                        );
-                    }
-                });
+                language_picker(ui, &mut self.settings.language);
 
                 // ---- dati locali: voti IMDb ----
                 ui.add_space(8.0);
@@ -7006,6 +6964,32 @@ fn pager_button(
     }
 }
 
+fn detail_preview_rect(screen: egui::Rect) -> (egui::Rect, egui::Rect) {
+    let area = egui::Rect::from_min_max(
+        egui::pos2(screen.left() + lumen::RAIL_WIDTH, screen.top() + 48.0),
+        egui::pos2(screen.right(), screen.bottom() - 28.0),
+    );
+    let size = egui::vec2(
+        (area.width() - 48.0).clamp(0.0, 520.0),
+        (area.height() - 32.0).clamp(0.0, 760.0),
+    );
+    (area, egui::Rect::from_center_size(area.center(), size))
+}
+
+fn language_picker(ui: &mut egui::Ui, language: &mut String) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), 36.0),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.spacing_mut().item_spacing.x = 12.0;
+            ui.label(lumen::label("Lingua"));
+            for (id, label) in [("it-IT", "Italiano"), ("en-US", "Inglese")] {
+                ui.selectable_value(language, id.to_string(), egui::RichText::new(label).size(12.0));
+            }
+        },
+    );
+}
+
 /// Larghezza massima dei pannelli laterali. Si apre un pannello per volta,
 /// quindi a 800 px la griglia conserva almeno tre card anche con i filtri.
 fn side_panel_widths(screen_w: f32) -> (f32, f32) {
@@ -7211,6 +7195,36 @@ mod tests {
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn lingua_allineata_e_modale_contenuta_a_ogni_dimensione() {
+        use crate::ui::{layout_test_support::*, lumen};
+        for scale in [1.0, 1.5, 2.0] {
+            let ctx = egui::Context::default();
+            lumen::install(&ctx);
+            ctx.set_pixels_per_point(scale);
+            for width in [270.0, 500.0, 760.0] {
+                let mut language = "it-IT".to_string();
+                let mut render = || frame(&ctx, egui::vec2(width, 120.0), |ui| super::language_picker(ui, &mut language));
+                let _ = render();
+                let output = render();
+                let label = text_rect(&output, "LINGUA");
+                let italian = text_rect(&output, "Italiano");
+                let english = text_rect(&output, "Inglese");
+                assert!(italian.left() - label.right() >= 8.0);
+                assert!(english.left() - italian.right() >= 8.0);
+                assert!((label.center().y - italian.center().y).abs() <= 1.0);
+                assert!((english.center().y - italian.center().y).abs() <= 1.0);
+                assert!(english.right() < width);
+            }
+        }
+        for (width, height) in [(800.0, 600.0), (1000.0, 660.0), (1220.0, 660.0), (1600.0, 900.0)] {
+            let (area, modal) = super::detail_preview_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height)));
+            assert!(area.shrink(15.0).contains_rect(modal));
+            assert!(modal.width() <= 520.0 && modal.height() <= 760.0);
+            assert!(modal.height() > height * 0.7);
+        }
+    }
 
     #[test]
     fn un_ordinamento_non_predefinito_non_usa_le_tendenze() {

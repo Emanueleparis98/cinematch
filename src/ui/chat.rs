@@ -14,6 +14,9 @@ use super::{fx, lumen, theme};
 
 const CONTENT_MAX: f32 = 1100.0;
 const RESULT_BREAKPOINT: f32 = 940.0;
+const COMPOSER_CONTROL_HEIGHT: f32 = 40.0;
+pub(crate) const COMPOSER_HEIGHT: f32 = 54.0;
+pub(crate) const COMPOSER_DOCK_HEIGHT: f32 = COMPOSER_HEIGHT + 24.0;
 
 /// Limite del messaggio: un incolla lungo non deve diventare una chiamata AI
 /// da migliaia di token.
@@ -117,18 +120,16 @@ pub struct PersonalCard {
 
 // ------------------------------------------------------------- misure ------
 
-fn content_pad(width: f32) -> f32 {
-    if width < 900.0 {
-        20.0
-    } else {
-        34.0
-    }
+pub(crate) fn content_pad(width: f32) -> f32 {
+    ((width - content_width(width)) * 0.5).max(0.0)
 }
 
-fn content_width(avail: f32) -> f32 {
-    let pad = content_pad(avail);
-    (avail - pad * 2.0).clamp(280.0, CONTENT_MAX)
+
+pub(crate) fn content_width(avail: f32) -> f32 {
+    let gutter = if avail < 900.0 { 20.0 } else { 34.0 };
+    (avail - gutter * 2.0).clamp(0.0, CONTENT_MAX)
 }
+
 
 fn result_columns(width: f32) -> usize {
     if width >= RESULT_BREAKPOINT {
@@ -294,6 +295,7 @@ pub fn home(
     let mut actions = HomeActions::default();
     egui::ScrollArea::vertical()
         .id_salt("chat-home-scroll")
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let avail = ui.available_width();
@@ -307,11 +309,13 @@ pub fn home(
                     egui::vec2(width, 0.0),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    ui.set_width(width);
                     ui.add_space(20.0);
                     // A destra dell'hero sta ciò che riporta dentro chi torna:
                     // i film già iniziati. Il cartellone prende poi tutta la
                     // larghezza, dove i poster possono essere grandi e uguali.
-                    let left_w = (width * 0.59).floor();
+                    let left_w = ((width - 30.0) * 0.62).floor();
                     let rail_w = width - left_w - 30.0;
                     if compact || resume.is_empty() {
                         hero_left(
@@ -326,6 +330,7 @@ pub fn home(
                         );
                     } else {
                         ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = 30.0;
                             ui.allocate_ui_with_layout(
                                 egui::vec2(left_w, 0.0),
                                 egui::Layout::top_down(egui::Align::LEFT),
@@ -342,7 +347,6 @@ pub fn home(
                                     )
                                 },
                             );
-                            ui.add_space(30.0);
                             ui.allocate_ui_with_layout(
                                 egui::vec2(rail_w, 0.0),
                                 egui::Layout::top_down(egui::Align::LEFT),
@@ -353,7 +357,8 @@ pub fn home(
                                         "Riprendi",
                                         "DAL TUO SIMKL",
                                         resume,
-                                        132.0,
+                                        rail_w,
+                                        true,
                                         &mut actions,
                                     )
                                 },
@@ -434,7 +439,8 @@ pub fn home(
                             "Riprendi",
                             "DAL TUO SIMKL",
                             resume,
-                            132.0,
+                            ((width - 12.0) * 0.5).min(360.0),
+                            true,
                             &mut actions,
                         );
                     }
@@ -449,6 +455,7 @@ pub fn home(
                             "DA VEDERE SU SIMKL",
                             watchlist,
                             132.0,
+                            false,
                             &mut actions,
                         );
                     }
@@ -459,6 +466,7 @@ pub fn home(
     actions
 }
 
+#[allow(clippy::too_many_arguments)]
 fn personal_strip(
     ui: &mut egui::Ui,
     images: &ImageStore,
@@ -466,18 +474,20 @@ fn personal_strip(
     kicker: &str,
     cards: &[PersonalCard],
     card_w: f32,
+    compact: bool,
     actions: &mut HomeActions,
 ) {
     let mut scroll_delta = 0.0f32;
+    let can_scroll = cards.len() as f32 * (card_w + 10.0) - 10.0 > ui.available_width();
     ui.horizontal(|ui| {
         ui.label(lumen::label(title));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if lumen::icon_button(ui, lumen::Icon::ArrowRight, 24.0, "Scorri a destra")
+            if can_scroll && lumen::icon_button(ui, lumen::Icon::ArrowRight, 24.0, "Scorri a destra")
                 .clicked()
             {
                 scroll_delta = 1.0;
             }
-            if lumen::icon_button(ui, lumen::Icon::ArrowLeft, 24.0, "Scorri a sinistra")
+            if can_scroll && lumen::icon_button(ui, lumen::Icon::ArrowLeft, 24.0, "Scorri a sinistra")
                 .clicked()
             {
                 scroll_delta = -1.0;
@@ -492,13 +502,14 @@ fn personal_strip(
     let page = (card_w + gap) * per_page;
     egui::ScrollArea::horizontal()
         .id_salt(("personal-strip", title))
+        .min_scrolled_height(0.0)
         .scroll_source(egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Always, ..Default::default() })
         .auto_shrink([false, true])
         .show(ui, |ui| {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
                 for card in cards {
-                    personal_card(ui, images, card_w, card, actions);
+                    personal_card(ui, images, card_w, compact, card, actions);
                 }
             });
             if scroll_delta != 0.0 {
@@ -512,16 +523,44 @@ fn personal_card(
     ui: &mut egui::Ui,
     images: &ImageStore,
     width: f32,
+    compact: bool,
     card: &PersonalCard,
     actions: &mut HomeActions,
 ) {
-    let poster_h = (width * 1.5).round();
-    let (rect, resp) = ui.allocate_exact_size(
-        egui::vec2(width, poster_h + 46.0),
-        Sense::click(),
-    );
-    let poster = Rect::from_min_size(rect.min, egui::vec2(width, poster_h));
-    let painter = ui.painter();
+    let poster_w = if compact {
+        72.0_f32.min(width * 0.28)
+    } else {
+        width
+    };
+    let poster_h = (poster_w * 1.5).round();
+    let text_w = if compact {
+        width - poster_w - 12.0
+    } else {
+        width
+    };
+    let title = ui.painter().layout_job(wrapped_font(
+        &card.title,
+        FontId::proportional(13.0),
+        lumen::IVORY,
+        text_w,
+        3,
+    ));
+    let meta = ui.painter().layout_job(wrapped_font(
+        &card.meta,
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
+        text_w,
+        2,
+    ));
+    let caption_h = title.size().y + 6.0 + meta.size().y;
+    let height = if compact {
+        poster_h.max(caption_h)
+    } else {
+        poster_h + 8.0 + caption_h
+    };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
+    let poster = Rect::from_min_size(rect.min, egui::vec2(poster_w, poster_h));
+    let painter = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
     painter.rect_filled(poster, egui::CornerRadius::ZERO, lumen::SURFACE);
     if let Some(url) = &card.poster {
         if let Some(tex) = images.texture(ui.ctx(), url) {
@@ -536,7 +575,9 @@ fn personal_card(
             painter.rect_stroke(
                 poster,
                 egui::CornerRadius::ZERO,
-                Stroke::new(1.0_f32, lumen::BORDER), egui::StrokeKind::Inside);
+                Stroke::new(1.0_f32, lumen::BORDER),
+                egui::StrokeKind::Inside,
+            );
         } else {
             painter.text(
                 poster.center(),
@@ -559,7 +600,9 @@ fn personal_card(
         painter.rect_stroke(
             poster,
             egui::CornerRadius::ZERO,
-            Stroke::new(1.0_f32, lumen::BORDER_HI), egui::StrokeKind::Inside);
+            Stroke::new(1.0_f32, lumen::BORDER_HI),
+            egui::StrokeKind::Inside,
+        );
     }
     if let Some(progress) = card.progress {
         let track = Rect::from_min_size(
@@ -576,33 +619,25 @@ fn personal_card(
             lumen::EMBER,
         );
     }
-    painter.text(
-        egui::pos2(rect.left(), poster.bottom() + 8.0),
-        Align2::LEFT_TOP,
-        theme::truncate(&card.title, 22),
-        FontId::proportional(13.0),
-        lumen::IVORY,
-    );
-    painter.text(
-        egui::pos2(rect.left(), poster.bottom() + 27.0),
-        Align2::LEFT_TOP,
-        &card.meta,
-        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
-        lumen::FAINT,
-    );
+    let text_pos = if compact {
+        egui::pos2(poster.right() + 12.0, rect.top())
+    } else {
+        egui::pos2(rect.left(), poster.bottom() + 8.0)
+    };
+    let meta_pos = text_pos + egui::vec2(0.0, title.size().y + 6.0);
+    painter.galley(text_pos, title, lumen::IVORY);
+    painter.galley(meta_pos, meta, lumen::FAINT);
     if resp.clicked() {
         actions.open_detail = Some(card.movie_id);
     }
     resp.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::Role::Button,
-            ui.is_enabled(),
-            card.title.clone(),
-        )
+        egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), card.title.clone())
     });
     lumen::focus(ui, &resp, 0.0);
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    resp.on_hover_text(&card.title)
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
 }
+
 
 #[allow(clippy::too_many_arguments)]
 fn hero_left(
@@ -1061,7 +1096,7 @@ pub fn view(
     if stick {
         ui.ctx().request_repaint();
     }
-    let top_avail = ui.available_width();
+    let top_avail = ui.available_width() - ui.spacing().scroll.allocated_width();
     let top_pad = content_pad(top_avail);
     let top_width = content_width(top_avail);
     ui.add_space(12.0);
@@ -1098,6 +1133,7 @@ pub fn view(
     });
     ui.add_space(2.0);
     let output = egui::ScrollArea::vertical()
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false, false])
         .stick_to_bottom(stick)
         .show(ui, |ui| {
@@ -1112,7 +1148,8 @@ pub fn view(
                     egui::vec2(width, 0.0),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
-                        ui.set_max_width(width);
+                        ui.set_width(width);
+                        ui.spacing_mut().item_spacing.x = 8.0;
                         for (index, entry) in entries.iter().enumerate() {
                             user_message(ui, &entry.user);
                             ui.add_space(18.0);
@@ -1332,14 +1369,12 @@ fn answer_view(
         let gap = 10.0;
         let card_w = ((width - gap * (cols - 1) as f32) / cols as f32).floor();
         for row in a.cards[1..].chunks(cols) {
+            let layouts: Vec<_> = row.iter().map(|card| compact_card_layout(ui, tax, card, card_w)).collect();
+            let height = layouts.iter().map(|layout| layout.height).fold(116.0_f32, f32::max);
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
-                for card in row {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(card_w, 0.0),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| compact_card(ui, images, tax, card, actions, card_w),
-                    );
+                for (card, layout) in row.iter().zip(&layouts) {
+                    compact_card(ui, images, card, actions, card_w, height, layout);
                 }
             });
             ui.add_space(gap);
@@ -1388,6 +1423,7 @@ fn hero_card(
         ui.set_max_width(available);
         let poster_w = if available < 760.0 { 110.0 } else { 150.0 };
         ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 14.0;
             let resp = lumen::poster(
                 ui,
                 images,
@@ -1402,8 +1438,9 @@ fn hero_card(
             if card.movie.track.watched {
                 lumen::watched_overlay(ui, resp.rect, resp.hovered());
             }
-            ui.add_space(14.0);
-            ui.vertical(|ui| {
+            let text_w = (available - poster_w - 14.0).max(0.0);
+            ui.allocate_ui_with_layout(egui::vec2(text_w, 0.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                ui.set_width(text_w);
                 ui.label(
                     lumen::display(
                         if poster_w < 120.0 { 22.0 } else { 28.0 },
@@ -1419,16 +1456,10 @@ fn hero_card(
                     egui::Label::new(
                         lumen::mono(10.0, movie_meta(card, tax)).color(lumen::FAINT),
                     )
-                    .truncate(),
+                    .wrap(),
                 );
                 ui.add_space(8.0);
-                ui.add(egui::Label::new(wrapped(
-                    &card.perche,
-                    13.0,
-                    lumen::MUTED,
-                    ui.available_width(),
-                    3,
-                )));
+                ui.add(egui::Label::new(lumen::body(13.0, &card.perche).color(lumen::MUTED)).wrap());
                 if !card.consiglio.is_empty() {
                     ui.add_space(6.0);
                     consiglio(ui, &card.consiglio, 11.0);
@@ -1439,11 +1470,11 @@ fn hero_card(
                         egui::Label::new(
                             lumen::mono(10.0, av).color(lumen::CELADON),
                         )
-                        .truncate(),
+                        .wrap(),
                     );
                 }
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 14.0;
                     if link(ui, "Apri scheda", lumen::EMBER).clicked() {
                         actions.open_detail = Some(card.movie.id);
@@ -1460,25 +1491,90 @@ fn hero_card(
     });
 }
 
+struct CompactCardLayout {
+    blocks: Vec<(std::sync::Arc<egui::Galley>, Color32, bool)>,
+    height: f32,
+}
+
+fn compact_card_layout(
+    ui: &egui::Ui,
+    tax: &Taxonomy,
+    card: &Card,
+    width: f32,
+) -> CompactCardLayout {
+    let text_w = (width - 94.0).max(1.0);
+    let mut blocks = Vec::new();
+    let mut add = |text: &str, font, color, advice| {
+        let galley = ui.painter().layout_job(wrapped_font(
+            text,
+            font,
+            color,
+            if advice { text_w - 9.0 } else { text_w },
+            usize::MAX,
+        ));
+        blocks.push((galley, color, advice));
+    };
+    add(
+        &card.movie.title,
+        FontId::new(15.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
+        lumen::IVORY,
+        false,
+    );
+    add(
+        &movie_meta(card, tax),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        lumen::FAINT,
+        false,
+    );
+    add(
+        &card.perche,
+        FontId::proportional(12.5),
+        lumen::MUTED,
+        false,
+    );
+    if !card.consiglio.is_empty() {
+        add(
+            &format!("Consiglio · {}", card.consiglio),
+            FontId::proportional(11.5),
+            lumen::MUTED,
+            true,
+        );
+    }
+    if let Some(av) = availability(card) {
+        add(
+            &av,
+            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            lumen::CELADON,
+            false,
+        );
+    }
+    let text_h: f32 = blocks
+        .iter()
+        .map(|(galley, _, _)| galley.size().y + 6.0)
+        .sum();
+    CompactCardLayout {
+        blocks,
+        height: (text_h + 50.0).max(116.0),
+    }
+}
+
+
 fn compact_card(
     ui: &mut egui::Ui,
     images: &ImageStore,
-    tax: &Taxonomy,
     card: &Card,
     actions: &mut Actions,
     width: f32,
+    height: f32,
+    layout: &CompactCardLayout,
 ) {
-    const CARD_H: f32 = 172.0;
-    let (rect, resp) =
-        ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::click());
-    let id = resp.id;
-    resp.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::Role::Button, true, &card.movie.title)
-    });
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &card.movie.title));
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
-    ui.painter().rect_filled(
+    let p = ui.painter().with_clip_rect(ui.clip_rect().intersect(rect));
+    p.rect_filled(
         rect,
         lumen::radius(lumen::RADIUS),
         if hover > 0.01 {
@@ -1487,128 +1583,83 @@ fn compact_card(
             lumen::SURFACE
         },
     );
-    ui.painter().rect_stroke(
+    p.rect_stroke(
         rect,
         lumen::radius(lumen::RADIUS),
         Stroke::new(
-            1.0_f32,
+            1.0,
             if hover > 0.01 {
                 lumen::BORDER_HI
             } else {
                 lumen::BORDER
             },
-        ), egui::StrokeKind::Inside);
-
-    let poster_rect = Rect::from_min_size(
-        rect.min + egui::vec2(10.0, 10.0),
-        egui::vec2(64.0, 96.0),
+        ),
+        egui::StrokeKind::Inside,
     );
-    ui.painter()
-        .rect_filled(poster_rect, egui::CornerRadius::ZERO, lumen::RAISED);
-    let mut loaded = false;
-    if let Some(path) = &card.movie.poster_path {
-        let uri = poster_url(path, "w342");
-        if let Some(tex) = images.texture(ui.ctx(), &uri) {
-            ui.painter().image(
-                tex.id(),
-                poster_rect,
-                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
-            loaded = true;
-        }
-    }
-    if card.movie.track.watched {
-        lumen::watched_overlay(ui, poster_rect, resp.hovered());
-    }
-    if !loaded {
-        ui.painter().text(
-            poster_rect.center(),
-            Align2::CENTER_CENTER,
-            theme::truncate(&card.movie.title, 18),
+    let poster = Rect::from_min_size(rect.min + egui::vec2(10.0, 10.0), egui::vec2(64.0, 96.0));
+    p.rect_filled(poster, egui::CornerRadius::ZERO, lumen::RAISED);
+    let texture = card
+        .movie
+        .poster_path
+        .as_ref()
+        .and_then(|path| images.texture(ui.ctx(), &poster_url(path, "w342")));
+    if let Some(texture) = texture {
+        p.image(
+            texture.id(),
+            poster,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    } else {
+        let title = p.layout_job(wrapped_font(
+            &card.movie.title,
             FontId::new(11.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
             lumen::IVORY,
-        );
+            54.0,
+            5,
+        ));
+        p.galley(poster.center() - title.size() * 0.5, title, lumen::IVORY);
     }
-    ui.painter().rect_stroke(
-        poster_rect,
+    if card.movie.track.watched {
+        lumen::watched_overlay(ui, poster, resp.hovered());
+    }
+    p.rect_stroke(
+        poster,
         egui::CornerRadius::ZERO,
-        Stroke::new(
-            1.0_f32,
-            if resp.hovered() {
-                lumen::BORDER_HI
+        Stroke::new(1.0, lumen::BORDER),
+        egui::StrokeKind::Inside,
+    );
+    let text_x = poster.right() + 10.0;
+    let mut y = rect.top() + 10.0;
+    for (galley, color, advice) in &layout.blocks {
+        let x = if *advice {
+            p.rect_filled(
+                Rect::from_min_size(egui::pos2(text_x, y), egui::vec2(2.0, galley.size().y)),
+                egui::CornerRadius::ZERO,
+                lumen::EMBER,
+            );
+            text_x + 9.0
+        } else {
+            text_x
+        };
+        p.galley(
+            egui::pos2(x, y),
+            galley.clone(),
+            if card.movie.track.watched && *color == lumen::IVORY {
+                lumen::MUTED
             } else {
-                lumen::BORDER
+                *color
             },
-        ), egui::StrokeKind::Inside);
+        );
+        y += galley.size().y + 6.0;
+    }
     if resp.clicked() {
         actions.open_detail = Some(card.movie.id);
     }
-
-    let text_x = poster_rect.right() + 10.0;
-    let text_w = (rect.right() - 10.0 - text_x).max(80.0);
-    let p = ui.painter();
-    let title = p.layout_job(wrapped_font(
-        &card.movie.title,
-        FontId::new(15.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
-        lumen::IVORY,
-        text_w,
-        1,
-    ));
-    p.galley(
-        rect.min + egui::vec2(84.0, 10.0),
-        title,
-        if card.movie.track.watched {
-            lumen::MUTED
-        } else {
-            lumen::IVORY
-        },
-    );
-    let meta = p.layout_job(wrapped_font(
-        &movie_meta(card, tax),
-        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
-        lumen::FAINT,
-        text_w,
-        1,
-    ));
-    p.galley(rect.min + egui::vec2(84.0, 30.0), meta, lumen::FAINT);
-    let desc = p.layout_job(wrapped_font(
-        &card.perche,
-        FontId::proportional(11.0),
-        lumen::MUTED,
-        text_w,
-        2,
-    ));
-    p.galley(rect.min + egui::vec2(84.0, 46.0), desc, lumen::MUTED);
-    if !card.consiglio.is_empty() {
-        p.rect_filled(
-            Rect::from_min_size(rect.min + egui::vec2(84.0, 78.0), egui::vec2(2.0, 26.0)),
-            egui::CornerRadius::ZERO,
-            lumen::EMBER,
-        );
-        let cons = p.layout_job(wrapped_font(
-            &format!("Consiglio · {}", card.consiglio),
-            FontId::proportional(10.0),
-            lumen::MUTED,
-            text_w - 10.0,
-            2,
-        ));
-        p.galley(rect.min + egui::vec2(94.0, 78.0), cons, lumen::MUTED);
-    }
-    if let Some(av) = availability(card) {
-        let av = p.layout_job(wrapped_font(
-            &av,
-            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
-            lumen::CELADON,
-            text_w,
-            1,
-        ));
-        p.galley(rect.min + egui::vec2(84.0, 110.0), av, lumen::CELADON);
-    }
     if card_link(
         ui,
-        id.with("similar"),
-        egui::pos2(text_x, rect.top() + 134.0),
+        resp.id.with("similar"),
+        egui::pos2(text_x, rect.bottom() - 30.0),
         "Film simili",
         lumen::MUTED,
     ) {
@@ -1616,6 +1667,7 @@ fn compact_card(
     }
     lumen::focus(ui, &resp, lumen::RADIUS);
 }
+
 
 fn card_link(
     ui: &mut egui::Ui,
@@ -1633,6 +1685,7 @@ fn card_link(
     }) + 2.0;
     let rect = Rect::from_min_size(pos, egui::vec2(width, 20.0));
     let resp = ui.interact(rect, id, Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), text));
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -1652,22 +1705,22 @@ fn card_link(
 }
 
 fn consiglio(ui: &mut egui::Ui, text: &str, size: f32) {
-    ui.horizontal_top(|ui| {
-        let (bar, _) = ui.allocate_exact_size(egui::vec2(2.0, 26.0), Sense::hover());
-        ui.painter().rect_filled(bar, egui::CornerRadius::ZERO, lumen::EMBER);
-        ui.add_space(7.0);
+    let row = ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 9.0;
+        ui.add_space(2.0);
         ui.add(
-            egui::Label::new(wrapped(
-                &format!("Consiglio · {text}"),
-                size,
-                lumen::MUTED,
-                ui.available_width(),
-                2,
-            ))
-            .wrap(),
+            egui::Label::new(lumen::body(size, format!("Consiglio · {text}")).color(lumen::MUTED))
+                .wrap(),
         );
     });
+    let rect = row.response.rect;
+    ui.painter().rect_filled(
+        Rect::from_min_size(rect.min, egui::vec2(2.0, rect.height())),
+        egui::CornerRadius::ZERO,
+        lumen::EMBER,
+    );
 }
+
 
 fn busy_view(
     ui: &mut egui::Ui,
@@ -1719,6 +1772,38 @@ fn busy_view(
 
 // ------------------------------------------------------------ composer -----
 
+pub(crate) fn docked_composer(
+    ui: &mut egui::Ui,
+    draft: &mut String,
+    busy: bool,
+    focus: bool,
+) -> bool {
+    let mut send = false;
+    egui::Panel::bottom("chat-composer-panel")
+        .exact_size(COMPOSER_DOCK_HEIGHT)
+        .frame(egui::Frame::NONE.fill(lumen::INK))
+        .show(ui, |ui| {
+            let area = ui.max_rect();
+            ui.painter().line_segment(
+                [area.left_top(), area.right_top()],
+                Stroke::new(1.0, lumen::BORDER),
+            );
+            let avail = area.width() - ui.spacing().scroll.allocated_width();
+            let rect = Rect::from_min_size(
+                egui::pos2(
+                    area.left() + content_pad(avail),
+                    area.center().y - COMPOSER_HEIGHT * 0.5,
+                ),
+                egui::vec2(content_width(avail), COMPOSER_HEIGHT),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                send = composer(ui, draft, busy, focus, rect.width());
+            });
+        });
+    send
+}
+
+
 pub fn composer(
     ui: &mut egui::Ui,
     draft: &mut String,
@@ -1743,55 +1828,58 @@ fn composer_inner(
     let focused = focused_at_start;
     let button_w = if wide_send { 100.0 } else { 40.0 };
     let gap = 8.0;
-    let inner_w = (width - 24.0).max(120.0);
+    let inner_w = (width - 26.0).max(120.0);
     let text_w = (inner_w - button_w - gap).max(70.0);
 
     egui::Frame::NONE
         .fill(lumen::DEEP)
         .stroke(Stroke::new(
             1.0_f32,
-            if focused {
-                lumen::EMBER
-            } else {
-                lumen::BORDER
-            },
+            if focused { lumen::EMBER } else { lumen::BORDER },
         ))
         .corner_radius(lumen::radius(lumen::RADIUS_SM))
         .inner_margin(egui::Margin::symmetric(12, 6))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
-                let resp = ui.add_sized(
-                    [text_w, 40.0],
-                    egui::TextEdit::multiline(draft)
-                        .id(edit_id)
-                        .frame(egui::Frame::NONE)
-                        .char_limit(MAX_PROMPT_CHARS)
-                        .desired_rows(1)
-                        .hint_text(COMPOSER_HINT)
-                        .font(egui::TextStyle::Body)
-                        .return_key(egui::KeyboardShortcut::new(
-                            egui::Modifiers::SHIFT,
-                            egui::Key::Enter,
-                        )),
-                );
+                let resp = ui
+                    .allocate_ui_with_layout(
+                        egui::vec2(text_w, COMPOSER_CONTROL_HEIGHT),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("chat-input-scroll")
+                                .min_scrolled_height(COMPOSER_CONTROL_HEIGHT)
+                                .max_height(COMPOSER_CONTROL_HEIGHT)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.add_sized(
+                                        [ui.available_width(), COMPOSER_CONTROL_HEIGHT],
+                                        egui::TextEdit::multiline(draft)
+                                            .id(edit_id)
+                                            .frame(egui::Frame::NONE)
+                                            .char_limit(MAX_PROMPT_CHARS)
+                                            .desired_rows(1)
+                                            .hint_text(COMPOSER_HINT)
+                                            .font(egui::TextStyle::Body)
+                                            .return_key(egui::KeyboardShortcut::new(
+                                                egui::Modifiers::SHIFT,
+                                                egui::Key::Enter,
+                                            )),
+                                    )
+                                })
+                                .inner
+                        },
+                    )
+                    .inner;
                 if focus {
                     resp.request_focus();
                 }
-                let enter = ui.input(|i| {
-                    i.key_pressed(egui::Key::Enter) && !i.modifiers.shift
-                });
+                let enter = ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
                 if enter && (focused_at_start || resp.has_focus()) {
                     send = true;
                 }
-                if send_button(
-                    ui,
-                    !busy && !draft.trim().is_empty(),
-                    wide_send,
-                    busy,
-                )
-                .clicked()
-                {
+                if send_button(ui, !busy && !draft.trim().is_empty(), wide_send, busy).clicked() {
                     send = true;
                 }
             });
@@ -1801,6 +1889,7 @@ fn composer_inner(
     }
     send
 }
+
 
 fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool, busy: bool) -> egui::Response {
     let (w, h) = if wide { (100.0, 40.0) } else { (40.0, 40.0) };
@@ -1884,6 +1973,139 @@ mod layout_tests {
     use super::poster_width;
     use super::result_columns;
     use super::friendly_error;
+
+    #[test]
+    fn risultati_e_composer_condividono_i_margini_a_ogni_taglia() {
+        use crate::domain::{model::Movie, taxonomy::Taxonomy};
+        use crate::ui::{images::ImageStore, layout_test_support::*, lumen};
+        let images = ImageStore::new();
+        let tax = Taxonomy::load();
+        let cards = (0..5).map(|id| super::Card {
+            movie: Movie { id, title: format!("Il gabinetto del Dr. Caligari e un titolo lungo da leggere fino in fondo {id}"), year: Some(1920), votes: 1000, ..Default::default() },
+            perche: "Scenografie dipinte e ombre deformate: una spiegazione che deve restare leggibile nella propria colonna. ".repeat(2),
+            consiglio: "Una copia restaurata e un accompagnamento musicale coerente con il film.".into(),
+            meta: Some(super::CardMeta { director: Some("Robert Wiene e un secondo nome per verificare i metadati".into()), runtime: Some(78), flatrate: vec!["Amazon Prime Video".into(), "MUBI Amazon Channel".into()], ..Default::default() }),
+        }).collect();
+        let entries = [super::Entry { user: "Grandi opere di Lang e Murnau".into(), answer: super::Answer { cards, ..Default::default() } }];
+        for scale in [1.0, 1.5, 2.0] {
+            let ctx = egui::Context::default();
+            lumen::install(&ctx);
+            ctx.set_pixels_per_point(scale);
+            for (width, height) in [(800.0, 600.0), (1064.0, 660.0), (1104.0, 660.0), (1220.0, 660.0), (1600.0, 900.0)] {
+                let render = || frame(&ctx, egui::vec2(width, height), |ui| {
+                    egui::Panel::top("test-header").exact_size(48.0).show(ui, |_| {});
+                    egui::Panel::bottom("test-status").exact_size(28.0).show(ui, |_| {});
+                    egui::Panel::left("test-rail").exact_size(lumen::RAIL_WIDTH).show(ui, |_| {});
+                    super::docked_composer(ui, &mut String::new(), false, false);
+                    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
+                        super::view(ui, &images, &tax, &entries, false, 10.0, &mut false, 20.0);
+                    });
+                });
+                let _ = render();
+                let output = render();
+                let rects = output.shapes.iter().filter_map(|shape| {
+                    if let egui::epaint::Shape::Rect(rect) = &shape.shape { Some(rect) } else { None }
+                }).collect::<Vec<_>>();
+                let composer = rects.iter().find(|rect| rect.fill == lumen::DEEP && rect.rect.width() > 300.0 && rect.rect.height() > 45.0).unwrap().rect;
+                let hero = rects.iter().filter(|rect| rect.fill == lumen::SURFACE && rect.rect.width() > 300.0).max_by(|a, b| a.rect.width().total_cmp(&b.rect.width())).expect("La card principale deve essere visibile").rect;
+                assert!((hero.left() - composer.left()).abs() <= 1.0, "margine sinistro {width}: {hero:?} / {composer:?}");
+                assert!((hero.right() - composer.right()).abs() <= 1.0, "margine destro {width}: {hero:?} / {composer:?}");
+                for shape in &output.shapes {
+                    if let egui::epaint::Shape::Text(text) = &shape.shape {
+                        let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                        assert!(bounds.right() <= width + 0.5, "testo oltre la finestra: {} {bounds:?}", text.galley.text());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn il_composer_resta_intero_con_ridimensionamento_dpi_e_testo_multilinea() {
+        use crate::ui::{layout_test_support::*, lumen};
+        for scale in [1.0, 1.5, 2.0] {
+            let ctx = egui::Context::default();
+            lumen::install(&ctx);
+            ctx.set_pixels_per_point(scale);
+            for (width, height) in [(800.0, 600.0), (1064.0, 660.0), (1104.0, 660.0), (1220.0, 660.0), (1600.0, 900.0)] {
+                for mut draft in [String::new(), "Una richiesta su più righe\n".repeat(20)] {
+                    let mut render = || frame(&ctx, egui::vec2(width, height), |ui| {
+                        egui::Panel::top("test-header").exact_size(48.0).show(ui, |_| {});
+                        egui::Panel::bottom("test-status").exact_size(28.0).show(ui, |_| {});
+                        egui::Panel::left("test-rail").exact_size(lumen::RAIL_WIDTH).show(ui, |_| {});
+                        super::docked_composer(ui, &mut draft, false, true);
+                    });
+                    let _ = render();
+                    let output = render();
+                    let border = output.shapes.iter().find_map(|shape| {
+                        if let egui::epaint::Shape::Rect(rect) = &shape.shape {
+                            (rect.fill == lumen::DEEP && rect.rect.width() > 300.0 && rect.rect.height() > 45.0)
+                                .then_some((rect.rect, shape.clip_rect))
+                        } else { None }
+                    }).expect("Il campo deve avere un bordo visibile");
+                    assert!(border.1.expand(0.5).contains_rect(border.0), "composer tagliato a {width}×{height}, scala {scale}: {border:?}");
+                    assert!(border.0.bottom() <= height - 28.0 - 10.0);
+                    assert!(border.0.height() <= super::COMPOSER_HEIGHT + 0.5);
+                    assert!(border.0.contains_rect(text_rect(&output, "CERCA")));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn titoli_personali_e_card_lunghe_restano_nelle_colonne() {
+        use crate::domain::model::Movie;
+        use crate::domain::taxonomy::Taxonomy;
+        use crate::ui::{images::ImageStore, layout_test_support::*, lumen};
+        let images = ImageStore::new();
+        let tax = Taxonomy::load();
+        let personal = super::PersonalCard {
+            title: "The Heist of the Century".into(), meta: "59% · 2020".into(),
+            movie_id: 1, progress: Some(0.59), poster: None,
+        };
+        let card = super::Card {
+            movie: Movie { title: "Un titolo cinematografico molto lungo che deve andare a capo nella propria colonna".into(), year: Some(1927), votes: 4500, ..Default::default() },
+            perche: "Una spiegazione articolata della scelta, con dettagli che restano leggibili anche quando la finestra si restringe. ".repeat(3),
+            consiglio: "Una copia restaurata permette di apprezzare la fotografia e leggere correttamente le didascalie. ".repeat(2),
+            meta: Some(super::CardMeta { director: Some("Un regista con un nome particolarmente lungo".into()), runtime: Some(151), flatrate: vec!["Amazon Prime Video".into(), "MUBI Amazon Channel".into()], ..Default::default() }),
+        };
+        for scale in [1.0, 1.5, 2.0] {
+            for width in [320.0, 460.0, 545.0, 836.0] {
+                let ctx = egui::Context::default();
+                lumen::install(&ctx);
+                ctx.set_pixels_per_point(scale);
+                let mut layout = None;
+                let mut render = || frame(&ctx, egui::vec2(width, 3000.0), |ui| {
+                    super::personal_card(ui, &images, 132.0, false, &personal, &mut super::HomeActions::default());
+                    let measured = super::compact_card_layout(ui, &tax, &card, width);
+                    super::compact_card(ui, &images, &card, &mut super::Actions::default(), width, measured.height, &measured);
+                    layout = Some(measured);
+                });
+                let _ = render();
+                let output = render();
+                let title = text_rect(&output, &personal.title);
+                let meta = text_rect(&output, &personal.meta);
+                assert!(title.width() <= 132.5 && title.bottom() < meta.top());
+                let measured = layout.unwrap();
+                for (galley, _, _) in &measured.blocks {
+                    assert!(!galley.elided, "Le informazioni della card non devono essere troncate");
+                }
+                let title = text_rect(&output, &card.movie.title);
+                let description = text_rect(&output, &card.perche);
+                let advice = text_rect(&output, &format!("Consiglio · {}", card.consiglio));
+                let action = text_rect(&output, "FILM SIMILI");
+                assert!(title.bottom() < description.top());
+                assert!(description.bottom() < advice.top());
+                assert!(advice.bottom() < action.top());
+                for shape in &output.shapes {
+                    if let egui::epaint::Shape::Text(text) = &shape.shape {
+                        let bounds = text.galley.rect.translate(text.pos.to_vec2());
+                        assert!(bounds.right() <= width + 0.5, "testo fuori colonna: {} {bounds:?}", text.galley.text());
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn le_piste_sono_visibili_e_preparano_senza_inviare() {

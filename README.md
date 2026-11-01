@@ -116,6 +116,12 @@ modificarlo prima di premere **Cerca**, senza chiamate AI o TMDB anticipate.
 Invio invia, Shift+Invio va a capo. Nella conversazione il campo resta in basso;
 `/` riporta il fuoco alla richiesta.
 
+Il layout si adatta da 800×600 alla finestra massimizzata: contenuto e campo
+condividono i margini, le card passano da due colonne a una e la loro altezza
+segue i testi. Il campo multilinea scorre al proprio interno senza coprire
+la barra di stato. «Riprendi» usa locandine compatte e titoli su piu righe;
+la scheda film sfrutta l'altezza disponibile mantenendo la chiusura fissa.
+
 La barra laterale mostra **Consigli · Sala 01** e **Catalogo · Sala 02**.
 Nella scheda film sinossi, regia e disponibilita precedono tracciamento e
 contenuti secondari; il poster resta come riferimento, senza un secondo
