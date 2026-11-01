@@ -97,11 +97,12 @@ fn cut(text: &str, max: usize) -> String {
     out
 }
 
-pub fn intro_text(n: usize, understood: &str) -> String {
+/// L'intro non ripete i criteri: la UI li mostra come titolo della risposta.
+pub fn intro_text(n: usize) -> String {
     if n <= 1 {
-        format!("Ecco il titolo che corrisponde di piu: {understood}.")
+        "Ecco il titolo che corrisponde di più.".to_string()
     } else {
-        format!("Ecco {n} titoli in linea con la richiesta: {understood}.")
+        format!("Ecco {n} titoli in linea con la richiesta.")
     }
 }
 
@@ -130,7 +131,7 @@ pub fn deterministic(req: &Request) -> Curation {
         })
         .collect();
     // Il limite lo mostra la UI in una riga a parte: qui non si ripete.
-    let intro = intro_text(n, &understood);
+    let intro = intro_text(n);
     Curation { intro, picks }
 }
 

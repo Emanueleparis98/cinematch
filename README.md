@@ -4,9 +4,9 @@ App desktop Windows in Rust per esplorare film su TMDB con una **barra di ricerc
 combinata a vincoli**: non tutte le combinazioni di tassonomia sono ammesse, e il
 programma spiega sempre il perche.
 
-L'interfaccia ha due viste, commutabili dalla rail di sinistra: la **Chat**
-per chiedere in liberta e ricevere fino a cinque film pertinenti, la **Griglia**
-per esplorare con il pannello dei filtri.
+L'interfaccia ha due sale, commutabili dalla rail di sinistra: la **Sala 01**
+(chat) per chiedere in liberta e ricevere fino a cinque film pertinenti, la
+**Sala 02** (catalogo) per esplorare con il pannello dei filtri.
 
 Esempio: `anni '80` + `Neorealismo` + `Horror` e impossibile — il Neorealismo copre
 il 1943–1954 in Italia, quindi non puo coesistere con gli anni '80. Se scegli prima
@@ -94,12 +94,12 @@ Il token di accesso viene salvato nel **Windows Credential Manager**, non in
 pubblico (identifica solo l'app), non e un segreto.
 
 Se lasci un film a metà in un'altra app collegata a SIMKL, la home mostra
-**Riprendi** con la percentuale; sotto le piste compare **Dalla tua lista** con
-i film da vedere.
+**Riprendi** prima delle piste, con la percentuale; sotto le piste compare
+**Dalla tua lista** con i film da vedere.
 
-## Chat dei consigli (la casa)
+## Sala 01 · Chat dei consigli (la casa)
 
-CineMatch si apre sulla **Chat**: scrivi in liberta, anche a modo tuo, e la
+CineMatch si apre sulla **Sala 01**: scrivi in liberta, anche a modo tuo, e la
 risposta e una conversazione con **fino a cinque film reali** presi da TMDB.
 Ogni film ha una card con poster, voto TMDB e IMDb, regia, durata, dove si vede,
 il **perche** quel film risponde alla richiesta e un **consiglio** pratico (come
@@ -126,10 +126,10 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   La rotazione si ferma mentre il mouse e sopra una card, cosi il clic non
   scappa. «Sorprendimi» pesca una proposta locale non visibile.
 
-- **Due viste, due stati**: la rail a sinistra cambia vista (Chat, Griglia, Nuova,
-  Setup); la striscia in alto porta marchio, contesto e controlli finestra. La
-  chat conserva la bozza, la griglia conserva ricerca, filtri e larghezza del
-  pannello; i filtri compaiono solo in Griglia. Filtri e scheda film non stanno
+- **Due sale, due stati**: la rail a sinistra cambia sala (Sala 01, Sala 02,
+  Impostazioni); la striscia in alto porta marchio, contesto e controlli finestra.
+  La chat conserva la bozza, il catalogo conserva ricerca, filtri e larghezza del
+  pannello; i filtri compaiono solo in Sala 02. Filtri e scheda film non stanno
   mai aperti insieme.
 - **Il contesto segue i seguiti**: l'app conserva il contesto per i seguiti
   espliciti («no, senza commedia», «e uno piu recente?», «e se fossero italiani?»).
@@ -177,7 +177,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
 - **Tipografia inclusa**: Fraunces per i titoli, Instrument Sans per il testo e
   JetBrains Mono per etichette, metadati e comandi. I font (licenza OFL) stanno in
   `assets/fonts`; i ripieghi CJK arrivano solo quando servono davvero.
-- **Shell**: rail da 72 px (Chat, Griglia, Nuova, Setup), striscia superiore da
+- **Shell**: rail da 72 px (Sala 01, Sala 02, Impostazioni), striscia superiore da
   48 px con marchio, contesto e controlli finestra, barra di stato da 28 px con
   versione, sorgente e provider. La finestra si trascina dalla striscia e si
   ridimensiona dai bordi.
@@ -185,11 +185,11 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   rete riuscita, «LAVORO» e ambra durante le operazioni, «OFFLINE» e rosso quando
   l'ultima richiesta fallisce. Le etichette TMDB/OpenRouter indicano la
   configurazione, non la connessione.
-- **Chat**: casa con hero, collage di poster reali, composer e quattro spunti
+- **Sala 01**: casa con hero, collage di poster reali, composer e quattro spunti
   locali in griglia 2x2; risultati con un film in evidenza e le altre card sotto.
   Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
   riprova e «Vedi tutti in griglia» restano dove erano.
-- **Griglia**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
+- **Sala 02**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
   card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza;
   a 1220 px quattro con i filtri e cinque senza. Il pager sta in basso, fuori
   dallo scroll.
@@ -435,10 +435,10 @@ Per una build locale, dopo aver installato Inno Setup 6:
 
 ```powershell
 cargo build --release
-ISCC.exe /DMyAppVersion=0.10.18 installer\cinematch.iss
+ISCC.exe /DMyAppVersion=0.10.19 installer\cinematch.iss
 ```
 
-Il risultato e `dist\CineMatch-Setup-0.10.18.exe`. Il manifesto
+Il risultato e `dist\CineMatch-Setup-0.10.19.exe`. Il manifesto
 `dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
 URL, dimensione e SHA-256 del setup.
 

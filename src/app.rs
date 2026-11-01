@@ -2532,12 +2532,11 @@ impl App {
     }
 
     fn apply_chat_actions(&mut self, a: chat::Actions) {
-        // «Film simili» ha la precedenza sul click della card che lo contiene.
+        // «Film simili» resta nella conversazione: è un seguito, non una
+        // nuova ricerca che sostituisce quella della griglia.
         if let Some(title) = a.similar_to {
-            self.grid_query = format!("film simili a «{title}»");
-            self.switch_mode(ViewMode::Griglia);
-            self.page = 1;
-            self.launch_search(true);
+            self.chat_draft = format!("Film simili a «{title}»");
+            self.send_chat();
         } else if let Some(id) = a.open_detail {
             // In chat la scheda è un'anteprima centrale: la conversazione
             // resta al suo posto e non si salta alla griglia.
@@ -3578,19 +3577,15 @@ impl App {
                     ui.label(lumen::display(22.0, "CINE"));
                     ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
                     ui.add_space(18.0);
-                    let (kicker, title) = if self.first_run {
-                        ("", "PRIMO AVVIO")
+                    let title = if self.first_run {
+                        "PRIMO AVVIO"
                     } else if self.show_settings {
-                        ("", "IMPOSTAZIONI")
+                        "IMPOSTAZIONI"
                     } else if self.mode == ViewMode::Griglia {
-                        ("SALA 02", "CATALOGO")
+                        "SALA 02"
                     } else {
-                        ("SALA 01", "CHAT")
+                        "SALA 01"
                     };
-                    if !kicker.is_empty() {
-                        ui.label(lumen::mono(9.0, kicker).color(lumen::FAINT));
-                        ui.add_space(8.0);
-                    }
                     ui.label(lumen::mono(9.0, title).color(lumen::IVORY));
 
                     ui.with_layout(
@@ -3654,9 +3649,10 @@ impl App {
                 if lumen::nav_item(
                     ui,
                     lumen::Icon::Home,
-                    "Chat",
+                    "Sala 01",
                     self.mode == ViewMode::Chat && !self.show_settings,
                 )
+                .on_hover_text("Sala 01 · chiedi in libertà e ricevi film spiegati")
                 .clicked()
                 {
                     switch = Some(ViewMode::Chat);
@@ -3664,9 +3660,10 @@ impl App {
                 if lumen::nav_item(
                     ui,
                     lumen::Icon::Grid,
-                    "Catalogo",
+                    "Sala 02",
                     self.mode == ViewMode::Griglia && !self.show_settings,
                 )
+                .on_hover_text("Sala 02 · il catalogo con i filtri")
                 .clicked()
                 {
                     switch = Some(ViewMode::Griglia);
@@ -3741,7 +3738,6 @@ impl App {
                 );
                 ui.horizontal(|ui| {
                     ui.add_space(20.0);
-                    ui.label(lumen::mono(11.0, "CATALOGO").color(lumen::IVORY));
                     if !compact {
                         ui.add_space(8.0);
                         let count = if self.loading {
@@ -5621,8 +5617,9 @@ impl App {
 }
 
 impl App {
-    /// Scorciatoie globali: «/» porta il fuoco nel campo della vista attiva,
-    /// Ctrl+1/2 cambiano vista, Ctrl+B apre i filtri solo nella griglia.
+    /// Scorciatoie globali: «/» e Ctrl+K portano il fuoco nel campo della vista
+    /// attiva, Ctrl+1/2 cambiano sala, Ctrl+N apre una chat nuova, Ctrl+B apre i
+    /// filtri solo nella griglia.
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let typing = ctx.memory(|m| m.focused().is_some());
         // «/» e' un tasto fisico su alcune tastiere e Shift+7 su quella
@@ -5654,6 +5651,28 @@ impl App {
         }
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Num2)) {
             self.switch_mode(ViewMode::Griglia);
+        }
+        // Ctrl+K riporta il fuoco al campo della vista attiva anche quando il
+        // mouse è altrove; Ctrl+N apre una chat nuova con la stessa conferma
+        // del pulsante in alto.
+        if !typing && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::K)) {
+            self.focus = Some(self.mode);
+        }
+        if !self.show_settings
+            && !self.first_run
+            && !self.guide_open
+            && !self.new_chat_confirm
+            && self.detail.is_none()
+            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::N))
+        {
+            if self.mode != ViewMode::Chat {
+                self.switch_mode(ViewMode::Chat);
+            }
+            if self.chat.is_empty() && !self.chat_busy {
+                self.new_chat();
+            } else {
+                self.new_chat_confirm = true;
+            }
         }
         // Ctrl+B resta attivo anche con un widget a fuoco: e' il toggle
         // della sidebar, non un comando di testo. In chat non esiste.
@@ -6259,6 +6278,36 @@ fn resolve_keywords(
     }
 }
 
+/// Con zero risultati, prova a togliere un vincolo per volta e indica quello
+/// che ne sblocca di più. Il costo è limitato ai casi vuoti e a cinque query.
+fn empty_hint(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    eff: &Facets,
+    kw: &[(String, u64)],
+) -> Option<String> {
+    let candidates = unlock_candidates(tax, eff);
+    if candidates.is_empty() || candidates.len() > 5 {
+        return None;
+    }
+    let mut best: Option<(String, u32)> = None;
+    for (label, relaxed) in candidates {
+        let Ok(q) = constraints::to_discover(tax, &relaxed, kw, 1) else {
+            continue;
+        };
+        let Ok(page) = tmdb.discover(&q) else { continue };
+        if page.total_results > best.as_ref().map(|(_, n)| *n).unwrap_or(0) {
+            best = Some((label, page.total_results));
+        }
+    }
+    best.map(|(label, total)| {
+        format!(
+            "Il primo vincolo da provare a togliere è «{label}»: senza, TMDB ne trova {}.",
+            theme::thousands(total)
+        )
+    })
+}
+
 /// Costruisce il pool della chat. I temi liberi sono criteri semantici, non
 /// filtri di griglia: si cercano concetto per concetto e si tengono solo i
 /// film che ne coprono davvero una parte.
@@ -6285,7 +6334,12 @@ pub fn chat_pool(
         chat_candidates(tmdb, tax, eff, &kw, title, similar, notes)?;
     let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
     let limit = if movies.is_empty() {
-        Some("Nessun film corrisponde ai criteri: prova a togliere un vincolo.".into())
+        Some(
+            empty_hint(tmdb, tax, eff, &kw).unwrap_or_else(|| {
+                "Nessun film corrisponde ai criteri: prova a togliere un vincolo."
+                    .into()
+            }),
+        )
     } else if !exact {
         Some("I criteri esatti non bastavano: ho allargato solo quanto necessario.".into())
     } else {

@@ -242,6 +242,7 @@ pub fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> Response {
         )
         .frame(false),
     );
+    focus(ui, &resp, RADIUS_SM);
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
