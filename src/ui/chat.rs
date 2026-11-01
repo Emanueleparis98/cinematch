@@ -98,7 +98,8 @@ pub struct HomeActions {
     pub prefill: Option<String>,
     pub surprise: bool,
     pub send: bool,
-    pub suggestions_hovered: bool,
+    pub more_suggestions: bool,
+    pub retry_now_playing: bool,
     /// Film scelto da una riga personale (Riprendi / Dalla tua lista).
     pub open_detail: Option<u64>,
 }
@@ -279,6 +280,8 @@ pub fn home(
     ui: &mut egui::Ui,
     images: &ImageStore,
     movies: &[Movie],
+    now_playing_busy: bool,
+    now_playing_error: Option<&str>,
     draft: &mut String,
     busy: bool,
     ai: bool,
@@ -371,6 +374,13 @@ pub fn home(
                                     actions.surprise = true;
                                 }
                                 ui.add_space(12.0);
+                                if lumen::link(ui, "Altre piste", lumen::MUTED)
+                                    .on_hover_text("Cambia i quattro spunti, senza inviare richieste")
+                                    .clicked()
+                                {
+                                    actions.more_suggestions = true;
+                                }
+                                ui.add_space(12.0);
                                 ui.label(
                                     lumen::mono(10.0, "PREPARA LA RICHIESTA")
                                         .color(lumen::FAINT),
@@ -406,7 +416,6 @@ pub fn home(
                                         |ui| suggestion_card(ui, card_w, &pista),
                                     )
                                     .inner;
-                                actions.suggestions_hovered |= resp.hovered() || resp.has_focus();
                                 if resp.clicked() {
                                     actions.prefill = Some(pista.prompt.clone());
                                 }
@@ -430,7 +439,7 @@ pub fn home(
                         );
                     }
                     ui.add_space(24.0);
-                    poster_strip(ui, images, movies, width, &mut actions);
+                    poster_strip(ui, images, movies, width, now_playing_busy, now_playing_error, &mut actions);
 
                     if !watchlist.is_empty() {
                         personal_strip(
@@ -667,6 +676,8 @@ fn poster_strip(
     images: &ImageStore,
     movies: &[Movie],
     width: f32,
+    busy: bool,
+    error: Option<&str>,
     actions: &mut HomeActions,
 ) {
     ui.horizontal(|ui| {
@@ -677,11 +688,27 @@ fn poster_strip(
         });
     });
     ui.add_space(8.0);
-    if movies.is_empty() {
+    if busy {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(lumen::body(12.0, "Carico i film in sala…").color(lumen::MUTED));
+        });
+    } else if let Some(error) = error {
+        ui.label(lumen::body(12.0, error).color(lumen::MUTED));
+        if !movies.is_empty() {
+            ui.label(lumen::body(12.0, "Mostro l'ultimo cartellone caricato.").color(lumen::MUTED));
+        }
+        if lumen::link(ui, "Riprova", lumen::EMBER).clicked() {
+            actions.retry_now_playing = true;
+        }
+    } else if movies.is_empty() {
         ui.label(
-            lumen::body(11.0, "Nessun film in sala disponibile.")
+            lumen::body(12.0, "Nessun film in sala disponibile.")
                 .color(lumen::MUTED),
         );
+        return;
+    }
+    if movies.is_empty() {
         return;
     }
     let gap = 10.0;
@@ -1149,7 +1176,7 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
 
 /// Gli errori del provider non escono in UI: l'utente vede cosa può fare.
 /// La stringa tecnica resta nel tooltip per chi la cerca.
-fn friendly_error(err: &str) -> &'static str {
+pub(crate) fn friendly_error(err: &str) -> &'static str {
     let e = err.to_lowercase();
     if e.contains("credenzial")
         || e.contains("401")
@@ -1761,6 +1788,7 @@ fn composer_inner(
                     ui,
                     !busy && !draft.trim().is_empty(),
                     wide_send,
+                    busy,
                 )
                 .clicked()
                 {
@@ -1774,7 +1802,7 @@ fn composer_inner(
     send
 }
 
-fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
+fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool, busy: bool) -> egui::Response {
     let (w, h) = if wide { (100.0, 40.0) } else { (40.0, 40.0) };
     let sense = if enabled {
         Sense::click()
@@ -1844,6 +1872,8 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
     if enabled {
         resp.on_hover_cursor(egui::CursorIcon::PointingHand)
             .on_hover_text("Invia · Shift+Invio va a capo")
+    } else if busy {
+        resp.on_hover_text("Ricerca in corso")
     } else {
         resp.on_hover_text("Scrivi un messaggio")
     }
@@ -1887,7 +1917,7 @@ mod layout_tests {
                     |ui| {
                         egui::CentralPanel::default().show(ui, |ui| {
                             actions = super::home(
-                                ui, &images, &[], &mut draft, false, false, false,
+                                ui, &images, &[], false, None, &mut draft, false, false, false,
                                 &tax, &[], &resume, &[],
                             );
                         });
@@ -1920,7 +1950,87 @@ mod layout_tests {
             }]);
             assert_eq!(actions.prefill.as_deref(), Some("Neorealismo: un film da recuperare"));
             assert!(!actions.send, "Uno spunto non deve avviare richieste AI/TMDB");
+
+            let pos = output.shapes.iter().find_map(|shape| {
+                if let egui::epaint::Shape::Text(text) = &shape.shape {
+                    (text.galley.text() == "Altre piste").then_some(text.pos + egui::vec2(3.0, 3.0))
+                } else {
+                    None
+                }
+            }).expect("Il ricambio manuale deve essere visibile");
+            let _ = frame(vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos, button: egui::PointerButton::Primary, pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+            let (_, actions) = frame(vec![egui::Event::PointerButton {
+                pos, button: egui::PointerButton::Primary, pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }]);
+            assert!(actions.more_suggestions);
+            assert!(!actions.send && !actions.surprise && actions.prefill.is_none());
         }
+    }
+
+    #[test]
+    fn il_cartellone_distingue_gli_stati_e_permette_di_riprovare() {
+        use crate::ui::{images::ImageStore, lumen};
+
+        let ctx = egui::Context::default();
+        lumen::install(&ctx);
+        let images = ImageStore::new();
+        let frame = |busy, error, events| {
+            let mut actions = super::HomeActions::default();
+            let mut output = ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 300.0))),
+                events,
+                ..Default::default()
+            }, |ui| {
+                super::poster_strip(ui, &images, &[], 580.0, busy, error, &mut actions);
+            });
+            output.textures_delta.clear();
+            (output, actions)
+        };
+        let text = |output: &egui::FullOutput| output.shapes.iter().filter_map(|shape| {
+            if let egui::epaint::Shape::Text(text) = &shape.shape {
+                Some(text.galley.text().to_owned())
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>().join("\n");
+
+        let (loading, _) = frame(true, None, vec![]);
+        assert!(text(&loading).contains("Carico i film in sala"));
+        assert!(!text(&loading).contains("Nessun film"));
+        let (empty, _) = frame(false, None, vec![]);
+        assert!(text(&empty).contains("Nessun film in sala disponibile"));
+
+        let error = Some("Manca la connessione a TMDB. Controlla la rete e riprova.");
+        let (failed, _) = frame(false, error, vec![]);
+        assert!(text(&failed).contains("Manca la connessione"));
+        assert!(!text(&failed).contains("Nessun film"));
+        let pos = failed.shapes.iter().find_map(|shape| {
+            if let egui::epaint::Shape::Text(text) = &shape.shape {
+                (text.galley.text() == "Riprova").then_some(text.pos + egui::vec2(3.0, 3.0))
+            } else {
+                None
+            }
+        }).expect("L'errore deve offrire Riprova");
+        let _ = frame(false, error, vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos, button: egui::PointerButton::Primary, pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]);
+        let (_, actions) = frame(false, error, vec![egui::Event::PointerButton {
+            pos, button: egui::PointerButton::Primary, pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        assert!(actions.retry_now_playing);
+        assert!(!actions.send && actions.prefill.is_none());
     }
 
     #[test]

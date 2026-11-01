@@ -4,7 +4,7 @@
 //! passare dal motore di vincoli. Se il motore dovesse correggerla, la
 //! scartiamo: in casa non compaiono mai combinazioni impossibili.
 //!
-//! La rotazione e' pura selezione: una proposta per categoria, poi il ciclo
+//! Il ricambio manuale e' pura selezione: una proposta per categoria, poi il ciclo
 //! avanza. In questo modo le quattro card cambiano insieme e non ripetono
 //! subito lo stesso testo.
 
@@ -13,9 +13,6 @@ use std::collections::BTreeSet;
 use crate::domain::constraints;
 use crate::domain::model::{Facets, Sort};
 use crate::domain::taxonomy::{Movement, Taxonomy};
-
-/// Ogni quanto cambiare le quattro card della casa, in secondi.
-pub const ROTATION_SECS: f64 = 7.0;
 
 /// Ripiego locale per «Sorprendimi»: contiene una faccia riconosciuta dal
 /// parser a regole, quindi non viene scambiata per un titolo.

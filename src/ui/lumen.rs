@@ -561,7 +561,7 @@ pub fn watched_overlay(ui: &mut egui::Ui, rect: Rect, hovered: bool) {
         egui::CornerRadius::ZERO,
         alpha(Color32::from_gray(74), veil),
     );
-    let badge = Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(44.0, 15.0));
+    let badge = Rect::from_min_size(rect.min + egui::vec2(6.0, 6.0), egui::vec2(52.0, 20.0));
     ui.painter()
         .rect_filled(badge, radius(2.0), alpha(INK, 235));
     ui.painter().rect_stroke(
@@ -572,7 +572,7 @@ pub fn watched_overlay(ui: &mut egui::Ui, rect: Rect, hovered: bool) {
         badge.center(),
         Align2::CENTER_CENTER,
         "VISTO",
-        FontId::new(8.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         CELADON,
     );
 }

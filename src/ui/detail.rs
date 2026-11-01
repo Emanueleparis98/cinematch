@@ -637,16 +637,14 @@ pub fn panel(
             }
 
             let provider = d.provider_link.as_deref().filter(|l| !l.trim().is_empty());
-            if !d.flatrate.is_empty()
-                || !d.rent.is_empty()
-                || !d.buy.is_empty()
-                || provider.is_some()
-            {
-                ui.add_space(12.0);
-                lumen::hairline(ui);
-                ui.add_space(10.0);
-                ui.label(lumen::label("Dove vederlo"));
-                ui.add_space(4.0);
+            ui.add_space(12.0);
+            lumen::hairline(ui);
+            ui.add_space(10.0);
+            ui.label(lumen::label("Dove vederlo"));
+            ui.add_space(4.0);
+            if d.flatrate.is_empty() && d.rent.is_empty() && d.buy.is_empty() && provider.is_none() {
+                ui.label(lumen::body(12.5, "Informazioni sulla disponibilità non presenti.").color(lumen::MUTED));
+            } else {
                 avail_row(ui, "IN ABBONAMENTO", &d.flatrate, lumen::CELADON);
                 avail_row(ui, "A NOLEGGIO", &d.rent, lumen::MUTED);
                 avail_row(ui, "ACQUISTO", &d.buy, lumen::MUTED);
@@ -755,6 +753,47 @@ fn compact_votes(v: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::dial_value;
+
+    #[test]
+    fn la_disponibilita_distingue_dati_assenti_e_provider_presenti() {
+        use crate::domain::model::Details;
+        use crate::ui::{images::ImageStore, lumen};
+
+        let images = ImageStore::new();
+        for source in ["assente", "link vuoto", "abbonamento", "noleggio", "acquisto", "link"] {
+            let mut details = Details::default();
+            details.movie.title = "Film di prova".into();
+            match source {
+                "abbonamento" => details.flatrate.push("Provider di prova".into()),
+                "noleggio" => details.rent.push("Provider di prova".into()),
+                "acquisto" => details.buy.push("Provider di prova".into()),
+                "link" => details.provider_link = Some("https://example.com/film".into()),
+                "link vuoto" => details.provider_link = Some("  ".into()),
+                _ => {},
+            }
+            let ctx = egui::Context::default();
+            lumen::install(&ctx);
+            let mut output = ctx.run_ui(egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(380.0, 1000.0))),
+                ..Default::default()
+            }, |ui| {
+                super::panel(ui, &images, &details, false, &super::TrackInfo::default(), None, None, false);
+            });
+            output.textures_delta.clear();
+            let text = output.shapes.iter().filter_map(|shape| {
+                if let egui::epaint::Shape::Text(text) = &shape.shape {
+                    Some(text.galley.text().to_owned())
+                } else {
+                    None
+                }
+            }).collect::<Vec<_>>().join("\n");
+            assert!(text.contains("DOVE VEDERLO"));
+            assert_eq!(text.contains("Informazioni sulla disponibilità non presenti"), matches!(source, "assente" | "link vuoto"));
+            if matches!(source, "abbonamento" | "noleggio" | "acquisto") {
+                assert!(text.contains("Provider di prova"));
+            }
+        }
+    }
 
     #[test]
     fn la_ghiera_parte_dall_alto_e_gira_in_senso_orario() {

@@ -93,7 +93,7 @@ pub fn header(
 pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
     let text = ui.painter().layout_no_wrap(
         "FILTRI".to_owned(),
-        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let (badge_w, _) = if active > 0 {
@@ -514,7 +514,7 @@ pub fn sections(
             ui.add_space(2.0);
             ui.label(
                 RichText::new(format!("Nessuna corrispondenza per «{}»", query.trim()))
-                    .size(10.5)
+                    .size(11.0)
                     .color(theme::FAINT),
             );
             ui.add_space(8.0);
@@ -537,19 +537,19 @@ pub fn sections(
             .show(ui, |ui| {
                 ui.label(
                     RichText::new("PERCHÉ")
-                        .size(10.0)
+                        .size(11.0)
                         .strong()
                         .color(theme::ACCENT),
                 );
                 ui.add_space(2.0);
                 for m in messages {
-                    ui.label(RichText::new(format!("• {m}")).size(10.5).color(theme::WARN));
+                    ui.label(RichText::new(format!("• {m}")).size(11.0).color(theme::WARN));
                 }
                 for m in info {
-                    ui.label(RichText::new(format!("· {m}")).size(10.5).color(theme::TEXT));
+                    ui.label(RichText::new(format!("· {m}")).size(11.0).color(theme::TEXT));
                 }
                 for n in ai_notes {
-                    ui.label(RichText::new(format!("◦ {n}")).size(10.5).color(theme::DIM));
+                    ui.label(RichText::new(format!("◦ {n}")).size(11.0).color(theme::DIM));
                 }
             });
     }
@@ -687,14 +687,14 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
 fn badge_size(ui: &Ui, n: usize) -> (f32, f32) {
     let galley = ui
         .painter()
-        .layout_no_wrap(n.to_string(), FontId::proportional(10.0), Color32::PLACEHOLDER);
+        .layout_no_wrap(n.to_string(), FontId::proportional(11.0), Color32::PLACEHOLDER);
     ((galley.size().x + 10.0).max(18.0), galley.size().y)
 }
 
 fn paint_badge(painter: &egui::Painter, rect: egui::Rect, n: usize) {
     let galley = painter.layout_no_wrap(
         n.to_string(),
-        FontId::proportional(10.0),
+        FontId::proportional(11.0),
         Color32::PLACEHOLDER,
     );
     painter.rect_filled(rect, lumen::radius(lumen::RADIUS_SM), theme::ACCENT_DIM);
@@ -713,7 +713,7 @@ fn ghost(ui: &mut Ui, text: &str, enabled: bool) -> Response {
     let color = if enabled { theme::ACCENT } else { theme::FAINT };
     let galley = ui.painter().layout_no_wrap(
         text.to_uppercase(),
-        FontId::new(9.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let size = galley.size() + egui::vec2(12.0, 6.0);
@@ -830,7 +830,7 @@ fn search_field(ui: &mut Ui, text: &mut String, hint: &str) -> Response {
 fn pill(ui: &mut Ui, label: &str) -> Response {
     let galley = ui.painter().layout_no_wrap(
         format!("× {label}"),
-        FontId::new(10.5, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     let size = galley.size() + egui::vec2(14.0, 8.0);
@@ -977,7 +977,7 @@ fn section(
     };
     let galley = p.layout_no_wrap(
         title.to_uppercase(),
-        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     p.galley(
@@ -1008,7 +1008,7 @@ fn section(
     if active > 0 {
         let cg = p.layout_no_wrap(
             "PULISCI".to_owned(),
-            FontId::new(9.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+            FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
             Color32::PLACEHOLDER,
         );
         let cpos = egui::pos2(
@@ -1160,7 +1160,7 @@ fn metrics(ui: &mut Ui, f: &Facets, out: &mut Vec<FacetAction>) {
             RichText::new(
                 "Per la classifica per voto contano solo i titoli con almeno 50 voti: alza «Voti minimi» per una lista solida.",
             )
-            .size(10.0)
+            .size(11.0)
             .color(theme::FAINT),
         );
     }
@@ -1203,7 +1203,7 @@ fn metric_chip(
         Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
     let galley = p.layout_no_wrap(
         label.to_owned(),
-        FontId::new(10.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
         Color32::PLACEHOLDER,
     );
     p.galley(
@@ -1256,7 +1256,7 @@ fn menu_item(ui: &mut Ui, label: &str, selected: bool) -> bool {
             egui::pos2(rect.right() - 8.0, rect.center().y),
             Align2::RIGHT_CENTER,
             "✓",
-            FontId::proportional(10.0),
+            FontId::proportional(11.0),
             theme::ACCENT_3,
         );
     }
@@ -1283,7 +1283,7 @@ fn rating_popup(
         .open_memory(None)
         .show(|ui| {
             ui.set_min_width(width.max(188.0));
-            ui.label(RichText::new(title).size(10.0).color(theme::FAINT));
+            ui.label(RichText::new(title).size(11.0).color(theme::FAINT));
             ui.add_space(2.0);
             if menu_item(ui, "Nessuno", current.is_none()) {
                 chosen = Some(make(None));
@@ -1305,7 +1305,7 @@ fn rating_popup(
             ui.add_space(4.0);
             ui.separator();
             ui.add_space(2.0);
-            ui.label(RichText::new("Valore fine").size(10.0).color(theme::FAINT));
+            ui.label(RichText::new("Valore fine").size(11.0).color(theme::FAINT));
             ui.spacing_mut().slider_width = width.max(150.0) - 28.0;
             let mut value = current.unwrap_or(7.0);
             let slider = ui.add(
@@ -1339,7 +1339,7 @@ fn votes_popup(
         .open_memory(None)
         .show(|ui| {
             ui.set_min_width(width.max(188.0));
-            ui.label(RichText::new("Voti minimi").size(10.0).color(theme::FAINT));
+            ui.label(RichText::new("Voti minimi").size(11.0).color(theme::FAINT));
             ui.add_space(2.0);
             if menu_item(ui, "Nessuno", current.is_none()) {
                 chosen = Some(FacetAction::Votes(None));
@@ -1388,7 +1388,7 @@ fn runtime_popup(
         .open_memory(None)
         .show(|ui| {
             ui.set_min_width(width.max(200.0));
-            ui.label(RichText::new("Durata").size(10.0).color(theme::FAINT));
+            ui.label(RichText::new("Durata").size(11.0).color(theme::FAINT));
             ui.add_space(2.0);
             for (label, value) in RUNTIMES {
                 if menu_item(ui, label, current == *value) {

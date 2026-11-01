@@ -740,14 +740,10 @@ pub struct App {
     suggestion_pool: Vec<suggestions::Suggestion>,
     suggestion_base: Facets,
     suggestion_cycle: u64,
-    /// Istante della comparsa e prossimo cambio (secondi di egui).
-    suggestion_shown_at: f64,
-    suggestion_next_at: f64,
-    /// Se il mouse e' su una card, la rotazione aspetta.
-    suggestion_hovered: bool,
     /// Film in sala per la home: indipendenti dai risultati della griglia.
     home_now_playing: Vec<Movie>,
     home_now_playing_busy: bool,
+    home_now_playing_error: Option<String>,
     home_now_playing_next: Option<Instant>,
     home_now_playing_gen: u64,
     /// Ricerca TMDB della griglia: resta com'e quando si passa alla chat.
@@ -879,11 +875,9 @@ impl App {
             suggestion_pool: Vec::new(),
             suggestion_base: Facets::default(),
             suggestion_cycle: 0,
-            suggestion_shown_at: 0.0,
-            suggestion_next_at: 0.0,
-            suggestion_hovered: false,
             home_now_playing: Vec::new(),
             home_now_playing_busy: false,
+            home_now_playing_error: None,
             home_now_playing_next: None,
             home_now_playing_gen: 0,
             grid_query: String::new(),
@@ -1168,13 +1162,13 @@ impl App {
                     self.home_now_playing_busy = false;
                     match res {
                         Ok(movies) => {
-                            if !movies.is_empty() {
-                                self.home_now_playing = movies;
-                            }
+                            self.home_now_playing = movies;
+                            self.home_now_playing_error = None;
                             self.home_now_playing_next =
                                 Some(Instant::now() + IN_SALA_REFRESH);
                         }
-                        Err(_) => {
+                        Err(error) => {
+                            self.home_now_playing_error = Some(chat::friendly_error(&error).into());
                             self.home_now_playing_next = Some(Instant::now() + IN_SALA_RETRY);
                         }
                     }
@@ -1772,26 +1766,19 @@ impl App {
     }
 
     /// Prepara le quattro card della casa. Se i filtri della griglia sono
-    /// cambiati ricostruisce il catalogo; altrimenti fa avanzare il ciclo.
+    /// cambiati ricostruisce il catalogo; il quartetto cambia solo su richiesta.
     /// Tutto avviene in memoria e con la sola tassonomia: nessuna AI, nessuna
     /// richiesta TMDB prima che l'utente invii un messaggio.
-    fn refresh_home_suggestions(&mut self, now: f64) {
+    fn refresh_home_suggestions(&mut self, change: bool) {
         let changed = self.suggestion_base != self.facets;
         if changed || self.suggestion_pool.is_empty() || self.suggestions.is_empty() {
             self.suggestion_pool = suggestions::candidates(&self.tax, &self.facets);
             self.suggestion_base = self.facets.clone();
             self.suggestion_cycle = 0;
             self.suggestions = suggestions::pick(&self.suggestion_pool, 0, &[], 4);
-            self.suggestion_shown_at = now;
-            self.suggestion_next_at = now + suggestions::ROTATION_SECS;
             return;
         }
-        if now < self.suggestion_next_at {
-            return;
-        }
-        if self.suggestion_hovered {
-            // Non cambiare una card sotto il mouse: si riprova tra poco.
-            self.suggestion_next_at = now + 0.8;
+        if !change {
             return;
         }
         let avoid = self
@@ -1802,8 +1789,6 @@ impl App {
         self.suggestion_cycle = self.suggestion_cycle.wrapping_add(1);
         self.suggestions =
             suggestions::pick(&self.suggestion_pool, self.suggestion_cycle, &avoid, 4);
-        self.suggestion_shown_at = now;
-        self.suggestion_next_at = now + suggestions::ROTATION_SECS;
     }
 
     /// Aggiunge una risposta solo testo: spiegazioni e confronti non sono
@@ -1824,7 +1809,6 @@ impl App {
             },
         });
         self.chat_jump = true;
-        self.suggestion_hovered = false;
         self.focus = Some(ViewMode::Chat);
     }
 
@@ -1921,7 +1905,6 @@ impl App {
         };
         self.chat_draft.clear();
         self.chat_jump = true;
-        self.suggestion_hovered = false;
         // Spiegazioni e confronti sono comandi locali: non sono nuove
         // ricerche e funzionano anche senza una chiamata AI.
         if self.handle_meta_command(&text) {
@@ -1959,7 +1942,6 @@ impl App {
         self.chat_context = Intent::default();
         self.chat_draft.clear();
         self.chat_jump = false;
-        self.suggestion_hovered = false;
         self.focus = Some(ViewMode::Chat);
     }
 
@@ -3066,11 +3048,12 @@ impl App {
         if self.home_now_playing_busy || self.tmdb.is_none() {
             return;
         }
-        if self
-            .home_now_playing_next
-            .is_some_and(|next| Instant::now() < next)
-        {
-            return;
+        if let Some(next) = self.home_now_playing_next {
+            let wait = next.saturating_duration_since(Instant::now());
+            if !wait.is_zero() {
+                self.ctx.request_repaint_after(wait);
+                return;
+            }
         }
         self.start_now_playing();
     }
@@ -3080,6 +3063,7 @@ impl App {
             return;
         };
         self.home_now_playing_busy = true;
+        self.home_now_playing_error = None;
         self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
         let gen = self.home_now_playing_gen;
         let tx = self.tx.clone();
@@ -3508,6 +3492,7 @@ impl App {
                 self.tmdb = Self::build_tmdb(&cfg);
                 self.home_now_playing.clear();
                 self.home_now_playing_busy = false;
+                self.home_now_playing_error = None;
                 self.home_now_playing_next = None;
                 self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
                 self.provider = build_provider(&cfg.ai);
@@ -3881,6 +3866,7 @@ impl App {
                     ui.spacing_mut().item_spacing.x = 8.0;
                     ui.add_space(14.0);
                     let busy = self.loading
+                        || self.home_now_playing_busy
                         || self.detail_loading
                         || self.chat_busy
                         || self.update.checking
@@ -4243,7 +4229,7 @@ impl App {
         let now = ctx.input(|i| i.time);
         if self.chat.is_empty() {
             self.maybe_refresh_now_playing();
-            self.refresh_home_suggestions(now);
+            self.refresh_home_suggestions(false);
             let want_focus = self.focus == Some(ViewMode::Chat);
             let resume_cards = self.simkl_resume_cards();
             let watchlist_cards = self.simkl_watchlist_cards();
@@ -4251,6 +4237,8 @@ impl App {
                 ui,
                 &self.images,
                 &self.home_now_playing,
+                self.home_now_playing_busy,
+                self.home_now_playing_error.as_deref(),
                 &mut self.chat_draft,
                 self.chat_busy,
                 self.provider.is_llm(),
@@ -4266,12 +4254,18 @@ impl App {
             if let Some(id) = actions.open_detail {
                 self.open_detail(id);
             }
-            self.suggestion_hovered = actions.suggestions_hovered;
+            if actions.more_suggestions {
+                self.refresh_home_suggestions(true);
+            }
+            if actions.retry_now_playing {
+                self.start_now_playing();
+            }
             if let Some(text) = actions.prefill {
                 self.chat_draft = text;
                 self.focus = Some(ViewMode::Chat);
             }
             if actions.surprise {
+                self.suggestion_cycle = self.suggestion_cycle.wrapping_add(1);
                 let visible: Vec<String> = self
                     .suggestions
                     .iter()
@@ -4286,10 +4280,6 @@ impl App {
             }
             if actions.send {
                 self.send_chat();
-            }
-            if !self.suggestion_hovered {
-                let wait = (self.suggestion_next_at - now).max(0.05);
-                ctx.request_repaint_after(Duration::from_secs_f64(wait));
             }
         } else {
             let actions = {
@@ -5319,7 +5309,9 @@ impl App {
                 ui.add_space(10.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
-                    if lumen::button_sized(ui, "Salva", true, 100.0).clicked() {
+                    if ui.add_enabled_ui(dirty, |ui| {
+                        lumen::button_sized(ui, "Salva", true, 100.0)
+                    }).inner.clicked() {
                         save = true;
                     }
                 });
@@ -5644,6 +5636,7 @@ impl App {
         }
         if self.show_settings
             && !self.settings_close_confirm
+            && self.settings_dirty()
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S))
             && self.save_settings()
         {
@@ -5658,7 +5651,9 @@ impl App {
         // Ctrl+K riporta il fuoco al campo della vista attiva anche quando il
         // mouse è altrove; Ctrl+N apre una chat nuova con la stessa conferma
         // del pulsante in alto.
-        if !typing && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::K)) {
+        if !self.show_settings && !self.first_run && !self.guide_open && !self.new_chat_confirm
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
+        {
             self.focus = Some(self.mode);
         }
         if !self.show_settings

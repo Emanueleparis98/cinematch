@@ -126,10 +126,14 @@ backdrop sopra le informazioni.
   attivi tramite lo stesso motore di vincoli della griglia. Se una combinazione
   richiederebbe una correzione, la card non compare. Il catalogo si costruisce
   in memoria, senza rete.
-- **Rotazione lenta**: ogni circa 7 secondi arriva un quartetto nuovo, con una
-  comparsa sobria; nessuna card ripete subito quella precedente.
-  La rotazione si ferma mentre il mouse e sopra una card, cosi il clic non
-  scappa. «Sorprendimi» pesca una proposta locale non visibile.
+- **Piste stabili**: i quattro spunti restano fermi mentre leggi o passi da una
+  sala all'altra. «Altre piste» cambia il quartetto senza ripetere subito le
+  proposte precedenti; se cambi i filtri, gli spunti si aggiornano per rispettarli.
+  «Sorprendimi» prepara una proposta locale non visibile, senza inviarla.
+- **Cartellone trasparente**: «In sala» distingue caricamento, errore e nessun
+  risultato. In caso di errore puoi riprovare; se c'e un cartellone precedente,
+  resta visibile con un avviso. Quando mancano i dati sui provider, la scheda
+  lo dichiara senza affermare che il film sia indisponibile.
 
 - **Due sale, due stati**: la rail a sinistra cambia sala (Consigli, Catalogo,
   Impostazioni); la striscia in alto porta marchio, contesto e controlli finestra.
@@ -399,7 +403,7 @@ src/
 │  ├─ taxonomy.rs     caricamento tassonomia (decenni, generi, paesi, mood, correnti)
 │  ├─ model.rs        Facets, Movie, Details, ordinamento
 │  ├─ constraints.rs  motore di vincoli (R1..R8)
-│  └─ suggestions.rs  catalogo locale e rotazione degli spunti della casa
+│  └─ suggestions.rs  catalogo locale e ricambio degli spunti della casa
 ├─ tmdb/              client HTTP (throttle 75 ms, retry, cache in memoria)
 ├─ ai/                trait IntentProvider + parser a regole + LLM pluggable
 │                     (chat, curatela dei film, rilevamento modelli, verifica)
@@ -493,7 +497,7 @@ verificano le regole dell'interprete, comprese le negazioni («italiano di guerr
 e un «senza guerra»), e la curatela della chat: id inventati scartati, doppioni,
 ordine preservato, parsing tollerante e streaming parziale dell'intro. I test di
 `domain::suggestions` verificano che ogni spunto passi il motore di vincoli, resti
-riconoscibile dal parser a regole e non si ripeta alla rotazione successiva.
+riconoscibile dal parser a regole e non si ripeta al ricambio successivo.
 
 Gli strumenti di sviluppo sono tre: `app_probe` (frase → facce → TMDB, senza
 finestra), `chat_probe` (messaggio → candidati → curatela, anche su piu turni)
