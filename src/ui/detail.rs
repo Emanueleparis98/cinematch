@@ -72,6 +72,9 @@ fn close_button(ui: &mut egui::Ui) -> egui::Response {
         Stroke::new(1.2_f32, color),
     );
     lumen::focus(ui, &resp, lumen::RADIUS_SM);
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), "Chiudi scheda film")
+    });
     resp.on_hover_text("Chiudi (Esc)")
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
@@ -125,7 +128,7 @@ fn fact(ui: &mut egui::Ui, title: &str, value: &str) {
             },
         );
         ui.add(
-            egui::Label::new(lumen::body(11.5, value).color(lumen::MUTED))
+            egui::Label::new(lumen::body(12.5, value).color(lumen::MUTED))
                 .wrap(),
         );
     });
@@ -149,7 +152,7 @@ fn status_pill(ui: &mut egui::Ui, status: &str) {
         "dropped" => ("ABBANDONATO", lumen::DANGER),
         _ => ("SU SIMKL", lumen::MUTED),
     };
-    let font = FontId::new(9.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into()));
+    let font = FontId::new(11.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into()));
     let galley = ui.painter().layout_no_wrap(label.to_string(), font, color);
     let size = egui::vec2(galley.size().x + 25.0, 18.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -316,7 +319,7 @@ fn rating_button(
                         center + egui::vec2(0.0, 20.0),
                         Align2::CENTER_CENTER,
                         "SU 10",
-                        FontId::new(9.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
+                        FontId::new(11.0, FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
                         lumen::FAINT,
                     );
                     if resp.clicked() || resp.dragged() {
@@ -547,12 +550,6 @@ pub fn panel(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let width = ui.available_width();
-            if d.movie.backdrop_path.is_some() && !compact {
-                let h = (width * 9.0 / 16.0).clamp(120.0, 210.0);
-                lumen::backdrop(ui, images, Some(&d.movie), width, h);
-                ui.add_space(12.0);
-            }
-
             let poster_w = (if compact { 92.0_f32 } else { 104.0 }).min(width * 0.34);
             ui.horizontal_top(|ui| {
                 let _ = lumen::poster(
@@ -565,6 +562,7 @@ pub fn panel(
                 );
                 ui.add_space(12.0);
                 ui.vertical(|ui| {
+                    ui.set_max_width((width - poster_w - 20.0).max(80.0));
                     ui.label(lumen::display(24.0, &d.movie.title));
                     if !d.movie.original_title.is_empty()
                         && d.movie.original_title != d.movie.title
@@ -626,6 +624,40 @@ pub fn panel(
                 });
             });
 
+            ui.add_space(12.0);
+            let text = if d.movie.overview.trim().is_empty() {
+                "Nessuna descrizione disponibile in italiano.".to_string()
+            } else {
+                d.movie.overview.clone()
+            };
+            ui.label(lumen::body(13.0, text).color(lumen::MUTED));
+
+            if let Some(dir) = &d.director {
+                fact(ui, "Regia", dir);
+            }
+
+            let provider = d.provider_link.as_deref().filter(|l| !l.trim().is_empty());
+            if !d.flatrate.is_empty()
+                || !d.rent.is_empty()
+                || !d.buy.is_empty()
+                || provider.is_some()
+            {
+                ui.add_space(12.0);
+                lumen::hairline(ui);
+                ui.add_space(10.0);
+                ui.label(lumen::label("Dove vederlo"));
+                ui.add_space(4.0);
+                avail_row(ui, "IN ABBONAMENTO", &d.flatrate, lumen::CELADON);
+                avail_row(ui, "A NOLEGGIO", &d.rent, lumen::MUTED);
+                avail_row(ui, "ACQUISTO", &d.buy, lumen::MUTED);
+                if let Some(link) = provider {
+                    ui.add_space(8.0);
+                    if lumen::link(ui, "Apri il link del provider ↗", lumen::EMBER).clicked() {
+                        actions.push(DetailAction::OpenUrl(link.to_string()));
+                    }
+                }
+            }
+
             if track.connected {
                 ui.add_space(12.0);
                 lumen::hairline(ui);
@@ -670,13 +702,6 @@ pub fn panel(
             lumen::hairline(ui);
             ui.add_space(10.0);
 
-            let text = if d.movie.overview.trim().is_empty() {
-                "Nessuna descrizione disponibile in italiano.".to_string()
-            } else {
-                d.movie.overview.clone()
-            };
-            ui.label(lumen::body(12.5, text).color(lumen::MUTED));
-
             let genres = d
                 .genres
                 .iter()
@@ -684,33 +709,8 @@ pub fn panel(
                 .collect::<Vec<_>>()
                 .join(" · ");
             fact(ui, "Generi", &genres);
-            if let Some(dir) = &d.director {
-                fact(ui, "Regia", dir);
-            }
             if !d.cast.is_empty() {
                 fact(ui, "Cast", &label_list(&d.cast));
-            }
-
-            let provider = d.provider_link.as_deref().filter(|l| !l.trim().is_empty());
-            if !d.flatrate.is_empty()
-                || !d.rent.is_empty()
-                || !d.buy.is_empty()
-                || provider.is_some()
-            {
-                ui.add_space(12.0);
-                lumen::hairline(ui);
-                ui.add_space(10.0);
-                ui.label(lumen::label("Dove vederlo"));
-                ui.add_space(4.0);
-                avail_row(ui, "IN ABBONAMENTO", &d.flatrate, lumen::CELADON);
-                avail_row(ui, "A NOLEGGIO", &d.rent, lumen::MUTED);
-                avail_row(ui, "ACQUISTO", &d.buy, lumen::MUTED);
-                if let Some(link) = provider {
-                    ui.add_space(8.0);
-                    if lumen::link(ui, "Apri il link del provider ↗", lumen::EMBER).clicked() {
-                        actions.push(DetailAction::OpenUrl(link.to_string()));
-                    }
-                }
             }
 
             ui.add_space(10.0);

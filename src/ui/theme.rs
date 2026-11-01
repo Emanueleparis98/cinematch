@@ -97,7 +97,7 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, size: egui::Vec2) -> egui:
         rect.center(),
         egui::Align2::CENTER_CENTER,
         label.to_uppercase(),
-        egui::FontId::new(10.0, egui::FontFamily::Name(super::fonts::LUMEN_MONO.into())),
+        egui::FontId::new(11.0, egui::FontFamily::Name(super::fonts::LUMEN_MONO.into())),
         ink,
     );
     resp.widget_info(|| {

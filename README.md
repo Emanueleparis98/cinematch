@@ -108,13 +108,18 @@ film copre tutti i criteri, la chat lo dice e mostra soltanto i titoli piu vicin
 con il criterio mancante indicato nella card: non riempie mai la lista con film
 generici.
 
-La casa e una colonna centrata: titolo, **quattro spunti vivi** e campo di
-scrittura fino a 820 px. Invio invia, Shift+Invio va a capo; gli spunti e
-«Sorprendimi» riempiono soltanto il testo, senza inviare e senza chiamare AI o
-TMDB. Quando la conversazione parte, il campo si aggancia in basso (sempre 820
-px) e il contenuto resta in una colonna da 980 px. Mentre rileggi scorrendo
-verso l'alto il campo si riduce a una barra da 44 px; torna intero quando arrivi
-in fondo, con un clic, con `/` o appena inizi a scrivere.
+La home mette al primo posto titolo e richiesta, seguiti da **quattro spunti
+vivi**, prima del cartellone. Se hai collegato SIMKL, i film da riprendere
+compaiono a destra sulle finestre larghe e sotto gli spunti su quelle strette.
+Un clic su uno spunto o su «Sorprendimi» prepara soltanto il testo: puoi
+modificarlo prima di premere **Cerca**, senza chiamate AI o TMDB anticipate.
+Invio invia, Shift+Invio va a capo. Nella conversazione il campo resta in basso;
+`/` riporta il fuoco alla richiesta.
+
+La barra laterale mostra **Consigli · Sala 01** e **Catalogo · Sala 02**.
+Nella scheda film sinossi, regia e disponibilita precedono tracciamento e
+contenuti secondari; il poster resta come riferimento, senza un secondo
+backdrop sopra le informazioni.
 
 - **Quattro spunti locali, sempre legali**: le card nascono dalla tassonomia
   (correnti, atmosfere, periodi, scoperte) e vengono confrontate con i filtri
@@ -126,7 +131,7 @@ in fondo, con un clic, con `/` o appena inizi a scrivere.
   La rotazione si ferma mentre il mouse e sopra una card, cosi il clic non
   scappa. «Sorprendimi» pesca una proposta locale non visibile.
 
-- **Due sale, due stati**: la rail a sinistra cambia sala (Sala 01, Sala 02,
+- **Due sale, due stati**: la rail a sinistra cambia sala (Consigli, Catalogo,
   Impostazioni); la striscia in alto porta marchio, contesto e controlli finestra.
   La chat conserva la bozza, il catalogo conserva ricerca, filtri e larghezza del
   pannello; i filtri compaiono solo in Sala 02. Filtri e scheda film non stanno

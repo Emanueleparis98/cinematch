@@ -26,6 +26,7 @@ pub const EMBER_HI: Color32 = Color32::from_rgb(255, 122, 87);
 pub const CELADON: Color32 = Color32::from_rgb(143, 227, 192);
 pub const DANGER: Color32 = Color32::from_rgb(255, 77, 94);
 pub const RADIUS: f32 = 4.0;
+pub const RAIL_WIDTH: f32 = 96.0;
 pub const RADIUS_SM: f32 = 2.0;
 
 /// Arrotondamento in pixel interi: egui 0.34 usa `CornerRadius` (u8).
@@ -141,7 +142,7 @@ pub fn body(size: f32, text: impl Into<String>) -> RichText {
 
 pub fn mono(size: f32, text: impl Into<String>) -> RichText {
     RichText::new(text)
-        .size(size)
+        .size(size.max(11.0))
         .family(FontFamily::Name(fonts::LUMEN_MONO.into()))
         .color(MUTED)
 }
@@ -217,8 +218,8 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
     p.text(
         rect.center(),
         Align2::CENTER_CENTER,
-        text.to_uppercase(),
-        FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        text,
+        FontId::proportional(12.0),
         ink,
     );
     focus(ui, &resp, RADIUS_SM);
@@ -235,9 +236,8 @@ pub fn button_sized(ui: &mut egui::Ui, text: &str, primary: bool, width: f32) ->
 pub fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> Response {
     let resp = ui.add(
         egui::Button::new(
-            RichText::new(text.to_uppercase())
-                .size(10.0)
-                .family(FontFamily::Name(fonts::LUMEN_MONO.into()))
+            RichText::new(text)
+                .size(12.0)
                 .color(color),
         )
         .frame(false),
@@ -382,8 +382,14 @@ pub fn icon_button(
         .on_hover_text(tip)
 }
 
-pub fn nav_item(ui: &mut egui::Ui, icon_kind: Icon, label_text: &str, active: bool) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(72.0, 62.0), Sense::click());
+pub fn nav_item(
+    ui: &mut egui::Ui,
+    icon_kind: Icon,
+    label_text: &str,
+    subtitle: Option<&str>,
+    active: bool,
+) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(RAIL_WIDTH, 72.0), Sense::click());
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -416,12 +422,21 @@ pub fn nav_item(ui: &mut egui::Ui, icon_kind: Icon, label_text: &str, active: bo
         },
     );
     p.text(
-        egui::pos2(rect.center().x, rect.bottom() - 13.0),
+        egui::pos2(rect.center().x, rect.top() + 43.0),
         Align2::CENTER_CENTER,
-        label_text.to_uppercase(),
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        label_text,
+        FontId::new(12.0, FontFamily::Name(fonts::LUMEN_UI_BOLD.into())),
         if active { IVORY } else { FAINT },
     );
+    if let Some(subtitle) = subtitle {
+        p.text(
+            egui::pos2(rect.center().x, rect.top() + 60.0),
+            Align2::CENTER_CENTER,
+            subtitle,
+            FontId::proportional(11.0),
+            MUTED,
+        );
+    }
     focus(ui, &resp, 0.0);
     resp.widget_info(|| {
         egui::WidgetInfo::selected(

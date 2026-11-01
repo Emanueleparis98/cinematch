@@ -3582,9 +3582,9 @@ impl App {
                     } else if self.show_settings {
                         "IMPOSTAZIONI"
                     } else if self.mode == ViewMode::Griglia {
-                        "SALA 02"
+                        "CATALOGO · SALA 02"
                     } else {
-                        "SALA 01"
+                        "CONSIGLI · SALA 01"
                     };
                     ui.label(lumen::mono(9.0, title).color(lumen::IVORY));
 
@@ -3636,7 +3636,7 @@ impl App {
         let mut switch = None;
         let mut settings = false;
         egui::Panel::left("rail")
-            .exact_size(72.0)
+            .exact_size(lumen::RAIL_WIDTH)
             .resizable(false)
             .frame(egui::Frame::NONE.fill(lumen::DEEP))
             .show(ui, |ui| {
@@ -3649,7 +3649,8 @@ impl App {
                 if lumen::nav_item(
                     ui,
                     lumen::Icon::Home,
-                    "Sala 01",
+                    "Consigli",
+                    Some("Sala 01"),
                     self.mode == ViewMode::Chat && !self.show_settings,
                 )
                 .on_hover_text("Sala 01 · chiedi in libertà e ricevi film spiegati")
@@ -3660,7 +3661,8 @@ impl App {
                 if lumen::nav_item(
                     ui,
                     lumen::Icon::Grid,
-                    "Sala 02",
+                    "Catalogo",
+                    Some("Sala 02"),
                     self.mode == ViewMode::Griglia && !self.show_settings,
                 )
                 .on_hover_text("Sala 02 · il catalogo con i filtri")
@@ -3672,6 +3674,7 @@ impl App {
                     ui,
                     lumen::Icon::Settings,
                     "Impostazioni",
+                    None,
                     self.show_settings || self.first_run,
                 );
                 if self.update.available.is_some() {
@@ -4090,7 +4093,7 @@ impl App {
         }
         let screen = ctx.content_rect();
         let area_rect = egui::Rect::from_min_max(
-            egui::pos2(screen.left() + 72.0, screen.top() + 48.0),
+            egui::pos2(screen.left() + lumen::RAIL_WIDTH, screen.top() + 48.0),
             egui::pos2(screen.right(), screen.bottom() - 28.0),
         );
         let modal_w = (area_rect.width() - 48.0).clamp(300.0, 440.0);
@@ -4314,7 +4317,7 @@ impl App {
         {
             return;
         }
-        let avail = (ui.ctx().content_rect().width() - 72.0).max(200.0);
+        let avail = (ui.ctx().content_rect().width() - lumen::RAIL_WIDTH).max(200.0);
         let pad = if avail < 900.0 { 20.0 } else { 34.0 };
         let width = (avail - pad * 2.0).min(1100.0);
         let want_focus = self.focus == Some(ViewMode::Chat);
@@ -4390,7 +4393,7 @@ impl App {
                     );
                     ui.label(
                         egui::RichText::new(
-                            "Togli una faccia dal pannello: il motore di vincoli spiega cosa era in conflitto.",
+                            "Togli un filtro dal pannello: il motore di vincoli spiega cosa era in conflitto.",
                         )
                         .size(12.0)
                         .color(theme::DIM),

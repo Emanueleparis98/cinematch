@@ -111,7 +111,7 @@ fn card(
         egui::pos2(rect.left(), title_y + title_h + 3.0),
         Align2::LEFT_TOP,
         sub,
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         if hovered { lumen::MUTED } else { lumen::FAINT },
     );
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &m.title));
@@ -213,7 +213,7 @@ pub fn mini_card(ui: &mut egui::Ui, images: &ImageStore, m: &Movie) -> bool {
         title_pos + egui::vec2(0.0, title_h + 3.0),
         Align2::LEFT_TOP,
         format!("{year} · {:.1} ★", m.rating),
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
     );
     resp.clicked()

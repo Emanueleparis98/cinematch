@@ -140,7 +140,7 @@ fn result_columns(width: f32) -> usize {
 // ------------------------------------------------------------ utilita' -----
 
 fn link(ui: &mut egui::Ui, text: &str, color: Color32) -> egui::Response {
-    let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
+    let font = FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
     let label = text.to_uppercase();
     let width = ui
         .fonts_mut(|f| f.layout_no_wrap(label.clone(), font.clone(), color).size().x)
@@ -350,34 +350,17 @@ pub fn home(
                                         "Riprendi",
                                         "DAL TUO SIMKL",
                                         resume,
-                                        150.0,
+                                        132.0,
                                         &mut actions,
                                     )
                                 },
                             );
                         });
                     }
-                    // Sulle finestre strette il rail non entra: «Riprendi»
-                    // torna sotto, ma prima del cartellone.
-                    if compact && !resume.is_empty() {
-                        ui.add_space(20.0);
-                        personal_strip(
-                            ui,
-                            images,
-                            "Riprendi",
-                            "DAL TUO SIMKL",
-                            resume,
-                            132.0,
-                            &mut actions,
-                        );
-                    }
-                    ui.add_space(24.0);
-                    poster_strip(ui, images, movies, width, &mut actions);
-
                     ui.add_space(16.0);
                     ui.horizontal(|ui| {
                         ui.label(lumen::label("Parti da")).on_hover_text(
-                            "Quattro ingressi al catalogo: una corrente, un periodo o una serata.",
+                            "Scegli una pista, modifica la richiesta e premi Cerca.",
                         );
                         ui.with_layout(
                             egui::Layout::right_to_left(egui::Align::Center),
@@ -389,7 +372,7 @@ pub fn home(
                                 }
                                 ui.add_space(12.0);
                                 ui.label(
-                                    lumen::mono(10.0, "4 PISTE")
+                                    lumen::mono(10.0, "PREPARA LA RICHIESTA")
                                         .color(lumen::FAINT),
                                 )
                                 .on_hover_text(
@@ -426,12 +409,28 @@ pub fn home(
                                 actions.suggestions_hovered |= resp.hovered() || resp.has_focus();
                                 if resp.clicked() {
                                     actions.prefill = Some(pista.prompt.clone());
-                                    actions.send = true;
                                 }
                             }
                         });
                         ui.add_space(gap);
                     }
+
+                    // Sulle finestre strette il rail non entra: «Riprendi»
+                    // torna sotto le piste, prima del cartellone.
+                    if compact && !resume.is_empty() {
+                        ui.add_space(20.0);
+                        personal_strip(
+                            ui,
+                            images,
+                            "Riprendi",
+                            "DAL TUO SIMKL",
+                            resume,
+                            132.0,
+                            &mut actions,
+                        );
+                    }
+                    ui.add_space(24.0);
+                    poster_strip(ui, images, movies, width, &mut actions);
 
                     if !watchlist.is_empty() {
                         personal_strip(
@@ -534,7 +533,7 @@ fn personal_card(
                 poster.center(),
                 Align2::CENTER_CENTER,
                 "SIMKL",
-                FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+                FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
                 lumen::FAINT,
             );
         }
@@ -543,7 +542,7 @@ fn personal_card(
             poster.center(),
             Align2::CENTER_CENTER,
             "SIMKL",
-            FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
             lumen::FAINT,
         );
     }
@@ -579,7 +578,7 @@ fn personal_card(
         egui::pos2(rect.left(), poster.bottom() + 27.0),
         Align2::LEFT_TOP,
         &card.meta,
-        FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
     );
     if resp.clicked() {
@@ -608,9 +607,6 @@ fn hero_left(
     actions: &mut HomeActions,
 ) {
     let _ = ai;
-    ui.label(lumen::mono(10.0, "SALA 01").color(lumen::EMBER))
-        .on_hover_text("Sala 01 · chiedi in libertà: l'interprete traduce in criteri.");
-    ui.add_space(8.0);
     let short = ui.ctx().content_rect().height() < 720.0;
     let size = if compact {
         if width >= 600.0 { 44.0 } else { 38.0 }
@@ -631,7 +627,7 @@ fn hero_left(
             ui.label(
                 lumen::body(
                     if compact { 12.0 } else { 13.0 },
-                    "Descrivi un’atmosfera, un regista o un dettaglio. CineMatch cerca film reali su\u{a0}TMDB e ti mostra perché sono lì.",
+                    "Descrivi un’atmosfera, un regista o un dettaglio, oppure scegli uno spunto. Poi premi Cerca.",
                 )
                 .color(lumen::MUTED),
             );
@@ -901,7 +897,7 @@ fn suggestion_card(
         egui::WidgetInfo::labeled(
             egui::Role::Button,
             ui.is_enabled(),
-            pista.title.clone(),
+            format!("Usa questo spunto: {}", pista.title),
         )
     });
     let hover = ui
@@ -932,7 +928,7 @@ fn suggestion_card(
         rect.min + egui::vec2(14.0, 12.0),
         Align2::LEFT_TOP,
         pista.kicker,
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::EMBER,
     );
     let max_title_w = width - 28.0;
@@ -965,7 +961,7 @@ fn suggestion_card(
     p.galley(rect.min + egui::vec2(14.0, 30.0), title_galley, lumen::IVORY);
     let combo_galley = p.layout_job(wrapped_font(
         &pista.combination,
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
         width - 28.0,
         1,
@@ -999,8 +995,8 @@ fn suggestion_card(
     p.text(
         egui::pos2(rect.left() + 14.0, rect.bottom() - 16.0),
         Align2::LEFT_BOTTOM,
-        "AVVIA LA RICERCA",
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        "USA QUESTO SPUNTO",
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         footer,
     );
     lumen::icon(
@@ -1146,7 +1142,7 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
         egui::pos2(rect.right() - 8.0, rect.top() + 3.0),
         Align2::RIGHT_TOP,
         "TU",
-        FontId::new(9.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
     );
 }
@@ -1503,7 +1499,7 @@ fn compact_card(
             poster_rect.center(),
             Align2::CENTER_CENTER,
             theme::truncate(&card.movie.title, 18),
-            FontId::new(10.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
+            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_DISPLAY.into())),
             lumen::IVORY,
         );
     }
@@ -1543,7 +1539,7 @@ fn compact_card(
     );
     let meta = p.layout_job(wrapped_font(
         &movie_meta(card, tax),
-        FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+        FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
         lumen::FAINT,
         text_w,
         1,
@@ -1575,7 +1571,7 @@ fn compact_card(
     if let Some(av) = availability(card) {
         let av = p.layout_job(wrapped_font(
             &av,
-            FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
             lumen::CELADON,
             text_w,
             1,
@@ -1601,7 +1597,7 @@ fn card_link(
     text: &str,
     color: Color32,
 ) -> bool {
-    let font = FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
+    let font = FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into()));
     let label = text.to_uppercase();
     let width = ui.fonts_mut(|f| {
         f.layout_no_wrap(label.clone(), font.clone(), color)
@@ -1821,7 +1817,7 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
             egui::pos2(rect.left() + 12.0, rect.center().y),
             Align2::LEFT_CENTER,
             "CERCA",
-            FontId::new(10.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
+            FontId::new(11.0, FontFamily::Name(fonts::LUMEN_MONO.into())),
             ink,
         );
         lumen::icon(
@@ -1841,6 +1837,9 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
             ink,
         );
     }
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, enabled, "Cerca film")
+    });
     lumen::focus(ui, &resp, lumen::RADIUS_SM);
     if enabled {
         resp.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -1855,6 +1854,74 @@ mod layout_tests {
     use super::poster_width;
     use super::result_columns;
     use super::friendly_error;
+
+    #[test]
+    fn le_piste_sono_visibili_e_preparano_senza_inviare() {
+        use crate::domain::taxonomy::Taxonomy;
+        use crate::ui::{images::ImageStore, lumen};
+
+        let images = ImageStore::new();
+        let tax = Taxonomy::load();
+        let resume = [super::PersonalCard {
+            title: "Film iniziato".into(),
+            meta: "50% · 2020".into(),
+            movie_id: 1,
+            progress: Some(0.5),
+            poster: None,
+        }];
+        for (width, height) in [(800.0, 600.0), (1220.0, 660.0)] {
+            let ctx = egui::Context::default();
+            lumen::install(&ctx);
+            let mut draft = String::new();
+            let mut frame = |events| {
+                let mut actions = super::HomeActions::default();
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width - lumen::RAIL_WIDTH, height - 76.0),
+                        )),
+                        events,
+                        ..Default::default()
+                    },
+                    |ui| {
+                        egui::CentralPanel::default().show(ui, |ui| {
+                            actions = super::home(
+                                ui, &images, &[], &mut draft, false, false, false,
+                                &tax, &[], &resume, &[],
+                            );
+                        });
+                    },
+                );
+                output.textures_delta.clear();
+                (output, actions)
+            };
+            let _ = frame(vec![]);
+            let (output, _) = frame(vec![]);
+            let title = output.shapes.iter().find_map(|shape| {
+                if let egui::epaint::Shape::Text(text) = &shape.shape {
+                    (text.galley.text() == "Neorealismo").then_some(text.pos)
+                } else {
+                    None
+                }
+            }).expect("La prima pista deve essere visibile nella finestra minima");
+            assert!(title.y + 120.0 < height - 76.0, "La prima riga di piste deve essere interamente visibile");
+            let pos = title + egui::vec2(5.0, 5.0);
+            let _ = frame(vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos, button: egui::PointerButton::Primary, pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]);
+            let (_, actions) = frame(vec![egui::Event::PointerButton {
+                pos, button: egui::PointerButton::Primary, pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }]);
+            assert_eq!(actions.prefill.as_deref(), Some("Neorealismo: un film da recuperare"));
+            assert!(!actions.send, "Uno spunto non deve avviare richieste AI/TMDB");
+        }
+    }
 
     #[test]
     fn cartellone_pieno_e_allineato() {
