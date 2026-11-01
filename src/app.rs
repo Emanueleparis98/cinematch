@@ -5830,7 +5830,7 @@ fn search_title_pages(tmdb: &Tmdb, query: &str) -> Result<(Vec<Movie>, u32), Str
     Ok((dedupe(raw), total))
 }
 
-/// Il collage "In sala" usa solo film con poster, al massimo sei.
+/// Il cartellone "In sala" usa solo film con poster, al massimo sei.
 fn in_sala_movies(movies: Vec<Movie>) -> Vec<Movie> {
     movies
         .into_iter()

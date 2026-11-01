@@ -305,33 +305,23 @@ pub fn home(
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                     ui.add_space(20.0);
-                    if compact {
+                    // A destra dell'hero sta ciò che riporta dentro chi torna:
+                    // i film già iniziati. Il cartellone prende poi tutta la
+                    // larghezza, dove i poster possono essere grandi e uguali.
+                    let left_w = (width * 0.59).floor();
+                    let rail_w = width - left_w - 30.0;
+                    if compact || resume.is_empty() {
                         hero_left(
                             ui,
-                            width,
-                            true,
+                            if compact { width } else { width.min(680.0) },
+                            compact,
                             draft,
                             busy,
                             ai,
                             focus,
                             &mut actions,
                         );
-                        ui.add_space(20.0);
-                        if !resume.is_empty() {
-                            personal_strip(
-                                ui,
-                                images,
-                                "Riprendi",
-                                "DAL TUO SIMKL",
-                                resume,
-                                &mut actions,
-                            );
-                        }
-                        ui.add_space(8.0);
-                        poster_strip(ui, images, movies, width, &mut actions);
                     } else {
-                        let left_w = (width * 0.59).floor();
-                        let right_w = width - left_w - 30.0;
                         ui.horizontal_top(|ui| {
                             ui.allocate_ui_with_layout(
                                 egui::vec2(left_w, 0.0),
@@ -351,27 +341,38 @@ pub fn home(
                             );
                             ui.add_space(30.0);
                             ui.allocate_ui_with_layout(
-                                egui::vec2(right_w, 0.0),
+                                egui::vec2(rail_w, 0.0),
                                 egui::Layout::top_down(egui::Align::LEFT),
-                                |ui| collage(ui, images, movies, right_w, &mut actions),
+                                |ui| {
+                                    personal_strip(
+                                        ui,
+                                        images,
+                                        "Riprendi",
+                                        "DAL TUO SIMKL",
+                                        resume,
+                                        150.0,
+                                        &mut actions,
+                                    )
+                                },
                             );
                         });
                     }
-
-                    // Chi riapre l'app vuole continuare un film, non
-                    // rileggere la presentazione: «Riprendi» viene prima.
-                    if !compact && !resume.is_empty() {
-                        ui.add_space(4.0);
+                    // Sulle finestre strette il rail non entra: «Riprendi»
+                    // torna sotto, ma prima del cartellone.
+                    if compact && !resume.is_empty() {
+                        ui.add_space(20.0);
                         personal_strip(
                             ui,
                             images,
                             "Riprendi",
                             "DAL TUO SIMKL",
                             resume,
+                            132.0,
                             &mut actions,
                         );
-                        ui.add_space(12.0);
                     }
+                    ui.add_space(24.0);
+                    poster_strip(ui, images, movies, width, &mut actions);
 
                     ui.add_space(16.0);
                     ui.horizontal(|ui| {
@@ -439,6 +440,7 @@ pub fn home(
                             "Dalla tua lista",
                             "DA VEDERE SU SIMKL",
                             watchlist,
+                            132.0,
                             &mut actions,
                         );
                     }
@@ -455,6 +457,7 @@ fn personal_strip(
     title: &str,
     kicker: &str,
     cards: &[PersonalCard],
+    card_w: f32,
     actions: &mut HomeActions,
 ) {
     let mut scroll_delta = 0.0f32;
@@ -477,8 +480,8 @@ fn personal_strip(
     });
     ui.add_space(8.0);
     let gap = 10.0;
-    let card_w = 132.0;
-    let page = (card_w + gap) * 5.0;
+    let per_page = (ui.available_width() / (card_w + gap)).floor().max(1.0);
+    let page = (card_w + gap) * per_page;
     egui::ScrollArea::horizontal()
         .id_salt(("personal-strip", title))
         .scroll_source(egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Always, ..Default::default() })
@@ -655,87 +658,12 @@ fn clickable_poster(
     }
 }
 
-fn collage(
-    ui: &mut egui::Ui,
-    images: &ImageStore,
-    movies: &[Movie],
-    width: f32,
-    actions: &mut HomeActions,
-) {
-    // Il cartellone resta più basso della colonna di testo: le piste entrano
-    // nella prima schermata anche sulle finestre basse.
-    let short = ui.ctx().content_rect().height() < 720.0;
-    let big_w = (width * 0.55).min(if short { 140.0 } else { 180.0 });
-    let gap = 8.0;
-    let small_cap = if short { 70.0 } else { 84.0 };
-    let mut small_w = ((width - big_w - 12.0 - gap) / 2.0).min(small_cap);
-    let grid = small_w >= 64.0;
-    if !grid {
-        small_w = (width - big_w - 12.0).min(small_cap);
-    }
-    let grid_w = if grid {
-        small_w * 2.0 + gap
-    } else {
-        small_w
-    };
-    let group_w = big_w + 12.0 + grid_w;
-    let offset = ((width - group_w) * 0.5).max(0.0);
-    ui.horizontal(|ui| {
-        ui.add_space(offset);
-        ui.label(lumen::label("In sala"))
-            .on_hover_text("Film in programmazione ora, secondo TMDB.");
-    });
-    ui.add_space(8.0);
-    if movies.is_empty() {
-        ui.label(
-            lumen::body(11.0, "Nessun film in sala disponibile.")
-                .color(lumen::MUTED),
-        );
-        return;
-    }
-    let big_h = big_w * 1.5;
-    let grid_h = small_w * 3.0 + gap;
-    ui.horizontal_top(|ui| {
-        ui.add_space(offset);
-        clickable_poster(ui, images, movies.first(), big_w, big_h, actions);
-        ui.add_space(12.0);
-        ui.vertical(|ui| {
-            ui.add_space(((big_h - grid_h) * 0.5).max(0.0));
-            if grid {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = gap;
-                    if let Some(m) = movies.get(1) {
-                        clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                    }
-                    if let Some(m) = movies.get(2) {
-                        clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                    }
-                });
-                if movies.len() > 3 {
-                    ui.add_space(gap);
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = gap;
-                        if let Some(m) = movies.get(3) {
-                            clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                        }
-                        if let Some(m) = movies.get(4) {
-                            clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                        }
-                    });
-                }
-            } else {
-                if let Some(m) = movies.get(1) {
-                    clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                }
-                if movies.len() > 2 {
-                    ui.add_space(gap);
-                }
-                if let Some(m) = movies.get(2) {
-                    clickable_poster(ui, images, Some(m), small_w, small_w * 1.5, actions);
-                }
-            }
-        });
-    });
+/// Larghezza di un poster del cartellone: la fila riempie `width` finché i
+/// poster non superano il tetto, così con pochi film non diventa un banner.
+fn poster_width(width: f32, n: usize) -> f32 {
+    let gap = 10.0;
+    let gaps = gap * n.saturating_sub(1) as f32;
+    ((width - gaps) / n.max(1) as f32).min(230.0).floor()
 }
 
 fn poster_strip(
@@ -745,10 +673,13 @@ fn poster_strip(
     width: f32,
     actions: &mut HomeActions,
 ) {
-    let gap = 8.0;
-    let w = ((width - gap * 5.0) / 6.0).floor();
-    ui.label(lumen::label("In sala"))
-        .on_hover_text("Film in programmazione ora, secondo TMDB.");
+    ui.horizontal(|ui| {
+        ui.label(lumen::label("In sala"))
+            .on_hover_text("Film in programmazione ora, secondo TMDB.");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(lumen::mono(9.0, "DAL CARTELLONE").color(lumen::FAINT));
+        });
+    });
     ui.add_space(8.0);
     if movies.is_empty() {
         ui.label(
@@ -757,10 +688,13 @@ fn poster_strip(
         );
         return;
     }
+    let gap = 10.0;
+    let n = movies.len().min(6);
+    let w = poster_width(width, n);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
-        for movie in movies.iter().take(6) {
-            clickable_poster(ui, images, Some(movie), w, w * 1.5, actions);
+        for movie in movies.iter().take(n) {
+            clickable_poster(ui, images, Some(movie), w, (w * 1.5).round(), actions);
         }
     });
 }
@@ -1918,8 +1852,17 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
 
 #[cfg(test)]
 mod layout_tests {
+    use super::poster_width;
     use super::result_columns;
     use super::friendly_error;
+
+    #[test]
+    fn cartellone_pieno_e_allineato() {
+        assert_eq!(poster_width(1100.0, 5), 212.0);
+        assert_eq!(poster_width(1100.0, 6), 175.0);
+        // Con pochi film la fila si ferma al tetto invece di stirarsi.
+        assert_eq!(poster_width(1100.0, 4), 230.0);
+    }
 
     #[test]
     fn errori_tecnici_diventano_azioni() {
