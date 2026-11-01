@@ -103,10 +103,7 @@ CineMatch si apre sulla **Sala 01**: scrivi in liberta, anche a modo tuo, e la
 risposta e una conversazione con **fino a cinque film reali** presi da TMDB.
 Ogni film ha una card con poster, voto TMDB e IMDb, regia, durata, dove si vede,
 il **perche** quel film risponde alla richiesta e un **consiglio** pratico (come
-guardarlo, a cosa fare attenzione). Se la richiesta e molto specifica e nessun
-film copre tutti i criteri, la chat lo dice e mostra soltanto i titoli piu vicini,
-con il criterio mancante indicato nella card: non riempie mai la lista con film
-generici.
+guardarlo, a cosa fare attenzione). I criteri espliciti restano vincolanti: se nessun film li rispetta, la chat lo dice e permette di modificarli. La selezione contiene fino a cinque film con dati verificati, senza riempire la lista con titoli estranei.
 
 La home mette al primo posto titolo e richiesta, seguiti da **quattro spunti
 vivi**, prima del cartellone. Se hai collegato SIMKL, i film da riprendere
@@ -171,15 +168,14 @@ backdrop sopra le informazioni.
   «viaggio nello spazio»). I temi vivono solo nella chat: non cambiano i filtri
   della griglia e non diventano keyword TMDB fuzzy. La ricerca usa concetti,
   keyword esatte e titoli di riferimento, poi verifica la trama dei candidati.
-- **Onesta**: se un film non copre tutti i concetti, la card dice cosa manca e la
-  risposta lo dichiara. Se i criteri esatti non bastano, l'app allarga solo
-  quanto necessario e lo dice; se non trova nulla di pertinente, non inventa e
-  non ripiega sui film del momento. Con zero risultati la chat spiega il limite.
+- **Criteri vincolanti**: ogni concetto del tema e ogni filtro esplicito devono trovare riscontro. Con zero risultati l'app spiega il limite e conserva i filtri. In catalogo «Sblocca» propone rinunce da scegliere; in chat il comando fisso «Criteri» porta alle chip rimovibili e a «Modifica criteri». Puoi cambiare piu valori e premere «Applica criteri»: la modifica crea una nuova risposta senza alterare lo stato del catalogo.
+- **Preferenze esplicite**: la memoria usa le richieste dell'utente, senza trasformare i film proposti in gusti approvati. «Ben diretto» orienta la curatela senza aggiungere un voto minimo arbitrario.
+- **Schede prima della scelta**: durata, paese e keyword vengono verificati prima della curatela, anche nelle ricerche per titolo o simili. La lingua originale non sostituisce il paese di produzione. I consigli pratici usano durata e abbonamenti forniti dalle schede, senza inventare edizioni o doppiaggi.
 - **Da chat a griglia**: «Vedi tutti i N in griglia» compare solo quando i criteri
   sono davvero rappresentabili come filtri (niente temi liberi) e porta gli stessi
   filtri nella griglia, con l'intento in cache: nessuna chiamata AI nuova.
   La richiesta naturale «altri» riusa lo stesso contesto, esclude i film appena
-  visti e propone altri titoli pertinenti, non necessariamente cinque. Toccare un
+  visti e legge le pagine successive per trovare altri titoli pertinenti, non necessariamente cinque. La ricerca si ferma a 20 pagine per fonte per mantenere il lavoro limitato. Toccare un
   filtro a mano riporta alla griglia. La scheda film resta quella di sempre (clic
   sul poster).
 
@@ -245,7 +241,7 @@ toglierli con un clic.
 L'interprete predefinito e **a regole, offline e istantaneo**. Nelle impostazioni puoi
 attivare **DeepSeek** (V4.1 Flash, sforzo massimo), **OpenRouter** oppure **Ollama**
 locale: l'AI propone solo le facce, **la validazione resta al motore di vincoli** -
-nessuna allucinazione puo finire nei risultati.
+gli identificativi dei film vengono verificati su TMDB.
 
 ## Pannello dei filtri
 
@@ -344,16 +340,8 @@ Le regole applicate, in ordine:
    rimossi.
 5. **R6 · backtracking**: qualunque modifica rilancia la propagazione su tutte le
    facce, in entrambe le direzioni.
-6. **R7 · traduzione della corrente**: su TMDB i generi di un movimento sono
-   *etichette alternative*, non requisiti simultanei. Se il genere chiesto e gia una
-   di quelle etichette (Mistero per il *Giallo Italiano*), la query usa l'unione in
-   OR — `with_genres=27|53|9648` — invece dell'AND; un genere estraneo al movimento
-   resta invece un filtro AND, perche aggiunge una condizione reale.
-7. **R5 · validazione sui dati reali**: se i vincoli chiesti producono **zero**
-   risultati, il motore allenta un vincolo alla volta e lo dichiara nel riquadro
-   *Perche*: prima i filtri sul giudizio (voto minimo, voto massimo, numero di voti),
-   poi i generi del movimento in OR, poi le parole chiave tematiche. Nessun
-   rilassamento silenzioso.
+6. **R7 · traduzione della corrente**: i generi impliciti di un movimento sono alternative quando non scegli un genere. Un genere esplicito rimane obbligatorio: Horror con Giallo Italiano non viene allargato a Mistero o Thriller.
+7. **R5 · validazione sui dati reali**: i filtri non vengono allentati automaticamente. Con zero risultati puoi scegliere un compromesso da «Sblocca» o modificare i criteri della chat.
 8. **R8 · identita della corrente**: la geometria (paese + periodo + genere) ha
    molto richiamo ma anche rumore: *giallo italiano anni 80* su TMDB restituisce
    circa 600 titoli dove i gialli veri sono un terzo. Per le correnti che la
@@ -364,8 +352,7 @@ Le regole applicate, in ordine:
 
 `pruning()` dice alla UI quali facce sono selezionabili e perche; `sanitize()` corregge
 lo stato e produce i messaggi mostrati nel riquadro *Perche*; `to_discover()` traduce
-lo stato in query TMDB; `app::discover_with_relaxation()` applica la scala di
-rilassamento con le sue spiegazioni.
+lo stato in query TMDB; `app::discover_strict()` conserva tutti i filtri; gli allargamenti sono azioni esplicite dell'utente.
 
 La tassonomia vive in `assets/taxonomy.json`: decenni, generi (id TMDB), paesi,
 mood (keyword TMDB, risolte a runtime) e movimenti con periodo, paesi e compatibilita

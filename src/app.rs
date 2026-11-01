@@ -11,7 +11,7 @@ use crate::ai::{
     ThemeConcept, DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
 };
 use crate::domain::constraints::{self, Prune};
-use crate::domain::model::{toggle, Details, Facets, Movie, Sort, TrackState};
+use crate::domain::model::{Details, Facets, Movie, Sort, TrackState};
 use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
@@ -221,7 +221,11 @@ impl SettingsDraft {
     }
 }
 
-fn verified_status<T: PartialEq>(tested: &T, current: &T, res: Result<String, String>) -> Option<String> {
+fn verified_status<T: PartialEq>(
+    tested: &T,
+    current: &T,
+    res: Result<String, String>,
+) -> Option<String> {
     if tested != current {
         return None;
     }
@@ -1596,6 +1600,19 @@ impl App {
                 payload.intent = intent.clone().map(|it| (text.clone(), it));
             }
 
+            if let Err(error) = require_keywords(&tax, &eff, &kw) {
+                payload.error = Some(error);
+                let _ = tx.send(Msg::Results { gen, payload: Box::new(payload) });
+                ctx.request_repaint();
+                return;
+            }
+            if !payload.removed.is_empty() && with_ai {
+                payload.error = Some(format!("La richiesta contiene criteri incompatibili: {} Correggi la richiesta per continuare.", payload.removed.join(" ")));
+                let _ = tx.send(Msg::Results { gen, payload: Box::new(payload) });
+                ctx.request_repaint();
+                return;
+            }
+            let local_search = title.is_some() || similar.is_some();
             let quality_newest =
                 similar.is_none() && title.is_none() && eff.sort == Sort::Newest;
             let quality_visual = similar.is_none()
@@ -1646,13 +1663,9 @@ impl App {
                                 let raw_len = raw.len();
                                 let filtered = filter_movies(raw, &tax, &eff);
                                 let filtered_len = filtered.len();
-                                let limits = local_filter_limits(&tax, &eff);
                                 let mut note = format!(
-                                    "Risultati per «{t}» · filtri applicati localmente ({filtered_len}/{raw_len})"
+                                    "Risultati per «{t}» · filtri verificati sulle schede"
                                 );
-                                if !limits.is_empty() {
-                                    note.push_str(&format!(" · limiti: {}", limits.join(", ")));
-                                }
                                 if total_results as usize > raw_len {
                                     note.push_str(&format!(
                                         " · prime {TITLE_PAGE_CAP} pagine di {total_results}"
@@ -1680,11 +1693,22 @@ impl App {
                     }
                 } else {
                     discover_used = true;
-                    discover_with_relaxation(&tmdb, &tax, &eff, &kw, page, &mut payload.removed)
+                    discover_strict(&tmdb, &tax, &eff, &kw, page, &mut payload.removed)
                 };
 
             match outcome {
-                Ok((mut movies, total, pages, headline)) => {
+                Ok((mut movies, mut total, mut pages, headline)) => {
+                    if local_search && !eff.is_empty() {
+                        match verified_details(&tmdb, &tax, &eff, &kw, &movies) {
+                            Ok(details) => movies.retain(|m| details.contains_key(&m.id)),
+                            Err(error) => {
+                                payload.error = Some(error);
+                                movies.clear();
+                            }
+                        }
+                        total = movies.len() as u32;
+                        pages = 1;
+                    }
                     if quality_visual {
                         let before = movies.len();
                         movies.retain(|m| m.poster_path.is_some());
@@ -1988,39 +2012,12 @@ impl App {
     fn chat_history(&self, upto: usize) -> Vec<(String, String)> {
         let end = upto.min(self.chat.len());
         let start = end.saturating_sub(3);
-        let mut out: Vec<(String, String)> = Vec::new();
-        for entry in &self.chat[start..end] {
-            out.push(("utente".into(), entry.user.clone()));
-            let a = &entry.answer;
-            let mut line = String::new();
-            if !a.understood.is_empty() {
-                line.push_str(&format!("Criteri: {}", a.understood));
-            }
-            if !a.cards.is_empty() {
-                let titles = a
-                    .cards
-                    .iter()
-                    .map(|c| c.movie.title.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if !line.is_empty() {
-                    line.push_str(" · ");
-                }
-                line.push_str(&format!("Ho proposto: {titles}"));
-            } else if !a.intro.is_empty() {
-                if !line.is_empty() {
-                    line.push_str(" · ");
-                }
-                line.push_str(&a.intro);
-            }
-            if !line.is_empty() {
-                out.push(("assistente".into(), theme::truncate(&line, 220)));
-            }
-        }
-        out
+        self.chat[start..end].iter()
+            .map(|entry| ("utente".into(), entry.user.clone())).collect()
     }
 
     fn spawn_chat(&mut self, text: String, exclude: Vec<u64>, reuse: Option<Intent>) {
+        self.chat_jump = true;
         let index = self.chat.len();
         self.chat.push(chat::Entry {
             user: text.clone(),
@@ -2245,9 +2242,11 @@ impl App {
                 }
                 payload.notes.extend(it.notes.clone());
             }
+            let requested = eff.clone();
             let (eff, removed) = constraints::sanitize(&tax, &eff);
+            let conflicts = removed.clone();
             payload.notes.extend(removed);
-            let context_free = intent.as_ref().and_then(|i| i.free_text.clone());
+            let context_free = intent.as_ref().and_then(|i| i.free_text.clone()).or_else(|| if action.is_contextual() { base.free_text.clone() } else { None });
             let context_similar = intent
                 .as_ref()
                 .and_then(|i| i.similar_to.clone())
@@ -2274,6 +2273,16 @@ impl App {
                 payload.intent = Some((text.clone(), it));
             }
 
+            if !conflicts.is_empty() {
+                payload.facets = requested.clone();
+                payload.context.facets = requested;
+                payload.understood = describe_chat(&tax, &payload.facets, &themes);
+                payload.limit = Some(format!("I criteri richiedono una correzione: {} Nessun filtro e stato allargato. Modifica i criteri qui sotto.", conflicts.join(" ")));
+                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
+                ctx.request_repaint();
+                return;
+            }
+
             // 2) Candidati reali. Se l'interprete non ha riconosciuto un
             //    titolo, una frase o una domanda non diventano titoli.
             let _ = tx.send(Msg::ChatStage {
@@ -2294,6 +2303,7 @@ impl App {
                     query,
                     seen_title.as_deref(),
                     &mut payload.notes,
+                    &exclude,
                 ) {
                     Ok(Some(found)) => {
                         person_label = Some(found.label.clone());
@@ -2330,6 +2340,7 @@ impl App {
                     title.as_deref(),
                     similar.as_deref(),
                     &mut payload.notes,
+                    &exclude,
                 ) {
                     Ok(p) => p,
                     Err(_) if cancel.load(Ordering::Relaxed) => return,
@@ -2386,20 +2397,37 @@ impl App {
             }
             movies.retain(|m| !exclude.contains(&m.id));
             movies.truncate(20);
-            if cancel.load(Ordering::Relaxed) {
-                return;
+            if cancel.load(Ordering::Relaxed) { return; }
+            let mut verified_keywords = known.clone();
+            verified_keywords.extend(payload.keyword_pairs.clone());
+            resolve_keywords(&tmdb, &tax, &used_facets, &mut verified_keywords, &mut payload.keyword_pairs, &mut payload.notes);
+            let details = match require_keywords(&tax, &used_facets, &verified_keywords).and_then(|()| verified_details(&tmdb, &tax, &used_facets, &verified_keywords, &movies)) {
+                Ok(details) => details,
+                Err(error) => {
+                    if cancel.load(Ordering::Relaxed) { return; }
+                    payload.error = Some(error);
+                    let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
+                    ctx.request_repaint();
+                    return;
+                }
+            };
+            let before = movies.len();
+            movies.retain(|m| details.get(&m.id).is_some_and(|d| d.movie.year.is_some() && !d.movie.overview.trim().is_empty()));
+            sort_movies(&mut movies, used_facets.sort);
+            movies.sort_by(|a, b| relevance.get(&b.id).unwrap_or(&1.0).partial_cmp(relevance.get(&a.id).unwrap_or(&1.0)).unwrap_or(std::cmp::Ordering::Equal));
+            if movies.len() < before {
+                payload.notes.push(format!("{} candidati esclusi: dati mancanti o criteri non verificati.", before - movies.len()));
             }
-
             if movies.is_empty() {
-                payload.intro = "Non ho trovato film che corrispondano davvero a questa richiesta. Preferisco non riempire la lista con titoli a caso.".into();
-                let _ = tx.send(Msg::ChatDone {
-                    gen,
-                    payload: Box::new(payload),
+                payload.limit = Some(if exclude.is_empty() {
+                    "Non ho trovato film verificati con tutti questi criteri. Puoi modificarli o rimuoverne uno qui sotto.".into()
+                } else {
+                    "Non ho trovato altri film verificati nelle pagine esplorate. Puoi modificare un criterio per continuare.".into()
                 });
+                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
                 ctx.request_repaint();
                 return;
             }
-
             // 3) Curatela: sceglie fino a 5 film reali e scrive i commenti (streaming).
             if cancel.load(Ordering::Relaxed) {
                 return;
@@ -2411,12 +2439,12 @@ impl App {
             });
             ctx.request_repaint();
             let make_candidate = |m: &Movie| {
-                candidate_of(
-                    &tax,
-                    m,
-                    reasons.get(&m.id).cloned(),
-                    relevance.get(&m.id).copied().unwrap_or(1.0),
-                )
+                let d = &details[&m.id];
+                let mut candidate = candidate_of(&tax, &d.movie, reasons.get(&m.id).cloned(), relevance.get(&m.id).copied().unwrap_or(1.0));
+                candidate.runtime = d.runtime;
+                candidate.director = d.director.clone();
+                candidate.providers = d.flatrate.clone();
+                candidate
             };
             let req = curator::Request {
                 user_text: text.clone(),
@@ -2458,55 +2486,18 @@ impl App {
                 return;
             }
 
-            // 4) Completa le scelte e carica la scheda dei film mostrati
-            //    (regia, durata, disponibilita, IMDb): solo per loro.
-            let chosen: Vec<(u64, String, String)> = cur
-                .picks
-                .into_iter()
-                .map(|p| (p.id, p.perche, p.consiglio))
-                .collect();
-            // Le schede sono indipendenti: le richieste in parallelo
-            // riducono l'attesa senza cambiare l'ordine delle card.
-            let cards = std::thread::scope(|scope| {
-                let mut pending = Vec::with_capacity(chosen.len());
-                for (id, perche, consiglio) in chosen {
-                    let tmdb = tmdb.clone();
-                    pending.push((
-                        id,
-                        perche,
-                        consiglio,
-                        scope.spawn(move || tmdb.details(id)),
-                    ));
-                }
-                let mut cards = Vec::with_capacity(pending.len());
-                for (id, perche, consiglio, handle) in pending {
-                    let Some(movie) = movies.iter().find(|m| m.id == id).cloned() else {
-                        continue;
-                    };
-                    let mut card = chat::Card {
-                        movie,
-                        perche,
-                        consiglio,
-                        meta: None,
-                    };
-                    if let Ok(d) = handle
-                        .join()
-                        .unwrap_or_else(|_| Err("scheda non disponibile".into()))
-                    {
-                        card.meta = Some(chat::CardMeta {
-                            director: d.director.clone(),
-                            runtime: d.runtime,
-                            flatrate: d.flatrate.clone(),
-                            rent: d.rent.clone(),
-                            imdb: d.imdb,
-                        });
-                        card.movie = d.movie;
-                    }
-                    cards.push(card);
-                }
-                cards
-            });
-            payload.cards = cards;
+            payload.cards = cur.picks.into_iter().filter_map(|pick| {
+                let d = details.get(&pick.id)?;
+                Some(chat::Card {
+                    movie: d.movie.clone(),
+                    perche: pick.perche,
+                    consiglio: pick.consiglio,
+                    meta: Some(chat::CardMeta {
+                        director: d.director.clone(), runtime: d.runtime,
+                        flatrate: d.flatrate.clone(), rent: d.rent.clone(), imdb: d.imdb,
+                    }),
+                })
+            }).collect();
             if cancel.load(Ordering::Relaxed) {
                 return;
             }
@@ -2528,6 +2519,15 @@ impl App {
     }
 
     fn apply_chat_actions(&mut self, a: chat::Actions) {
+        if let Some((_index, intent)) = a.criteria {
+            if self.chat_busy {
+                self.toast("Attendi la risposta prima di modificare i criteri.");
+            } else {
+                let text = format!("Criteri aggiornati: {}", describe_chat(&self.tax, &intent.facets, &intent.themes));
+                self.spawn_chat(text, Vec::new(), Some(intent));
+            }
+            return;
+        }
         // «Film simili» resta nella conversazione: è un seguito, non una
         // nuova ricerca che sostituisce quella della griglia.
         if let Some(title) = a.similar_to {
@@ -3178,68 +3178,12 @@ impl App {
             self.switch_mode(ViewMode::Griglia);
         }
         for action in actions {
-            match action {
-                FacetAction::Decade(id) => toggle(&mut self.facets.decades, id),
-                FacetAction::Movement(id) => toggle(&mut self.facets.movements, id),
-                FacetAction::Genre(id) => {
-                    if self.facets.without_genres.contains(&id) {
-                        toggle(&mut self.facets.without_genres, id);
-                    } else {
-                        toggle(&mut self.facets.genres, id);
-                    }
-                }
-                FacetAction::Country(code) => toggle(&mut self.facets.countries, code),
-                FacetAction::Mood(id) => toggle(&mut self.facets.moods, id),
-                FacetAction::Keyword(name) => toggle(&mut self.facets.keywords, name),
-                FacetAction::Rating(v) => self.facets.min_rating = v,
-                FacetAction::MaxRating(v) => self.facets.max_rating = v,
-                FacetAction::Votes(v) => self.facets.min_votes = v,
-                FacetAction::Runtime(v) => self.facets.runtime = v,
-                // Guida: la combinazione di filtri che descrive una corrente.
-                // Si aggiunge a quello che c'e gia, cosi l'utente vede le facce
-                // accendersi e puo togliere cio che non vuole.
-                FacetAction::Combo { decades, countries, movements } => {
-                    for d in decades {
-                        if !self.facets.decades.contains(&d) {
-                            self.facets.decades.push(d);
-                        }
-                    }
-                    for c in countries {
-                        if !self.facets.countries.contains(&c) {
-                            self.facets.countries.push(c);
-                        }
-                    }
-                    for m in movements {
-                        if !self.facets.movements.contains(&m) {
-                            self.facets.movements.push(m);
-                        }
-                    }
-                }
-                FacetAction::Clear(Section::All) => {
-                    let sort = self.facets.sort;
-                    self.facets = Facets { sort, ..Default::default() };
-                    self.grid_query.clear();
-                    self.facet_query.clear();
-                    self.ai_notes.clear();
-                }
-                FacetAction::Clear(Section::Period) => self.facets.decades.clear(),
-                FacetAction::Clear(Section::Genres) => {
-                    self.facets.genres.clear();
-                    self.facets.without_genres.clear();
-                }
-                FacetAction::Clear(Section::Countries) => self.facets.countries.clear(),
-                FacetAction::Clear(Section::Moods) => {
-                    self.facets.moods.clear();
-                    self.facets.keywords.clear();
-                }
-                FacetAction::Clear(Section::Metrics) => {
-                    self.facets.min_rating = None;
-                    self.facets.max_rating = None;
-                    self.facets.min_votes = None;
-                    self.facets.runtime = None;
-                }
+            if matches!(action, FacetAction::Clear(Section::All)) {
+                self.grid_query.clear(); self.facet_query.clear(); self.ai_notes.clear();
             }
+            facets::apply_action(&mut self.facets, action);
         }
+
         self.resanitize();
         if !self.tmdb.is_some() {
             return;
@@ -5837,14 +5781,6 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
         .as_ref()
         .map(|q| q.without_genres.as_slice())
         .unwrap_or(f.without_genres.as_slice());
-    let countries = query
-        .as_ref()
-        .map(|q| q.countries.clone())
-        .unwrap_or_else(|| constraints::effective_countries(tax, f));
-    let langs = countries
-        .iter()
-        .filter_map(|c| constraints::country_language(c))
-        .collect::<Vec<&'static str>>();
     let min_rating = query.as_ref().and_then(|q| q.min_rating).or(f.min_rating);
     let max_rating = query.as_ref().and_then(|q| q.max_rating).or(f.max_rating);
     let min_votes = query.as_ref().and_then(|q| q.min_votes).or(f.min_votes);
@@ -5852,6 +5788,7 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
     movies
         .into_iter()
         .filter(|m| {
+            if !selected_decade(tax, f, m.year) { return false; }
             if let Some((a, b)) = year {
                 match m.year {
                     Some(y) if y >= a && y <= b => {}
@@ -5869,11 +5806,6 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
                 }
             }
             if m.genre_ids.iter().any(|g| without.contains(g)) {
-                return false;
-            }
-            // Il paese non e un campo della ricerca per titolo: la lingua
-            // originale e solo una stima. La UI lo dichiara.
-            if !langs.is_empty() && !langs.contains(&m.lang.as_str()) {
                 return false;
             }
             if let Some(r) = min_rating {
@@ -5895,27 +5827,6 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
             true
         })
         .collect()
-}
-
-/// Criteri che la ricerca per titolo applica solo in parte o non applica.
-fn local_filter_limits(tax: &Taxonomy, f: &Facets) -> Vec<&'static str> {
-    let mut out = Vec::new();
-    if f.runtime.is_some() {
-        out.push("durata");
-    }
-    if !f.moods.is_empty() {
-        out.push("mood");
-    }
-    if !f.keywords.is_empty() {
-        out.push("temi");
-    }
-    if !f.countries.is_empty() {
-        out.push("paese (stimato dalla lingua)");
-    }
-    if constraints::decade_gap(tax, f) {
-        out.push("periodi non contigui (la ricerca include gli anni in mezzo)");
-    }
-    out
 }
 
 /// Un solo vincolo tolto per volta: è il compromesso più piccolo che sblocca
@@ -6097,117 +6008,64 @@ fn runtime_label(a: u32, b: u32) -> String {
     }
 }
 
-/// R5 · validazione sui dati reali. Se i vincoli chiesti producono zero titoli,
 /// li allento uno alla volta — voto, poi generi, poi parole chiave tematiche —
-/// e annoto esattamente cosa ho tolto, cosi l'utente vede il ragionamento.
-pub fn discover_with_relaxation(
+/// Ricerca con filtri vincolanti: gli allargamenti richiedono una scelta esplicita.
+pub fn discover_strict(
     tmdb: &Tmdb,
     tax: &Taxonomy,
     facets: &Facets,
     kw: &[(String, u64)],
     page: u32,
-    removed: &mut Vec<String>,
+    notes: &mut Vec<String>,
 ) -> Result<(Vec<Movie>, u32, u32, String), String> {
-    let base = constraints::to_discover(tax, facets, kw, page)?;
+    require_keywords(tax, facets, kw)?;
+    let query = constraints::to_discover(tax, facets, kw, page)?;
+    let result = tmdb.discover(&query)?;
+    let mut movies: Vec<Movie> = result.results.into_iter().map(Movie::from).collect();
     if constraints::decade_gap(tax, facets) {
-        removed.push(
-            "I periodi scelti non sono contigui: la ricerca copre anche gli anni in mezzo."
-                .into(),
-        );
+        movies.retain(|m| selected_decade(tax, facets, m.year));
+        notes.push("Decenni separati: verificati sui singoli film; il totale TMDB puo includere gli anni intermedi.".into());
     }
-    let headline = describe(tax, facets, base.year);
-    let pack = |p: PagedMovies, suffix: Option<String>| -> (Vec<Movie>, u32, u32, String) {
-        (
-            p.results.into_iter().map(Movie::from).collect(),
-            p.total_results,
-            p.total_pages,
-            match suffix {
-                Some(s) => format!("{headline} · {s}"),
-                None => headline.clone(),
-            },
-        )
-    };
+    Ok((
+        movies,
+        result.total_results,
+        result.total_pages,
+        describe(tax, facets, query.year),
+    ))
+}
 
-    let first = tmdb.discover(&base)?;
-    if first.total_results > 0 {
-        return Ok(pack(first, None));
-    }
+fn selected_decade(tax: &Taxonomy, facets: &Facets, year: Option<u16>) -> bool {
+    facets.decades.is_empty()
+        || year.is_some_and(|y| {
+            facets
+                .decades
+                .iter()
+                .filter_map(|id| tax.decade(id))
+                .any(|d| y >= d.from && y <= d.to)
+        })
+}
 
-    // Passo 1: i filtri sul giudizio sono i piu arbitrari, li tolgo per primi.
-    if base.min_rating.is_some() || base.max_rating.is_some() || base.min_votes.is_some() {
-        let mut softened = base.clone();
-        softened.min_rating = None;
-        softened.max_rating = None;
-        softened.min_votes = None;
-        let p = tmdb.discover(&softened)?;
-        if p.total_results > 0 {
-            let mut names: Vec<&str> = Vec::new();
-            if base.min_rating.is_some() {
-                names.push("voto minimo");
-            }
-            if base.max_rating.is_some() {
-                names.push("voto massimo");
-            }
-            if base.min_votes.is_some() {
-                names.push("numero di voti");
-            }
-            removed.push(format!(
-                "Nessun titolo con quei filtri sul giudizio ({}): li ho tolti.",
-                names.join(", ")
-            ));
-            return Ok(pack(p, Some("giudizio non filtrato".into())));
-        }
+fn require_keywords(
+    tax: &Taxonomy,
+    facets: &Facets,
+    known: &[(String, u64)],
+) -> Result<(), String> {
+    let mut missing = constraints::unresolved_themes(facets, known);
+    missing.extend(
+        constraints::unresolved_keywords(tax, facets, known)
+            .into_iter()
+            .map(|(_, name)| name),
+    );
+    missing.extend(
+        constraints::unresolved_movement_keywords(tax, facets, known)
+            .into_iter()
+            .map(|(_, name)| name),
+    );
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("Non posso verificare questi temi su TMDB: {}. Modifica o rimuovi il criterio per continuare.", missing.join(", ")))
     }
-
-    // Passo 2: su TMDB i generi di un movimento sono etichette alternative, non
-    // requisiti simultanei: li unisco a quelli chiesti e li passo in OR.
-    let mut genres = base.genres.clone();
-    for id in &facets.movements {
-        if let Some(m) = tax.movement(id) {
-            for g in &m.genres_core {
-                if !genres.contains(g) {
-                    genres.push(*g);
-                }
-            }
-        }
-    }
-    if !genres.is_empty() {
-        let mut widened = base.clone();
-        widened.min_rating = None;
-        widened.max_rating = None;
-        widened.min_votes = None;
-        widened.genres = genres.clone();
-        widened.genres_or = true;
-        let p = tmdb.discover(&widened)?;
-        if p.total_results > 0 {
-            removed.push(
-                "Combinazione molto stretta: ho trattato i generi come alternative (Horror oppure Thriller…), includendo i generi tipici del movimento."
-                    .into(),
-            );
-            return Ok(pack(p, Some("generi in alternativa".into())));
-        }
-    }
-
-    // Passo 3: le parole chiave tematiche sono filtri AND molto severi.
-    if !kw.is_empty() {
-        let mut widened = base.clone();
-        widened.min_rating = None;
-        widened.max_rating = None;
-        widened.min_votes = None;
-        widened.genres = genres;
-        widened.genres_or = true;
-        widened.keywords.clear();
-        let p = tmdb.discover(&widened)?;
-        if p.total_results > 0 {
-            removed.push(
-                "Le parole chiave tematiche non avevano corrispondenze: le ho rimosse mantenendo periodo, paese e generi."
-                    .into(),
-            );
-            return Ok(pack(p, Some("temi non filtrati".into())));
-        }
-    }
-
-    Ok(pack(first, Some("nessun risultato".into())))
 }
 
 /// Risolve su TMDB le parole chiave di mood, temi liberi e correnti: quella
@@ -6299,17 +6157,19 @@ pub fn chat_pool(
     title: Option<&str>,
     similar: Option<&str>,
     notes: &mut Vec<String>,
+    exclude: &[u64],
 ) -> Result<ChatPoolResult, String> {
     let mut kw = known.to_vec();
     let mut pairs = Vec::new();
     resolve_keywords(tmdb, tax, eff, &mut kw, &mut pairs, notes);
 
+    require_keywords(tax, eff, &kw)?;
     if !themes.is_empty() {
-        return chat_theme_pool(tmdb, tax, eff, themes, &kw, pairs, notes);
+        return chat_theme_pool(tmdb, tax, eff, themes, &kw, pairs, notes, exclude);
     }
 
-    let (movies, total, _headline, exact) =
-        chat_candidates(tmdb, tax, eff, &kw, title, similar, notes)?;
+    let (movies, total, _headline) =
+        chat_candidates(tmdb, tax, eff, &kw, title, similar, notes, exclude)?;
     let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
     let limit = if movies.is_empty() {
         Some(
@@ -6318,8 +6178,6 @@ pub fn chat_pool(
                     .into()
             }),
         )
-    } else if !exact {
-        Some("I criteri esatti non bastavano: ho allargato solo quanto necessario.".into())
     } else {
         None
     };
@@ -6333,8 +6191,7 @@ pub fn chat_pool(
         // griglia: il pulsante mostrerebbe risultati diversi dalla chat.
         grid_ready: !eff.is_empty()
             && title.is_none()
-            && similar.is_none()
-            && exact,
+            && similar.is_none(),
         reasons: HashMap::new(),
         relevance,
     })
@@ -6374,6 +6231,7 @@ fn chat_person_pool(
     query: &PersonQuery,
     seen: Option<&str>,
     _notes: &mut Vec<String>,
+    exclude: &[u64],
 ) -> Result<Option<PersonPool>, String> {
     let results = tmdb.search_person(&query.name)?;
     let Some(person) = choose_person(&results, query) else {
@@ -6421,6 +6279,7 @@ fn chat_person_pool(
     } else {
         None
     };
+    movies.retain(|m| !exclude.contains(&m.id));
     movies.truncate(20);
     let reasons = movies
         .iter()
@@ -6450,6 +6309,12 @@ fn chat_person_pool(
 struct ThemeCandidate {
     movie: Movie,
     matched: Vec<bool>,
+}
+
+impl ThemeCandidate {
+    fn complete(&self) -> bool {
+        !self.matched.is_empty() && self.matched.iter().all(|matched| *matched)
+    }
 }
 
 fn has_word(hay: &str, term: &str) -> bool {
@@ -6505,6 +6370,7 @@ fn add_theme_movie(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn chat_theme_pool(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -6513,6 +6379,7 @@ fn chat_theme_pool(
     hard_kw: &[(String, u64)],
     hard_pairs: Vec<(String, u64)>,
     notes: &mut Vec<String>,
+    exclude: &[u64],
 ) -> Result<ChatPoolResult, String> {
     let concepts: Vec<ThemeConcept> = themes
         .iter()
@@ -6556,7 +6423,6 @@ fn chat_theme_pool(
     }
 
     let mut pool: HashMap<u64, ThemeCandidate> = HashMap::new();
-    let mut total = 0u32;
     for (index, ids) in queries.iter().enumerate() {
         // Una keyword per query: TMDB non sa combinare «hard AND (a OR b)».
         // Cosi le alternative del concetto restano davvero alternative.
@@ -6566,9 +6432,8 @@ fn chat_theme_pool(
                 q.keywords.push(*id);
             }
             q.keywords_or = false;
-            let page = tmdb.discover(&q)?;
-            total = total.saturating_add(page.total_results);
-            for movie in page.results.into_iter().map(Movie::from) {
+            let (batch, _) = collect_chat_pages(tmdb, tax, eff, hard_kw, exclude, |page| { let mut q = q.clone(); q.page = page; tmdb.discover(&q) })?;
+            for movie in batch {
                 add_theme_movie(&mut pool, &concepts, movie, Some(index));
             }
         }
@@ -6598,14 +6463,10 @@ fn chat_theme_pool(
     }
 
     let n = concepts.len();
-    // Due concetti bastano per il confronto (cane/gatto); con tre o piu
-    // concetti chiediamo almeno due segnali, altrimenti il "piu vicino" e
-    // solo un film qualsiasi che parla d'altro.
-    let need = if n <= 1 { n } else if n == 2 { 1 } else { 2 };
     let mut ranked: Vec<ThemeCandidate> = pool.into_values().collect();
     // I match completi restano in cima; se sono meno di cinque, i parziali
     // dichiarati completano la scelta senza spacciarsi per corrispondenze piene.
-    ranked.retain(|c| c.matched.iter().filter(|m| **m).count() >= need);
+    ranked.retain(|c| !exclude.contains(&c.movie.id) && c.complete());
     ranked.sort_by(|a, b| {
         let ca = a.matched.iter().filter(|m| **m).count();
         let cb = b.matched.iter().filter(|m| **m).count();
@@ -6657,34 +6518,13 @@ fn chat_theme_pool(
     }
 
     let count = ranked.len();
-    let exact_count = ranked
-        .iter()
-        .filter(|c| c.matched.iter().filter(|m| **m).count() == n)
-        .count();
     let movies = ranked.into_iter().map(|c| c.movie).take(20).collect::<Vec<_>>();
     let limit = if movies.is_empty() {
-        Some(format!(
-            "Nessun film copre almeno {} dei {} concetti: non lo sostituisco con titoli a caso.",
-            need, n
-        ))
-    } else if exact_count == 0 {
-        Some(format!(
-            "Nessun film copre tutti i {n} concetti: questi sono i più vicini."
-        ))
-    } else if exact_count < 5 && count > exact_count {
-        Some(format!(
-            "Solo {exact_count} film {} tutti i criteri; gli altri sono i più vicini.",
-            if exact_count == 1 { "copre" } else { "coprono" }
-        ))
-    } else if exact_count < 5 {
-        Some(format!(
-            "Solo {exact_count} film {} davvero tutti i criteri; non aggiungo titoli a caso.",
-            if exact_count == 1 { "copre" } else { "coprono" }
-        ))
-    } else {
-        None
-    };
-    let total = total.max(movies.len() as u32);
+        Some(format!("Nessun film copre tutti i {n} concetti richiesti. Puoi rimuovere o modificare un tema."))
+    } else if count < 5 {
+        Some(format!("Solo {count} film coprono tutti i concetti: non aggiungo titoli estranei."))
+    } else { None };
+    let total = count as u32;
     Ok(ChatPoolResult {
         movies,
         total,
@@ -6697,8 +6537,8 @@ fn chat_theme_pool(
     })
 }
 
-/// Candidati reali per titolo, simili, tendenze o facce dure. Il rilassamento
-/// e dichiarato: non si sostituiscono i criteri stretti con titoli estranei.
+/// Candidati nuovi per titolo, simili, tendenze o filtri vincolanti.
+#[allow(clippy::too_many_arguments)]
 fn chat_candidates(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -6707,87 +6547,83 @@ fn chat_candidates(
     title: Option<&str>,
     similar: Option<&str>,
     notes: &mut Vec<String>,
-) -> Result<(Vec<Movie>, u32, String, bool), String> {
-    if let Some(name) = similar {
-        let p = tmdb.search(name, 1)?;
-        let Some(first) = p.results.first() else {
-            return Err(format!("Nessun film trovato per «{name}»."));
-        };
-        let seed = first.title.clone();
-        let rec = tmdb.similar(first.id, 1)?;
-        let movies = filter_movies(
-            dedupe(rec.results.into_iter().map(Movie::from).collect()),
+    exclude: &[u64],
+) -> Result<(Vec<Movie>, u32, String), String> {
+    let (movies, total, headline) = if let Some(name) = similar {
+        let page = tmdb.search(name, 1)?;
+        let first = page
+            .results
+            .first()
+            .ok_or_else(|| format!("Nessun film trovato per «{name}»."))?;
+        let (movies, total) = collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| {
+            tmdb.similar(first.id, page)
+        })?;
+        (movies, total, format!("Simili a «{}»", first.title))
+    } else if let Some(title) = title {
+        let (movies, total) =
+            collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| tmdb.search(title, page))?;
+        (movies, total, format!("Risultati per «{title}»"))
+    } else if wants_trending(eff) {
+        let (movies, total) =
+            collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| tmdb.trending(page))?;
+        (movies, total, "Tendenze della settimana".into())
+    } else {
+        require_keywords(tax, eff, kw)?;
+        let query = constraints::to_discover(tax, eff, kw, 1)?;
+        let headline = describe(tax, eff, query.year);
+        let (movies, total) = collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| {
+            let mut q = query.clone();
+            q.page = page;
+            tmdb.discover(&q)
+        })?;
+        (movies, total, headline)
+    };
+    if movies.is_empty() && !exclude.is_empty() {
+        notes.push("Nessun nuovo candidato verificabile nelle pagine esplorate. I film gia proposti restano esclusi.".into());
+    }
+    Ok((movies, total, headline))
+}
+
+fn collect_chat_pages(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    facets: &Facets,
+    known: &[(String, u64)],
+    exclude: &[u64],
+    mut fetch: impl FnMut(u32) -> Result<PagedMovies, String>,
+) -> Result<(Vec<Movie>, u32), String> {
+    let mut movies = Vec::new();
+    let mut seen: HashSet<u64> = exclude.iter().copied().collect();
+    let mut total = 0;
+    let mut local = facets.clone();
+    // Il paese si verifica sui dati della scheda, non stimandolo dalla lingua.
+    local.countries.clear();
+    // shortcut: al massimo 20 pagine per fonte; evita ricerche senza limite in una sessione desktop.
+    for page in 1..=20 {
+        let result = fetch(page)?;
+        total = result.total_results;
+        let last = result.total_pages.min(500);
+        let batch = filter_movies(
+            result.results.into_iter().map(Movie::from).collect(),
             tax,
-            eff,
+            &local,
         );
-        if movies.is_empty() {
-            return Err(format!(
-                "Nessun film simile a «{seed}» con i filtri attivi."
-            ));
-        }
-        let total = if eff.is_empty() {
-            rec.total_results
-        } else {
-            movies.len() as u32
-        };
-        return Ok((movies, total, format!("Simili a «{seed}»"), true));
-    }
-    if let Some(t) = title {
-        if eff.is_empty() {
-            let p1 = tmdb.search(t, 1)?;
-            let total = p1.total_results;
-            let mut movies: Vec<Movie> = p1.results.into_iter().map(Movie::from).collect();
-            if p1.total_pages > 1 && movies.len() < 20 {
-                if let Ok(p2) = tmdb.search(t, 2) {
-                    movies.extend(p2.results.into_iter().map(Movie::from));
-                }
+        movies.extend(batch.into_iter().filter(|m| {
+            if !seen.insert(m.id) {
+                return false;
             }
-            let movies = dedupe(movies);
-            if movies.is_empty() && looks_like_question(t) {
-                // Solo per una frase che sembra una domanda: una vera ricerca
-                // per titolo non viene sostituita dai film del momento.
-                notes.push(
-                    "La frase sembra una domanda, non un titolo: propongo i film del momento."
-                        .into(),
-                );
-                let p = tmdb.trending(1)?;
-                return Ok((
-                    dedupe(p.results.into_iter().map(Movie::from).collect()),
-                    p.total_results,
-                    "Tendenze della settimana".into(),
-                    false,
-                ));
-            }
-            return Ok((movies, total, format!("Risultati per «{t}»"), true));
-        }
-        let (raw, _) = search_title_pages(tmdb, t)?;
-        let movies = filter_movies(raw, tax, eff);
-        let total = movies.len() as u32;
-        return Ok((movies, total, format!("Risultati per «{t}»"), true));
-    }
-    if wants_trending(eff) {
-        let p = tmdb.trending(1)?;
-        return Ok((
-            dedupe(p.results.into_iter().map(Movie::from).collect()),
-            p.total_results,
-            "Tendenze della settimana".into(),
-            true,
-        ));
-    }
-    let mut relaxed = Vec::new();
-    let (m1, total, pages, headline) =
-        discover_with_relaxation(tmdb, tax, eff, kw, 1, &mut relaxed)?;
-    let mut movies = m1;
-    if pages > 1 && movies.len() < 20 {
-        if let Ok((m2, _, _, _)) =
-            discover_with_relaxation(tmdb, tax, eff, kw, 2, &mut relaxed)
-        {
-            movies.extend(m2);
+            tmdb.cached_details(m.id).is_none_or(|d| {
+                d.movie.year.is_some()
+                    && !d.movie.overview.trim().is_empty()
+                    && verified_match(&d, tax, facets, known)
+            })
+        }));
+        if movies.len() >= 20 || page >= last {
+            break;
         }
     }
-    let exact = relaxed.is_empty();
-    notes.extend(relaxed);
-    Ok((dedupe(movies), total, headline, exact))
+    movies.truncate(20);
+    Ok((movies, total))
 }
 
 fn dedupe(movies: Vec<Movie>) -> Vec<Movie> {
@@ -6795,17 +6631,96 @@ fn dedupe(movies: Vec<Movie>) -> Vec<Movie> {
     movies.into_iter().filter(|m| seen.insert(m.id)).collect()
 }
 
-/// Una frase che sembra una domanda, non un titolo: usata solo quando la
-/// ricerca per titolo non trova nulla, per non chiudere con zero film.
-fn looks_like_question(text: &str) -> bool {
-    let t = text.trim().to_lowercase();
-    if t.contains('?') {
-        return true;
+
+fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String, u64)]) -> bool {
+    if require_keywords(tax, facets, known).is_err() {
+        return false;
     }
-    const STARTS: [&str; 8] = [
-        "chi ", "cosa ", "che cosa", "qual", "quando ", "dove ", "come ", "perch",
-    ];
-    STARTS.iter().any(|p| t.starts_with(p))
+    let mut local = facets.clone();
+    local.countries.clear();
+    if filter_movies(vec![d.movie.clone()], tax, &local).is_empty() {
+        return false;
+    }
+    if (facets.min_rating.is_some() || facets.max_rating.is_some()) && d.movie.votes == 0 {
+        return false;
+    }
+    let Ok(query) = constraints::to_discover(tax, facets, known, 1) else {
+        return false;
+    };
+    if let Some((min, max)) = query.runtime {
+        if !d
+            .runtime
+            .is_some_and(|minutes| minutes > 0 && minutes >= min && minutes <= max)
+        {
+            return false;
+        }
+    }
+    if !query.countries.is_empty()
+        && !query
+            .countries
+            .iter()
+            .any(|code| d.country_codes.contains(code))
+    {
+        return false;
+    }
+    if !query.keywords.is_empty() {
+        let matches = |id: &u64| d.keywords.contains(id);
+        if query.keywords_or {
+            if !query.keywords.iter().any(matches) {
+                return false;
+            }
+        } else if !query.keywords.iter().all(matches) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Legge le schede prima della selezione e verifica anche filtri non disponibili nella ricerca per titolo.
+pub fn verified_details(
+    tmdb: &Tmdb,
+    tax: &Taxonomy,
+    facets: &Facets,
+    known: &[(String, u64)],
+    movies: &[Movie],
+) -> Result<HashMap<u64, Details>, String> {
+    let mut found = HashMap::new();
+    let mut succeeded = 0;
+    let mut error = None;
+    for batch in movies.chunks(8) {
+        let results = std::thread::scope(|scope| {
+            let pending: Vec<_> = batch
+                .iter()
+                .map(|m| scope.spawn(move || tmdb.details(m.id)))
+                .collect();
+            pending
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err("Scheda non disponibile.".into()))
+                })
+                .collect::<Vec<_>>()
+        });
+        for result in results {
+            match result {
+                Ok(d) => {
+                    succeeded += 1;
+                    if verified_match(&d, tax, facets, known) {
+                        found.insert(d.movie.id, d);
+                    }
+                }
+                Err(e) => {
+                    error = Some(e);
+                }
+            }
+        }
+    }
+    if succeeded == 0 {
+        if let Some(error) = error {
+            return Err(error);
+        }
+    }
+    Ok(found)
 }
 
 /// Il film come lo vede il curatore: pochi campi, trama troncata.
@@ -6827,9 +6742,10 @@ fn candidate_of(
             .filter_map(|g| tax.genre_name(*g))
             .collect::<Vec<_>>()
             .join(", "),
-        overview: theme::truncate(&m.overview, 240),
+        overview: theme::truncate(&m.overview, 720),
         reason,
         relevance,
+        ..Default::default()
     }
 }
 
@@ -7211,12 +7127,169 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        allowed_url, describe, filter_movies, has_word, in_sala_movies, looks_like_question,
+        allowed_url, describe, filter_movies, has_word, in_sala_movies,
         merge_facets, resize_edge, side_panel_widths, sort_movies, unlock_candidates,
         wants_trending, Cleared, Facets, Movie, Sort,
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn altri_legge_pagine_successive_ed_esclude_tutti_i_titoli_gia_proposti() {
+        let tax = Taxonomy::load();
+        let tmdb = crate::tmdb::Tmdb::new("test".into(), "it-IT".into());
+        let mut requested = Vec::new();
+        let excluded: Vec<u64> = (1..=20).collect();
+        let (movies, total) =
+            super::collect_chat_pages(&tmdb, &tax, &Facets::default(), &[], &excluded, |page| {
+                requested.push(page);
+                Ok(crate::tmdb::models::PagedMovies {
+                    page,
+                    total_pages: 3,
+                    total_results: 60,
+                    results: (1..=20)
+                        .map(|n| crate::tmdb::models::ApiMovie {
+                            id: (page as u64 - 1) * 20 + n,
+                            ..Default::default()
+                        })
+                        .collect(),
+                })
+            })
+            .unwrap();
+        assert_eq!(requested, vec![1, 2]);
+        assert_eq!(total, 60);
+        assert_eq!(movies.len(), 20);
+        assert!(movies.iter().all(|m| m.id > 20));
+    }
+
+    #[test]
+    fn la_paginazione_non_si_ferma_su_una_pagina_senza_match() {
+        let tax = Taxonomy::load();
+        let tmdb = crate::tmdb::Tmdb::new("test".into(), "it-IT".into());
+        let facets = Facets {
+            genres: vec![53],
+            ..Default::default()
+        };
+        let (movies, _) = super::collect_chat_pages(&tmdb, &tax, &facets, &[], &[], |page| {
+            Ok(crate::tmdb::models::PagedMovies {
+                page,
+                total_pages: 2,
+                total_results: 2,
+                results: vec![crate::tmdb::models::ApiMovie {
+                    id: page as u64,
+                    genre_ids: if page == 2 { vec![53] } else { vec![35] },
+                    ..Default::default()
+                }],
+            })
+        })
+        .unwrap();
+        assert_eq!(movies.iter().map(|m| m.id).collect::<Vec<_>>(), vec![2]);
+    }
+
+    #[test]
+    fn durata_paese_e_temi_sono_verificati_sulla_scheda() {
+        let tax = Taxonomy::load();
+        let mut details = crate::domain::model::Details {
+            movie: Movie {
+                id: 1,
+                year: Some(1985),
+                genre_ids: vec![53],
+                lang: "en".into(),
+                overview: "Trama verificabile".into(),
+                rating: 7.5,
+                votes: 50,
+                ..Default::default()
+            },
+            runtime: Some(95),
+            country_codes: vec!["IT".into()],
+            keywords: vec![123],
+            ..Default::default()
+        };
+        let facets = Facets {
+            runtime: Some((0, 100)),
+            countries: vec!["IT".into()],
+            genres: vec![53],
+            keywords: vec!["friendship".into()],
+            ..Default::default()
+        };
+        let known = vec![("friendship".into(), 123)];
+        assert!(
+            super::verified_match(&details, &tax, &facets, &known),
+            "La lingua inglese non esclude una produzione italiana"
+        );
+        details.runtime = Some(120);
+        assert!(!super::verified_match(&details, &tax, &facets, &known));
+        details.runtime = None;
+        assert!(
+            !super::verified_match(&details, &tax, &facets, &known),
+            "Durata sconosciuta non significa zero minuti"
+        );
+        details.runtime = Some(95);
+        details.country_codes = vec!["US".into()];
+        details.movie.lang = "it".into();
+        assert!(
+            !super::verified_match(&details, &tax, &facets, &known),
+            "La lingua italiana non basta per il paese"
+        );
+        details.country_codes = vec!["IT".into()];
+        details.keywords.clear();
+        assert!(!super::verified_match(&details, &tax, &facets, &known));
+        assert!(!super::verified_match(&details, &tax, &facets, &[]));
+    }
+
+    #[test]
+    fn periodi_separati_non_includono_il_decennio_intermedio() {
+        let tax = Taxonomy::load();
+        let facets = Facets {
+            decades: vec!["1970s".into(), "1990s".into()],
+            ..Default::default()
+        };
+        let movies = [1975, 1985, 1995]
+            .into_iter()
+            .map(|year| Movie {
+                year: Some(year),
+                ..Default::default()
+            })
+            .collect();
+        let result = filter_movies(movies, &tax, &facets);
+        assert_eq!(
+            result.iter().map(|m| m.year.unwrap()).collect::<Vec<_>>(),
+            vec![1975, 1995]
+        );
+    }
+
+    #[test]
+    fn la_memoria_non_trasforma_le_proposte_in_preferenze() {
+        let ctx = egui::Context::default();
+        let mut app = super::App::with_local_data(&ctx, Default::default(), None, Default::default());
+        app.chat.push(crate::ui::chat::Entry {
+            user: "Un thriller italiano".into(),
+            answer: crate::ui::chat::Answer {
+                intro: "Ti piace il cinema erotico".into(),
+                understood: "Erotico".into(),
+                ..Default::default()
+            },
+        });
+        assert_eq!(
+            app.chat_history(1),
+            vec![("utente".into(), "Un thriller italiano".into())]
+        );
+    }
+
+    #[test]
+    fn un_tema_richiede_tutti_i_concetti_anche_quando_sono_due() {
+        for (matched, expected) in [
+            (vec![true, true], true),
+            (vec![true, false], false),
+            (vec![false, true], false),
+            (vec![true, true, false], false),
+            (vec![true, true, true], true),
+            (vec![], false),
+        ] {
+            let candidate = super::ThemeCandidate { movie: Movie::default(), matched };
+            assert_eq!(candidate.complete(), expected);
+        }
+    }
 
     #[test]
     fn schermate_e_stati_si_disegnano_alle_dimensioni_supportate() {
@@ -7589,14 +7662,6 @@ mod tests {
         assert!(1220.0 - left >= 808.0);
         assert!(1220.0 - right >= 808.0);
         assert_eq!(side_panel_widths(1920.0), (380.0, 420.0));
-    }
-
-    #[test]
-    fn una_domanda_non_e_un_titolo() {
-        assert!(looks_like_question("qual e la capitale della Francia?"));
-        assert!(looks_like_question("chi ha diretto Suspiria"));
-        assert!(!looks_like_question("Il padrino"));
-        assert!(!looks_like_question("Blade Runner 2049"));
     }
 
     #[test]

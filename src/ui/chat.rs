@@ -86,6 +86,7 @@ pub struct Entry {
 
 #[derive(Default)]
 pub struct Actions {
+    pub criteria: Option<(usize, crate::ai::Intent)>,
     pub open_detail: Option<u64>,
     pub similar_to: Option<String>,
     pub retry: Option<usize>,
@@ -1088,6 +1089,7 @@ pub fn view(
     bottom_pad: f32,
 ) -> Actions {
     let mut actions = Actions::default();
+    let mut show_criteria = false;
     let stick = busy
         || entries
             .last()
@@ -1125,6 +1127,11 @@ pub fn view(
                             {
                                 actions.new_chat = true;
                             }
+                            ui.add_space(10.0);
+                            show_criteria = ui.add_enabled_ui(!busy, |ui| {
+                                lumen::link(ui, "Criteri", lumen::MUTED)
+                                    .on_hover_text("Mostra i criteri dell'ultima risposta per modificarli")
+                            }).inner.clicked();
                         },
                     );
                 });
@@ -1135,7 +1142,7 @@ pub fn view(
     let output = egui::ScrollArea::vertical()
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
         .auto_shrink([false, false])
-        .stick_to_bottom(stick)
+        .stick_to_bottom(stick && !show_criteria)
         .show(ui, |ui| {
             let avail = ui.available_width();
             let pad = content_pad(avail);
@@ -1153,7 +1160,8 @@ pub fn view(
                         for (index, entry) in entries.iter().enumerate() {
                             user_message(ui, &entry.user);
                             ui.add_space(18.0);
-                            answer_view(ui, images, tax, entry, index, now, &mut actions, width);
+                            let editable = index + 1 == entries.len() && !entries.iter().any(|e| e.answer.state == State::Busy);
+                            answer_view(ui, images, tax, entry, index, now, &mut actions, width, editable, show_criteria && index + 1 == entries.len());
                             if index + 1 < entries.len() {
                                 ui.add_space(24.0);
                                 hairline_width(ui, width);
@@ -1247,6 +1255,8 @@ fn answer_view(
     now: f64,
     actions: &mut Actions,
     width: f32,
+    editable: bool,
+    reveal_criteria: bool,
 ) {
     let a = &entry.answer;
     ui.set_max_width(width);
@@ -1276,6 +1286,11 @@ fn answer_view(
         let interrupted = err == "Risposta interrotta.";
         let text = if interrupted {
             "Risposta interrotta."
+        } else if err.starts_with("Non posso verificare questi temi")
+            || err.starts_with("Il periodo selezionato")
+            || err.starts_with("Nessun film")
+        {
+            err.as_str()
         } else {
             friendly_error(err)
         };
@@ -1292,6 +1307,9 @@ fn answer_view(
             actions.retry = Some(index);
         }
         if a.cards.is_empty() {
+            if let Some(context) = &a.context {
+                ui.add_enabled_ui(editable, |ui| criteria_editor(ui, tax, context, index, actions));
+            }
             return;
         }
         ui.add_space(10.0);
@@ -1299,7 +1317,7 @@ fn answer_view(
 
     if !a.understood.is_empty() {
         ui.label(lumen::label("Criteri interpretati")).on_hover_text(
-            "Sono i filtri usati per cercare su TMDB: puoi correggerli con un seguito.",
+            "Questi criteri restano vincolanti. Puoi rimuoverli con un clic o modificarli qui sotto.",
         );
         ui.add_space(4.0);
         ui.scope(|ui| {
@@ -1309,6 +1327,11 @@ fn answer_view(
             );
         });
         ui.add_space(10.0);
+    }
+    if let Some(context) = &a.context {
+        if reveal_criteria { ui.scroll_to_cursor(Some(egui::Align::TOP)); }
+        ui.add_enabled_ui(editable, |ui| criteria_editor(ui, tax, context, index, actions));
+        ui.add_space(8.0);
     }
     if !a.cards.is_empty() && !a.intro.is_empty() {
         ui.scope(|ui| {
@@ -1398,11 +1421,103 @@ fn answer_view(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
             ui.label(
-                lumen::mono(10.0, format!("{} RISULTATI", theme::thousands(total)))
+                lumen::mono(10.0, if a.grid_ready {
+                    format!("{} SU TMDB", theme::thousands(total))
+                } else {
+                    format!("{} PROPOSTE VERIFICATE", a.cards.len())
+                })
                     .color(lumen::FAINT),
             );
         });
     });
+}
+
+fn criteria_editor(
+    ui: &mut egui::Ui,
+    tax: &Taxonomy,
+    context: &crate::ai::Intent,
+    index: usize,
+    actions: &mut Actions,
+) {
+    use super::facets;
+    if !ui.is_enabled() {
+        let _ = facets::active_pills(ui, tax, &context.facets);
+        return;
+    }
+    let mut edited = context.clone();
+    let mut changes = Vec::new();
+    let mut changed = false;
+    ui.push_id(("chat_criteria", index), |ui| {
+        changes.extend(facets::active_pills(ui, tax, &edited.facets));
+        ui.horizontal_wrapped(|ui| {
+            for (i, theme) in context.themes.iter().enumerate() {
+                if link(ui, &format!("Rimuovi tema: {}", theme.label), lumen::MUTED).clicked() {
+                    edited.themes.remove(i);
+                    changed = true;
+                    break;
+                }
+            }
+        });
+        egui::CollapsingHeader::new("Modifica criteri").show(ui, |ui| {
+            let id = ui.scope_id().with("criteria_draft");
+            let mut draft = ui
+                .data_mut(|d| d.get_temp::<crate::ai::Intent>(id))
+                .unwrap_or_else(|| context.clone());
+            let mut query = String::new();
+            let mut guide = ui
+                .data_mut(|d| d.get_temp::<bool>(id.with("guide")))
+                .unwrap_or(false);
+            let prune = crate::domain::constraints::pruning(tax, &draft.facets);
+            let mut updates = Vec::new();
+            egui::ScrollArea::vertical().id_salt("chat-criteria-fields").min_scrolled_height(108.0).max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
+            updates.extend(facets::sections(
+                ui,
+                tax,
+                &draft.facets,
+                &prune,
+                &mut query,
+                &mut guide,
+                &[],
+                &[],
+                &[],
+            ));
+            });
+            if guide {
+                updates.extend(facets::guide_window(ui.ctx(), tax, &mut guide));
+            }
+            for update in updates {
+                facets::apply_action(&mut draft.facets, update);
+            }
+            egui::ComboBox::from_id_salt("chat_sort")
+                .selected_text(draft.facets.sort.label())
+                .show_ui(ui, |ui| {
+                    for sort in crate::domain::model::Sort::ALL {
+                        ui.selectable_value(&mut draft.facets.sort, sort, sort.label());
+                    }
+                });
+            ui.horizontal(|ui| {
+                if ui.add_enabled_ui(draft.facets != context.facets, |ui| lumen::button_sized(ui, "Applica criteri", true, 140.0)).inner.clicked() {
+                    edited = draft.clone();
+                    changed = true;
+                }
+                if link(ui, "Annulla modifiche", lumen::MUTED).clicked() {
+                    draft = context.clone();
+                }
+            });
+            ui.data_mut(|d| {
+                d.insert_temp(id, draft);
+                d.insert_temp(id.with("guide"), guide);
+            });
+        });
+    });
+    changed |= !changes.is_empty();
+    for action in changes {
+        facets::apply_action(&mut edited.facets, action);
+    }
+    if changed {
+        edited.action = crate::ai::ChatAction::Refine;
+        actions.criteria = Some((index, edited));
+    }
 }
 
 fn hero_card(
@@ -1970,6 +2085,81 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool, busy: bool) -> egui
 
 #[cfg(test)]
 mod layout_tests {
+    #[test]
+    fn un_tema_non_verificabile_spiega_quale_criterio_correggere() {
+        use crate::ui::{images::ImageStore, layout_test_support::*, lumen};
+        let ctx = egui::Context::default();
+        lumen::install(&ctx);
+        let tax = crate::domain::taxonomy::Taxonomy::load();
+        let images = ImageStore::new();
+        let message = "Non posso verificare questi temi su TMDB: tema sconosciuto. Modifica o rimuovi il criterio per continuare.";
+        let entry = super::Entry { user: "Un film".into(), answer: super::Answer { error: Some(message.into()), ..Default::default() } };
+        let output = frame(&ctx, egui::vec2(640.0, 400.0), |ui| super::answer_view(ui, &images, &tax, &entry, 0, 0.0, &mut super::Actions::default(), 620.0, true, false));
+        assert!(text_rect(&output, message).is_finite());
+    }
+
+    #[test]
+    fn rimuovere_un_criterio_dalla_chat_preserva_gli_altri() {
+        use crate::ui::{layout_test_support::text_rect, lumen};
+        let ctx = egui::Context::default();
+        lumen::install(&ctx);
+        let tax = crate::domain::taxonomy::Taxonomy::load();
+        let context = crate::ai::Intent {
+            facets: crate::domain::model::Facets {
+                min_rating: Some(7.0),
+                runtime: Some((0, 100)),
+                without_genres: vec![27],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let render = |events| {
+            let mut actions = super::Actions::default();
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(640.0, 600.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ui| super::criteria_editor(ui, &tax, &context, 0, &mut actions),
+            );
+            output.textures_delta.clear();
+            (output, actions)
+        };
+        let _ = render(vec![]);
+        let (output, _) = render(vec![]);
+        let pos = text_rect(&output, "× voto ≥ 7.0").center();
+        let _ = render(vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]);
+        let (_, actions) = render(vec![egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        let (_, edited) = actions
+            .criteria
+            .expect("il clic deve aggiornare i criteri della chat");
+        assert_eq!(edited.facets.min_rating, None);
+        assert_eq!(edited.facets.runtime, Some((0, 100)));
+        assert_eq!(edited.facets.without_genres, vec![27]);
+        assert_eq!(
+            context.facets.min_rating,
+            Some(7.0),
+            "la risposta precedente conserva il suo contesto"
+        );
+    }
+
     use super::poster_width;
     use super::result_columns;
     use super::friendly_error;

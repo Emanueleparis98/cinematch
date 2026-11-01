@@ -12,7 +12,7 @@ use egui::{
 };
 
 use crate::domain::constraints::{movement_recipe, Availability, Prune};
-use crate::domain::model::{Facets, Sort};
+use crate::domain::model::{toggle, Facets, Sort};
 use crate::domain::taxonomy::{Movement, Taxonomy};
 use crate::ui::fonts;
 use crate::ui::{lumen, theme};
@@ -860,7 +860,7 @@ fn pill(ui: &mut Ui, label: &str) -> Response {
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-fn active_pills(ui: &mut Ui, tax: &Taxonomy, f: &Facets) -> Vec<FacetAction> {
+pub(crate) fn active_pills(ui: &mut Ui, tax: &Taxonomy, f: &Facets) -> Vec<FacetAction> {
     let mut items: Vec<(String, FacetAction)> = Vec::new();
     for id in &f.movements {
         if let Some(m) = tax.movement(id) {
@@ -1549,6 +1549,75 @@ fn movement_details(tax: &Taxonomy, m: &Movement) -> (String, String) {
     };
     (period, details)
 }
+
+pub(crate) fn apply_action(f: &mut Facets, action: FacetAction) {
+    match action {
+        FacetAction::Decade(id) => toggle(&mut f.decades, id),
+        FacetAction::Movement(id) => toggle(&mut f.movements, id),
+        FacetAction::Genre(id) => {
+            if f.without_genres.contains(&id) {
+                toggle(&mut f.without_genres, id);
+            } else {
+                toggle(&mut f.genres, id);
+            }
+        }
+        FacetAction::Country(code) => toggle(&mut f.countries, code),
+        FacetAction::Mood(id) => toggle(&mut f.moods, id),
+        FacetAction::Keyword(name) => toggle(&mut f.keywords, name),
+        FacetAction::Rating(v) => f.min_rating = v,
+        FacetAction::MaxRating(v) => f.max_rating = v,
+        FacetAction::Votes(v) => f.min_votes = v,
+        FacetAction::Runtime(v) => f.runtime = v,
+        // Guida: la combinazione di filtri che descrive una corrente.
+        // Si aggiunge a quello che c'e gia, cosi l'utente vede le facce
+        // accendersi e puo togliere cio che non vuole.
+        FacetAction::Combo {
+            decades,
+            countries,
+            movements,
+        } => {
+            for d in decades {
+                if !f.decades.contains(&d) {
+                    f.decades.push(d);
+                }
+            }
+            for c in countries {
+                if !f.countries.contains(&c) {
+                    f.countries.push(c);
+                }
+            }
+            for m in movements {
+                if !f.movements.contains(&m) {
+                    f.movements.push(m);
+                }
+            }
+        }
+        FacetAction::Clear(Section::All) => {
+            let sort = f.sort;
+            *f = Facets {
+                sort,
+                ..Default::default()
+            };
+        }
+        FacetAction::Clear(Section::Period) => f.decades.clear(),
+        FacetAction::Clear(Section::Genres) => {
+            f.genres.clear();
+            f.without_genres.clear();
+        }
+        FacetAction::Clear(Section::Countries) => f.countries.clear(),
+        FacetAction::Clear(Section::Moods) => {
+            f.moods.clear();
+            f.keywords.clear();
+        }
+        FacetAction::Clear(Section::Metrics) => {
+            f.min_rating = None;
+            f.max_rating = None;
+            f.min_votes = None;
+            f.runtime = None;
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

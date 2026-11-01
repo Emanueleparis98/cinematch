@@ -33,10 +33,8 @@ fn anni_80_piu_giallo_e_legittimo_ma_ristretto() {
     let q = to_discover(&tax, &clean, &[], 1).unwrap();
     assert_eq!(q.countries, vec!["IT".to_string()], "paese implicato dal movimento");
     assert!(q.without_genres.contains(&16), "animazione esclusa dal giallo");
-    assert!(
-        q.genres_or && q.genres.contains(&9648) && q.genres.contains(&53),
-        "Mistero e Thriller sono etichette alternative del giallo, non requisiti simultanei"
-    );
+    assert_eq!(q.genres, vec![27], "Horror esplicito resta obbligatorio");
+    assert!(!q.genres_or, "il movimento non allarga un genere richiesto");
 }
 
 #[test]
@@ -49,6 +47,15 @@ fn genere_estraneo_al_movimento_resta_un_filtro_stretto() {
     let q = to_discover(&tax, &clean, &[], 1).unwrap();
     assert_eq!(q.genres, vec![35], "nessuna etichetta del movimento aggiunta");
     assert!(!q.genres_or, "il genere estraneo non allarga la query");
+}
+
+#[test]
+fn il_movimento_da_solo_usa_i_suoi_generi_in_alternativa() {
+    let tax = Taxonomy::load();
+    let f = facets(&[], &["giallo_italiano"], &[]);
+    let q = to_discover(&tax, &f, &[], 1).unwrap();
+    assert!(q.genres_or);
+    assert!(q.genres.contains(&27) && q.genres.contains(&53));
 }
 
 #[test]

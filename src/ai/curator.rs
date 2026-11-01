@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 /// Un film reale proposto al curatore: pochi campi, quelli che servono per
 /// scegliere e per spiegare la scelta.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Candidate {
     pub id: u64,
     pub title: String,
@@ -23,6 +23,9 @@ pub struct Candidate {
     pub reason: Option<String>,
     /// 1.0 = copre tutti i concetti; 0.5 = uno su due; ecc.
     pub relevance: f32,
+    pub runtime: Option<u32>,
+    pub director: Option<String>,
+    pub providers: Vec<String>,
 }
 
 /// Il materiale che il curatore riceve: richiesta, filtri capiti, memoria
@@ -77,12 +80,23 @@ pub fn pick_texts(c: &Candidate, understood: &str) -> (String, String) {
         "«{}» rientra nei criteri della ricerca: {}.{}{}",
         c.title, understood, genres, match_note
     );
-    let consiglio = if c.rating >= 7.5 {
-        "Tra i titoli piu solidi del gruppo: buon punto di partenza. Apri la scheda per cast e disponibilita."
+    (perche, verified_advice(c))
+}
+
+pub fn verified_advice(c: &Candidate) -> String {
+    let mut parts = Vec::new();
+    if let Some(minutes) = c.runtime {
+        parts.push(format!("Metti in conto {minutes} minuti."));
+    }
+    if !c.providers.is_empty() {
+        parts.push(format!("In abbonamento: {}.", c.providers.join(", ")));
+    }
+    if parts.is_empty() {
+        "Apri la scheda per i dettagli disponibili; edizioni e doppiaggio non sono verificati."
+            .into()
     } else {
-        "Scelta sicura per la serata: apri la scheda per i dettagli e dove si vede."
-    };
-    (perche, consiglio.to_string())
+        parts.join(" ")
+    }
 }
 
 /// Chiude un testo su un limite di caratteri, senza spezzare le parole in
@@ -99,7 +113,9 @@ fn cut(text: &str, max: usize) -> String {
 
 /// L'intro non ripete i criteri: la UI li mostra come titolo della risposta.
 pub fn intro_text(n: usize) -> String {
-    if n <= 1 {
+    if n == 0 {
+        "Nessun film verificato con questi criteri.".to_string()
+    } else if n == 1 {
         "Ecco il titolo che corrisponde di più.".to_string()
     } else {
         format!("Ecco {n} titoli in linea con la richiesta.")
@@ -295,6 +311,20 @@ impl IntroStream {
 mod tests {
     use super::*;
 
+    #[test]
+    fn i_consigli_usano_solo_dati_verificati() {
+        let candidate = Candidate {
+            runtime: Some(95),
+            providers: vec!["MUBI".into()],
+            ..Default::default()
+        };
+        assert_eq!(
+            verified_advice(&candidate),
+            "Metti in conto 95 minuti. In abbonamento: MUBI."
+        );
+        assert!(!verified_advice(&Candidate::default()).contains("restaurat"));
+    }
+
     fn cand(id: u64, title: &str, rating: f32, votes: u32) -> Candidate {
         Candidate {
             id,
@@ -306,6 +336,7 @@ mod tests {
             overview: "Una trama.".into(),
             reason: None,
             relevance: 1.0,
+            ..Default::default()
         }
     }
 

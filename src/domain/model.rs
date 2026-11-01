@@ -151,6 +151,8 @@ pub struct Details {
     pub buy: Vec<String>,
     pub provider_link: Option<String>,
     pub countries: Vec<String>,
+    pub country_codes: Vec<String>,
     pub recommendations: Vec<Movie>,
     pub imdb: Option<ImdbRating>,
+    pub keywords: Vec<u64>,
 }

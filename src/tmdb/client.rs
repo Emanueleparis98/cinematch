@@ -550,6 +550,10 @@ impl Tmdb {
         }
     }
 
+    pub fn cached_details(&self, id: u64) -> Option<Details> {
+        self.details_cache.lock().ok()?.get(&id).cloned()
+    }
+
     pub fn details(&self, id: u64) -> Result<Details, String> {        if let Ok(c) = self.details_cache.lock() {
             if let Some(hit) = c.get(&id) {
                 return Ok(hit.clone());
@@ -557,7 +561,7 @@ impl Tmdb {
         }
         let p = vec![(
             "append_to_response".to_string(),
-            "credits,watch/providers,recommendations,external_ids".to_string(),
+            "credits,watch/providers,recommendations,external_ids,keywords".to_string(),
         )];
         let raw: ApiDetails = self.get(&format!("/movie/{id}"), &p)?;
         let details = raw.into_details(&self.region);

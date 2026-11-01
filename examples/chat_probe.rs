@@ -187,9 +187,10 @@ fn candidate_of(
             .filter_map(|g| tax.genre_name(*g))
             .collect::<Vec<_>>()
             .join(", "),
-        overview: m.overview.chars().take(240).collect(),
+        overview: m.overview.chars().take(720).collect(),
         reason: reasons.get(&m.id).cloned(),
         relevance: relevance.get(&m.id).copied().unwrap_or(1.0),
+            ..Default::default()
     }
 }
 
@@ -215,6 +216,7 @@ fn turn(
     };
     let parse_history: &[(String, String)] =
         if provider.is_llm() || pre_follow { history } else { &[] };
+    let started = std::time::Instant::now();
     let intent = match provider.parse_chat(text, tax, parse_history, parse_active) {
         Ok(i) => i,
         Err(e) => {
@@ -296,7 +298,7 @@ fn turn(
     for r in &removed {
         println!("  vincolo: {r}");
     }
-    let title = intent.free_text.clone();
+    let title = intent.free_text.clone().or_else(|| if action.is_contextual() { active.free_text.clone() } else { None });
     let similar = intent
         .similar_to
         .clone()
@@ -342,6 +344,7 @@ fn turn(
         title.as_deref(),
         similar.as_deref(),
         &mut Vec::new(),
+        exclude,
     ) {
         Ok(p) => p,
         Err(e) => {
@@ -361,7 +364,11 @@ fn turn(
     for (id, reason) in &pool.reasons {
         println!("  match {id}: {reason}");
     }
-    pool.movies.retain(|m| !exclude.contains(&m.id));
+    let details = match cinematch::app::verified_details(tmdb, tax, &eff, &pool.keyword_pairs, &pool.movies) {
+        Ok(details) => details,
+        Err(error) => { println!("errore verifica: {error}"); return None; }
+    };
+    pool.movies.retain(|m| details.get(&m.id).is_some_and(|d| d.movie.year.is_some() && !d.movie.overview.trim().is_empty()) && !exclude.contains(&m.id));
     pool.movies.truncate(20);
     let movies = pool.movies;
 
@@ -372,7 +379,14 @@ fn turn(
         history: if follow { history.to_vec() } else { Vec::new() },
         candidates: movies
             .iter()
-            .map(|m| candidate_of(tax, m, &pool.reasons, &pool.relevance))
+            .map(|m| {
+                let d = &details[&m.id];
+                let mut candidate = candidate_of(tax, &d.movie, &pool.reasons, &pool.relevance);
+                candidate.runtime = d.runtime;
+                candidate.director = d.director.clone();
+                candidate.providers = d.flatrate.clone();
+                candidate
+            })
             .collect(),
     };
     let mut chunks = 0usize;
@@ -416,7 +430,7 @@ fn turn(
         }
     }
 
-    println!("\nscelte: {}", titles.len());
+    println!("\nscelte: {} · tempo: {:.1}s", titles.len(), started.elapsed().as_secs_f64());
     Some((context, titles, ids))
 }
 
@@ -451,16 +465,11 @@ fn main() {
             Vec::new()
         };
         match turn(&tmdb, &tax, &provider, phrase, &active, &history, &exclude) {
-            Some((context, titles, ids)) => {
+            Some((context, _titles, ids)) => {
                 active = context;
                 seen.extend(ids);
                 history.push(("utente".into(), phrase.clone()));
-                if !titles.is_empty() {
-                    history.push((
-                        "assistente".into(),
-                        format!("Ho proposto: {}", titles.join(", ")),
-                    ));
-                }
+
             }
             None => break,
         }

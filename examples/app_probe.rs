@@ -5,7 +5,7 @@
 //! Legge la configurazione vera da %APPDATA%\CineMatch\config.json.
 
 use cinematch::ai::build_provider;
-use cinematch::app::discover_with_relaxation;
+use cinematch::app::discover_strict;
 use cinematch::domain::constraints;
 use cinematch::domain::model::{Facets, Movie, Sort};
 use cinematch::domain::taxonomy::Taxonomy;
@@ -142,7 +142,7 @@ fn main() {
         }
     }
 
-    let mut relaxed: Vec<String> = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
     if let Ok(q) = constraints::to_discover(&tax, &clean, &kw, 1) {
         println!(
             "  query: generi={:?} (or={}) esclusi={:?} keyword={:?} paesi={:?} anni={:?} durata={:?} voto={:?} voto_max={:?} voti={:?}",
@@ -151,11 +151,11 @@ fn main() {
         );
     }
 
-    match discover_with_relaxation(&tmdb, &tax, &clean, &kw, 1, &mut relaxed) {
+    match discover_strict(&tmdb, &tax, &clean, &kw, 1, &mut notes) {
         Ok((movies, total, _pages, headline)) => {
             println!("titolo: {headline}");
-            for r in &relaxed {
-                println!("  rilassato: {r}");
+            for r in &notes {
+                println!("  nota: {r}");
             }
             println!("{total} risultati");
             for m in movies.iter().take(8) {

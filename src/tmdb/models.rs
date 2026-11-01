@@ -183,11 +183,14 @@ struct KeywordItem {
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct KeywordResults {
-    #[serde(default)]
+    #[serde(default, alias = "keywords")]
     results: Vec<KeywordItem>,
 }
 
 impl KeywordResults {
+    pub fn ids(&self) -> Vec<u64> {
+        self.results.iter().map(|k| k.id).collect()
+    }
     /// Corrispondenza esatta soltanto: il primo risultato fuzzy di TMDB
     /// («cani» -> «cali») produrrebbe film senza alcun rapporto col tema.
     pub fn exact(&self, query: &str) -> Option<u64> {
@@ -207,6 +210,8 @@ pub struct ExternalIds {
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiDetails {
+    #[serde(default)]
+    pub keywords: Option<KeywordResults>,
     #[serde(default)]
     pub id: u64,
     #[serde(default)]
@@ -295,6 +300,7 @@ impl ApiDetails {
             }
         }
         Details {
+            keywords: self.keywords.map(|k| k.ids()).unwrap_or_default(),
             movie,
             tagline: self.tagline.clone().unwrap_or_default(),
             runtime: self.runtime,
@@ -310,6 +316,7 @@ impl ApiDetails {
                 .iter()
                 .map(|c| c.name.clone())
                 .collect(),
+            country_codes: self.production_countries.iter().map(|c| c.iso_3166_1.clone()).collect(),
             recommendations: self
                 .recommendations
                 .map(|p| p.results.into_iter().map(Movie::from).collect())
@@ -322,6 +329,16 @@ impl ApiDetails {
 #[cfg(test)]
 mod tests {
     use super::{parse_year, KeywordItem, KeywordResults};
+
+    #[test]
+    fn la_scheda_separa_i_nomi_dei_paesi_dai_codici_e_legge_le_keyword() {
+        let raw = r#"{"id":1,"title":"Film","release_date":"1985-01-01","production_countries":[{"iso_3166_1":"IT","name":"Italy"}],"keywords":{"keywords":[{"id":123,"name":"friendship"}]}}"#;
+        let api: super::ApiDetails = serde_json::from_str(raw).unwrap();
+        let details = api.into_details("IT");
+        assert_eq!(details.countries, vec!["Italy"]);
+        assert_eq!(details.country_codes, vec!["IT"]);
+        assert_eq!(details.keywords, vec![123]);
+    }
 
     #[test]
     fn la_keyword_deve_corrispondere_esattamente() {

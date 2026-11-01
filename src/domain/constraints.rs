@@ -444,12 +444,8 @@ pub fn to_discover(
 ) -> Result<DiscoverQuery, String> {
     let year = year_range(tax, f)?;
 
-    // Un movimento si traduce su TMDB in piu etichette alternative (il giallo e
-    // Horror *oppure* Thriller *oppure* Mistero, non tutti insieme). Se il genere
-    // chiesto e gia una di quelle etichette, non va imposto in AND: era l'indizio
-    // che ha portato al movimento. In quel caso si usa l'unione in OR; un genere
-    // estraneo al movimento resta invece un filtro AND, perche aggiunge davvero
-    // una condizione.
+    // I generi impliciti del movimento sono alternative solo quando
+    // l'utente non ha scelto un genere: quelli espliciti restano obbligatori.
     let mut genres = f.genres.clone();
     let mut genres_or = false;
     let mut core: Vec<u32> = Vec::new();
@@ -462,12 +458,8 @@ pub fn to_discover(
             }
         }
     }
-    if !core.is_empty() && !f.genres.is_empty() && f.genres.iter().all(|g| core.contains(g)) {
-        for g in &core {
-            if !genres.contains(g) {
-                genres.push(*g);
-            }
-        }
+    if !core.is_empty() && f.genres.is_empty() {
+        genres = core;
         genres_or = true;
     }
 
