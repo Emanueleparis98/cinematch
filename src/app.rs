@@ -2532,16 +2532,16 @@ impl App {
     }
 
     fn apply_chat_actions(&mut self, a: chat::Actions) {
-        if let Some(id) = a.open_detail {
-            // In chat la scheda è un'anteprima centrale: la conversazione
-            // resta al suo posto e non si salta alla griglia.
-            self.open_detail(id);
-        }
+        // «Film simili» ha la precedenza sul click della card che lo contiene.
         if let Some(title) = a.similar_to {
             self.grid_query = format!("film simili a «{title}»");
             self.switch_mode(ViewMode::Griglia);
             self.page = 1;
             self.launch_search(true);
+        } else if let Some(id) = a.open_detail {
+            // In chat la scheda è un'anteprima centrale: la conversazione
+            // resta al suo posto e non si salta alla griglia.
+            self.open_detail(id);
         }
         if a.stop {
             self.stop_chat();

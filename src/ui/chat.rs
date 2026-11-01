@@ -1453,9 +1453,12 @@ fn compact_card(
 ) {
     const CARD_H: f32 = 172.0;
     let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::hover());
+        ui.allocate_exact_size(egui::vec2(width, CARD_H), Sense::click());
     let id = ui.scope_id().with(("chat-card", card.movie.id));
-    let resp = ui.interact(rect, id, Sense::hover());
+    let resp = ui.interact(rect, id, Sense::click());
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, true, &card.movie.title)
+    });
     let hover = ui
         .ctx()
         .animate_bool_with_time(resp.id, resp.hovered(), 0.12);
@@ -1474,7 +1477,7 @@ fn compact_card(
         Stroke::new(
             1.0_f32,
             if hover > 0.01 {
-                lumen::EMBER
+                lumen::BORDER_HI
             } else {
                 lumen::BORDER
             },
@@ -1520,6 +1523,10 @@ fn compact_card(
             },
         ), egui::StrokeKind::Inside);
     if poster_resp.clicked() {
+        actions.open_detail = Some(card.movie.id);
+    }
+
+    if resp.clicked() {
         actions.open_detail = Some(card.movie.id);
     }
 
@@ -1724,7 +1731,7 @@ pub fn composer(
         focus,
         width,
         "Scrivi cosa vuoi vedere…",
-        false,
+        true,
     )
 }
 
@@ -1826,10 +1833,18 @@ fn send_button(ui: &mut egui::Ui, enabled: bool, wide: bool) -> egui::Response {
     };
     ui.painter()
         .rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
+    if !enabled {
+        ui.painter().rect_stroke(
+            rect,
+            lumen::radius(lumen::RADIUS_SM),
+            Stroke::new(1.0_f32, lumen::BORDER),
+            egui::StrokeKind::Inside,
+        );
+    }
     let ink = if enabled {
         lumen::INK
     } else {
-        lumen::FAINT
+        lumen::MUTED
     };
     if wide {
         ui.painter().text(
