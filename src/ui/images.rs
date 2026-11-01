@@ -83,6 +83,7 @@ fn prune_cache_dir(dir: &std::path::Path, max: usize, keep: usize) -> usize {
 }
 
 /// Potatura della cache reale, in un thread leggero una volta per avvio.
+#[cfg(not(test))]
 fn prune_disk_cache() {
     const MAX_FILES: usize = 800;
     const KEEP_FILES: usize = 500;
@@ -114,6 +115,7 @@ impl ImageStore {
             .build()
             .unwrap_or_else(|_| reqwest::blocking::Client::new());
         let (tx, rx) = channel();
+        #[cfg(not(test))]
         std::thread::spawn(prune_disk_cache);
         Self {
             map: Mutex::new(HashMap::new()),

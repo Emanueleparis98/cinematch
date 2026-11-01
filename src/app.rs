@@ -58,11 +58,11 @@ enum Msg {
     /// arrivano, senza aspettare le chiamate TMDB aggiuntive.
     Unlocks { gen: u64, unlocks: Vec<unlock::Unlock> },
     Details { gen: u64, res: Result<Details, String> },
-    Check { res: Result<String, String> },
+    Check { key: String, res: Result<String, String> },
     /// Verifica della chiave TMDB durante il primo avvio.
     OnboardingChecked { key: String, res: Result<String, String> },
     Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
-    AiCheck { res: Result<String, String> },
+    AiCheck { config: crate::infra::config::AiCfg, res: Result<String, String> },
     /// Esito del download dei voti IMDb.
     Imdb { res: Result<String, String> },
     /// Avanzamento del download dei voti IMDb (byte scompattati).
@@ -219,6 +219,16 @@ impl SettingsDraft {
             _ => false,
         }
     }
+}
+
+fn verified_status<T: PartialEq>(tested: &T, current: &T, res: Result<String, String>) -> Option<String> {
+    if tested != current {
+        return None;
+    }
+    Some(match res {
+        Ok(m) => format!("✔ {m}"),
+        Err(e) => format!("✕ {e}"),
+    })
 }
 
 /// Minuscole, senza punteggiatura: il confronto fra titoli non dipende da
@@ -842,6 +852,10 @@ pub struct App {
 
 impl App {
     pub fn new(ctx: &egui::Context, cfg: Config) -> Self {
+        Self::with_local_data(ctx, cfg, simkl::load_tokens().ok().flatten(), simkl::load_store())
+    }
+
+    fn with_local_data(ctx: &egui::Context, cfg: Config, simkl_tokens: Option<simkl::Tokens>, simkl_store: simkl::Store) -> Self {
         let tax = Arc::new(Taxonomy::load());
         let provider = build_provider(&cfg.ai);
         let tmdb = Self::build_tmdb(&cfg);
@@ -850,8 +864,6 @@ impl App {
         let prune = constraints::pruning(&tax, &facets);
         let settings = SettingsDraft::from(&cfg);
         let first_run = !cfg.has_key();
-        let simkl_tokens = simkl::load_tokens().ok().flatten();
-        let simkl_store = simkl::load_store();
         let mut app = Self {
             ctx: ctx.clone(),
             tax,
@@ -1063,14 +1075,15 @@ impl App {
                         Err(e) => self.toast(e),
                     }
                 }
-                Msg::Check { res } => {
-                    if res.is_ok() {
+                Msg::Check { key, res } => {
+                    let net_ok = res.is_ok();
+                    let Some(status) = verified_status(&key.as_str(), &self.settings.tmdb_key.trim(), res) else {
+                        continue;
+                    };
+                    if net_ok {
                         self.net = Some(true);
                     }
-                    self.settings_check = Some(match res {
-                        Ok(m) => format!("✔ {m}"),
-                        Err(e) => format!("✕ {e}"),
-                    });
+                    self.settings_check = Some(status);
                 }
                 Msg::OnboardingChecked { key, res } => {
                     self.onboarding_busy = false;
@@ -1130,12 +1143,11 @@ impl App {
                         }
                     }
                 }
-                Msg::AiCheck { res } => {
+                Msg::AiCheck { config, res } => {
                     self.ai_checking = false;
-                    self.ai_check = Some(match res {
-                        Ok(m) => format!("✔ {m}"),
-                        Err(e) => format!("✕ {e}"),
-                    });
+                    if let Some(status) = verified_status(&config, &self.settings.ai_cfg(), res) {
+                        self.ai_check = Some(status);
+                    }
                 }
                 Msg::Imdb { res } => {
                     self.imdb_busy = false;
@@ -1511,6 +1523,7 @@ impl App {
         let provider = self.provider.clone();
         let page = self.page;
         let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
 
         std::thread::spawn(move || {
             let mut intent: Option<Intent> = None;
@@ -1736,6 +1749,7 @@ impl App {
                     unlock_options(&tmdb, &tax, &eff, &kw, current_total, &seen);
                 if !unlocks.is_empty() {
                     let _ = tx.send(Msg::Unlocks { gen, unlocks });
+                    ctx.request_repaint();
                 }
             }
         });
@@ -3271,7 +3285,7 @@ impl App {
         std::thread::spawn(move || {
             let provider = LlmProvider::new(config);
             let res = provider.probe(&tax);
-            let _ = tx.send(Msg::AiCheck { res });
+            let _ = tx.send(Msg::AiCheck { config: ai, res });
             ctx.request_repaint();
         });
     }
@@ -3333,9 +3347,9 @@ impl App {
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
-            let tmdb = Tmdb::new(key, lang);
+            let tmdb = Tmdb::new(key.clone(), lang);
             let res = tmdb.ping();
-            let _ = tx.send(Msg::Check { res });
+            let _ = tx.send(Msg::Check { key, res });
             ctx.request_repaint();
         });
     }
@@ -4552,6 +4566,8 @@ impl App {
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui) {
+        let checked_key = self.settings.tmdb_key.clone();
+        let checked_ai = self.settings.ai_cfg();
         let mut close = false;
         let mut onboarding = false;
         let mut save = false;
@@ -5289,6 +5305,12 @@ impl App {
                 });
             });
 
+        if checked_key != self.settings.tmdb_key {
+            self.settings_check = None;
+        }
+        if checked_ai != self.settings.ai_cfg() {
+            self.ai_check = None;
+        }
         if open_api_page {
             open_url("https://www.themoviedb.org/settings/api");
         }
@@ -5512,13 +5534,13 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        self.update_ui(ui, frame);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.update_ui(ui);
     }
 }
 
 impl App {
-    fn update_ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn update_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.poll();
         if self.images.poll() {
@@ -7195,6 +7217,149 @@ mod tests {
     };
     use crate::domain::taxonomy::Taxonomy;
     use egui::viewport::ResizeDirection as Dir;
+
+    #[test]
+    fn schermate_e_stati_si_disegnano_alle_dimensioni_supportate() {
+        use super::{App, Config, Details, ViewMode, IN_SALA_REFRESH};
+        use crate::ui::{chat, lumen};
+        for size in [[800.0, 600.0], [1220.0, 660.0], [1920.0, 1080.0]] {
+            for state in 0..21 {
+                let ctx = egui::Context::default();
+                lumen::install(&ctx);
+                let mut app = App::with_local_data(&ctx, Config::default(), None, Default::default());
+                app.boot_done = true;
+                app.first_run = state == 0;
+                if state != 0 && state != 14 {
+                    app.tmdb = Some(std::sync::Arc::new(crate::tmdb::Tmdb::new(
+                        "test".into(),
+                        "it-IT".into(),
+                    )));
+                }
+                app.home_now_playing_next = Some(std::time::Instant::now() + IN_SALA_REFRESH);
+                let movie = Movie {
+                    id: 1,
+                    title: "Un titolo molto lungo che deve andare a capo senza uscire dalla card"
+                        .repeat(2),
+                    overview: "Una sinossi lunga. ".repeat(60),
+                    year: Some(1980),
+                    ..Default::default()
+                };
+                match state {
+                    1 => app.home_now_playing_busy = true,
+                    2 => app.home_now_playing_error = Some("Errore di rete: riprova".into()),
+                    3 => app.home_now_playing = vec![movie.clone(); 6],
+                    4..=6 => {
+                        app.chat = vec![chat::Entry {
+                            user: "Un film intenso".into(),
+                            answer: chat::Answer {
+                                intro: "Ecco alcuni film".into(),
+                                cards: if state == 4 {
+                                    vec![
+                                        chat::Card {
+                                            movie: movie.clone(),
+                                            perche: "Il motivo. ".repeat(35),
+                                            consiglio: "Un consiglio. ".repeat(20),
+                                            meta: Some(chat::CardMeta::default())
+                                        };
+                                        5
+                                    ]
+                                } else {
+                                    vec![]
+                                },
+                                state: if state == 5 {
+                                    chat::State::Busy
+                                } else {
+                                    chat::State::Done
+                                },
+                                error: (state == 6).then(|| "Errore di rete".into()),
+                                ..Default::default()
+                            },
+                        }];
+                        app.chat_busy = state == 5;
+                    }
+                    7..=10 => {
+                        app.mode = ViewMode::Griglia;
+                        app.filters_open = state == 7;
+                        app.movies = if state == 8 {
+                            vec![movie.clone(); 20]
+                        } else {
+                            vec![]
+                        };
+                        app.loading = state == 9;
+                        app.results_error = (state == 10).then(|| "Errore di rete".into());
+                    }
+                    11 => app.show_settings = true,
+                    12 => {
+                        app.detail = Some(Details {
+                            movie,
+                            ..Default::default()
+                        })
+                    }
+                    13 => app.new_chat_confirm = true,
+                    15 => {
+                        app.show_settings = true;
+                        app.settings_close_confirm = true;
+                    }
+                    16 => {
+                        app.mode = ViewMode::Griglia;
+                        app.filters_open = false;
+                        app.detail_loading = true;
+                    }
+                    17 => app.guide_open = true,
+                    18..=20 => {
+                        app.show_settings = true;
+                        app.settings.provider = ["deepseek", "openrouter", "ollama"][state - 18].into();
+                    }
+                    _ => {}
+                }
+                let _ = crate::ui::layout_test_support::frame(&ctx, size.into(), |ui| app.update_ui(ui));
+                let output = crate::ui::layout_test_support::frame(&ctx, size.into(), |ui| app.update_ui(ui));
+                assert!(!output.shapes.is_empty(), "schermata {state}, {size:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn verifiche_obsolete_non_confermano_chiavi_o_provider_nuovi() {
+        let ctx = egui::Context::default();
+        let mut app = super::App::with_local_data(&ctx, Default::default(), None, Default::default());
+        let tested_ai = app.settings.ai_cfg();
+        app.settings.tmdb_key = "seconda".into();
+        app.settings.provider = "openrouter".into();
+        app.ai_checking = true;
+        app.tx
+            .send(super::Msg::Check {
+                key: "prima".into(),
+                res: Ok("valida".into()),
+            })
+            .unwrap();
+        app.tx
+            .send(super::Msg::AiCheck {
+                config: tested_ai,
+                res: Ok("valida".into()),
+            })
+            .unwrap();
+        app.poll();
+        assert!(app.settings_check.is_none());
+        assert!(app.ai_check.is_none());
+        assert!(app.net.is_none());
+        assert!(!app.ai_checking);
+        app.tx
+            .send(super::Msg::Check {
+                key: "seconda".into(),
+                res: Ok("valida".into()),
+            })
+            .unwrap();
+        app.tx
+            .send(super::Msg::AiCheck {
+                config: app.settings.ai_cfg(),
+                res: Err("rifiutata".into()),
+            })
+            .unwrap();
+        app.poll();
+        assert_eq!(app.settings_check.as_deref(), Some("✔ valida"));
+        assert_eq!(app.ai_check.as_deref(), Some("✕ rifiutata"));
+    }
 
     #[test]
     fn lingua_allineata_e_modale_contenuta_a_ogni_dimensione() {

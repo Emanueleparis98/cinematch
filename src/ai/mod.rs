@@ -21,16 +21,16 @@ fn cancelled(cancel: Option<&AtomicBool>) -> bool {
     cancel.is_some_and(|c| c.load(Ordering::Relaxed))
 }
 
-struct CancelReader<'a> {
-    inner: reqwest::blocking::Response,
+struct CancelReader<'a, R> {
+    inner: R,
     cancel: &'a AtomicBool,
 }
 
-impl Read for CancelReader<'_> {
+impl<R: Read> Read for CancelReader<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.cancel.load(Ordering::Relaxed) {
             return Err(std::io::Error::new(
-                std::io::ErrorKind::Interrupted,
+                std::io::ErrorKind::ConnectionAborted,
                 "richiesta interrotta",
             ));
         }
@@ -2578,6 +2578,32 @@ impl IntentProvider for LlmProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn annullare_durante_la_lettura_ferma_testo_e_righe() {
+        let cancel = AtomicBool::new(false);
+        let mut reader = CancelReader {
+            inner: std::io::Cursor::new(b"prima\ndopo\n"),
+            cancel: &cancel,
+        };
+        let mut first = [0; 6];
+        reader.read_exact(&mut first).unwrap();
+        cancel.store(true, Ordering::Relaxed);
+        assert_eq!(
+            reader
+                .read_to_string(&mut String::new())
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::ConnectionAborted
+        );
+        assert_eq!(
+            std::io::BufReader::new(reader)
+                .read_line(&mut String::new())
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::ConnectionAborted
+        );
+    }
 
     #[test]
     fn i_dati_ostili_restano_dentro_i_delimiti() {

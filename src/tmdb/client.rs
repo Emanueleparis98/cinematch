@@ -18,16 +18,16 @@ pub const API_BASE: &str = "https://api.themoviedb.org/3";
 pub const IMG_BASE: &str = "https://image.tmdb.org/t/p/";
 const CANCELLED: &str = "Richiesta interrotta.";
 
-struct CancelReader<'a> {
-    inner: reqwest::blocking::Response,
+struct CancelReader<'a, R> {
+    inner: R,
     cancel: &'a AtomicBool,
 }
 
-impl Read for CancelReader<'_> {
+impl<R: Read> Read for CancelReader<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.cancel.load(Ordering::Relaxed) {
             return Err(std::io::Error::new(
-                std::io::ErrorKind::Interrupted,
+                std::io::ErrorKind::ConnectionAborted,
                 "richiesta interrotta",
             ));
         }
@@ -133,11 +133,6 @@ fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String
                 Some(g) if g.as_str() > today => g,
                 _ => today.to_string(),
             });
-            // Un periodo passato piu' "Prossimamente" non puo' produrre
-            // risultati: il limite superiore sarebbe prima di oggi.
-            if lte.as_deref().is_some_and(|l| l < today) {
-                lte = None;
-            }
         }
         _ => {
             lte = Some(match lte {
@@ -412,6 +407,9 @@ impl Tmdb {
         // ordinamenti mostrano solo film già usciti; «Prossimamente» parte da
         // oggi e ordina per data crescente.
         let (gte, lte) = date_bounds(q, &crate::infra::winclock::today_iso());
+        if matches!((&gte, &lte), (Some(a), Some(b)) if a > b) {
+            return Err("Il periodo selezionato non contiene film con questo ordinamento. Cambia periodo oppure ordinamento.".into());
+        }
         if let Some(g) = gte {
             p.push(("primary_release_date.gte".into(), g));
         }
@@ -637,6 +635,25 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
+    fn annullare_durante_il_corpo_non_riprova_la_lettura() {
+        use std::io::Read;
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let mut reader = super::CancelReader {
+            inner: std::io::Cursor::new(b"risposta"),
+            cancel: &cancel,
+        };
+        reader.read_exact(&mut [0; 1]).unwrap();
+        cancel.store(true, Ordering::Relaxed);
+        assert_eq!(
+            reader
+                .read_to_string(&mut String::new())
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::ConnectionAborted
+        );
+    }
+
+    #[test]
     fn piu_recenti_si_ferma_a_oggi() {
         let q = DiscoverQuery {
             sort: Sort::Newest,
@@ -659,7 +676,7 @@ mod tests {
     }
 
     #[test]
-    fn prossimamente_ignora_un_periodo_passato() {
+    fn prossimamente_rispetta_un_periodo_passato() {
         let q = DiscoverQuery {
             sort: Sort::Upcoming,
             year: Some((1980, 1989)),
@@ -667,7 +684,9 @@ mod tests {
         };
         let (gte, lte) = date_bounds(&q, "2026-10-28");
         assert_eq!(gte.as_deref(), Some("2026-10-28"));
-        assert_eq!(lte, None, "un limite superiore nel passato va tolto");
+        assert_eq!(lte.as_deref(), Some("1989-12-31"));
+        let tmdb = Tmdb::new("x".into(), "it-IT".into());
+        assert!(tmdb.discover(&q).unwrap_err().contains("Cambia periodo"));
     }
 
     #[test]

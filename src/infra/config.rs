@@ -20,7 +20,7 @@ fn looks_like_openrouter(key: &str) -> bool {
     key.trim().starts_with("sk-or-")
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AiCfg {
     /// "rules" | "deepseek" | "openrouter" | "ollama"
     #[serde(default = "default_provider")]
