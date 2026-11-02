@@ -17,6 +17,10 @@ export function summarizeMovie(data){
   return {type:'movie',id:data.id,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person)};
 }
 export function chooseMatch(results,ref){
+  if(ref.type==='person'){
+    const exact=results.filter(p=>ref.variants.some(name=>normalize(name)===normalize(p.name)));
+    return exact.length===1?exact[0]:null;
+  }
   if(ref.type!=='movie'||!ref.year)return null;
   const names=ref.variants.map(normalize);
   const exact=results.filter(m=>Number(m.release_date?.slice(0,4))===ref.year&&[m.title,m.original_title].some(t=>t&&names.includes(normalize(t))));
@@ -54,7 +58,7 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
       if(chooseMatch(results,ref)||(ref.type==='person'&&results.length))break;
     }
     const exact=chooseMatch(results,ref);
-    if(exact){const movie=await details('movie',exact.id);if(!ref.director||movie.directors.some(p=>normalize(p.name)===normalize(ref.director)))return {matched:movie,candidates:[]};}
+    if(exact){const item=await details(ref.type,exact.id);if(ref.type==='person'||!ref.director||item.directors.some(p=>normalize(p.name)===normalize(ref.director)))return {matched:item,candidates:[]};}
     return {matched:null,candidates:results.map(r=>ref.type==='movie'?{id:r.id,type:'movie',title:r.title??r.original_title??'',originalTitle:r.original_title??'',year:r.release_date?.slice(0,4)??'',poster:safeImagePath(r.poster_path)}:{id:r.id,type:'person',title:r.name??'',year:r.known_for_department??'',poster:safeImagePath(r.profile_path)}),hasMore:results.length>=20};
   }
   async function image(path,size){

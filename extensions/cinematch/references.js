@@ -2,7 +2,7 @@
  * world, never in the AI site's JavaScript world. No network or DOM access. */
 (() => {
   const normalize = text => String(text).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('it').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  const trimTitle = text => text.replace(/^\s*(?:#{1,6}\s*|\d+[.)]\s*|[-•]\s*)/, '').replace(/[*_`]/g, '').replace(/^titolo(?: originale| italiano)?\s*:\s*/i, '').replace(/^["“«]+|["”»]+$/g, '').replace(/[\s:—–|,]+$/g, '').trim();
+  const trimTitle = text => text.replace(/[*_`]/g, '').replace(/^(?:\s*(?:#{1,6}\s*|\d+[.)]\s*|[-•]\s*))+/,'').replace(/^titolo(?: originale| italiano)?\s*:\s*/i, '').replace(/^["“«]+|["”»]+$/g, '').replace(/[\s:—–|,]+$/g, '').trim();
   function extract(text) {
     if (typeof text !== 'string' || text.length > 200000) throw new Error('Risposta troppo lunga: cerca un titolo manualmente.');
     const lines = text.split(/\r?\n/).map(line => line.replace(/\[(\d+)\]/g, '').trim()).filter(Boolean);

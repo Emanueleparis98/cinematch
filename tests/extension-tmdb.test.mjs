@@ -16,6 +16,8 @@ test('parser deduplicates titles and avoids unsupported prose and huge input',()
 });
 test('explicit person labels are recognized',()=>{assert.equal(extract('Regista: Vittorio De Sica')[0].type,'person');});
 test('director metadata does not duplicate a movie as an extra person card',()=>{const refs=extract('Ladri di biciclette (1948)\nRegista: Vittorio De Sica');assert.equal(refs.length,1);assert.equal(refs[0].director,'Vittorio De Sica');});
+test('numbered headings from the real La terrazza screenshot strip both heading and ordinal',()=>{const [ref]=extract('# 8. La terrazza (1980) — Regia: Ettore Scola');assert.equal(ref.title,'La terrazza');assert.equal(ref.director,'Ettore Scola');assert.equal(ref.year,1980);});
+test('a unique exact person name matches automatically; homonyms need a choice',()=>{const ref={type:'person',variants:['Vittorio De Sica']};assert.equal(chooseMatch([{id:1,name:'Vittorio De Sica'}],ref).id,1);assert.equal(chooseMatch([{id:1,name:'Vittorio De Sica'},{id:2,name:'Vittorio De Sica'}],ref),null);});
 test('invalid credentials are rejected without echoing them',()=>{
   assert.equal(credential(' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '),'a'.repeat(32));assert.equal(credential('Bearer eyJtest.payload.signature'),'eyJtest.payload.signature');assert.throws(()=>credential('secret-invalid'),e=>!e.message.includes('secret-invalid'));
 });

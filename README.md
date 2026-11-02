@@ -1,15 +1,15 @@
-# CineMatch — estensione browser 1.1.0
+# CineMatch — estensione browser 1.2.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
 Claude e Gemini. Si apre accanto alla chat e inserisce il testo nell'editor:
-l'invio rimane all'utente. Aggiunge locandine, cast e registi alle risposte su
-richiesta. Non richiede app Windows o API AI a pagamento; le immagini usano una
+l'invio rimane all'utente. Aggiunge automaticamente locandine, cast e registi
+sotto i titoli nelle risposte. Non richiede app Windows o API AI a pagamento; le immagini usano una
 credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-1.1.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-1.2.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -27,10 +27,12 @@ Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato su
    di essere modificata. **Copia** permette di usare qualsiasi altra chat.
 
 Per le immagini apri **Immagini TMDB**, salva la credenziale e ricarica la chat.
-Sulla risposta premi **Mostra locandine e cast**; apri **Regia** o **Cast** per i
-ritratti. Sono disponibili scelta fra omonimi, correzione e ricerca manuale.
+Le immagini appaiono da sole sotto ciascun titolo mentre la chat risponde:
+locandina, regista e primi interpreti. Il cast completo resta espandibile.
+Sono disponibili scelta fra omonimi, correzione e ricerca manuale. La modalità
+automatica è attiva per impostazione predefinita e si disattiva nelle opzioni.
 
-Viene letta solo la risposta selezionata al clic, non i messaggi dell'utente.
+Vengono analizzate localmente le risposte dell'AI, non i messaggi dell'utente.
 TMDB riceve titoli, anni o nomi, non la conversazione. Nessun invio automatico
 di messaggi e nessuna API AI. Quattro host AI e i due host ufficiali TMDB autorizzati;
 nessuna cronologia o accesso generale ai siti. La chiave non viene esposta alle chat.
@@ -55,7 +57,7 @@ pubblica lo ZIP come artefatto CI. I test browser usano Chromium isolato e pagin
 simulate: nessun account reale o richiesta AI. I siti possono cambiare editor;
 in quel caso rimane il copia/incolla.
 
-Verifica immagini e privacy: [collaudo 1.1.0](docs/estensione-1.1.0-verifica.md).
+Verifica immagini automatiche e privacy: [collaudo 1.2.0](docs/estensione-1.2.0-verifica.md).
 
 La raccolta conserva 44 movimenti, 14 tendenze/scenari, 12 generi/cicli,
 3 tradizioni e 1 tecnica. [Audit storico](docs/correnti-0.14.0-audit.md),

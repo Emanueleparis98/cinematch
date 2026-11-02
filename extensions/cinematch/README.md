@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 1.1.0
+# CineMatch — estensione browser 1.2.0
 
 74 voci sulle correnti del cinema e un generatore locale di richieste per le chat AI.
 Non richiede l'app Windows, un eseguibile o un server. Consultazione e generazione
@@ -6,7 +6,7 @@ non richiedono API; le immagini facoltative usano una credenziale TMDB personale
 
 ## Installazione in Chrome
 
-1. Estrai completamente `CineMatch-Chrome-1.1.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-1.2.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella estratta che contiene `manifest.json`. Dal menu Estensioni
@@ -55,8 +55,8 @@ accesso illimitato o assenza dei limiti previsti dai siti.
 - L'accesso alle chat riguarda solo `https://chatgpt.com/*`,
   `https://chat.deepseek.com/*`, `https://claude.ai/*`, `https://gemini.google.com/*`.
   Chrome mostrerà il relativo permesso di accesso. L'inserimento modifica solo
-  l'editor. I controlli delle immagini vengono aggiunti alle risposte; il loro testo
-  è letto solo quando premi **Mostra locandine e cast**, per la sola risposta scelta.
+  l'editor. Con immagini automatiche attive, le risposte dell'AI vengono analizzate
+  localmente mentre arrivano per riconoscere riferimenti a film o persone.
   Nessuna lettura di messaggi utente, cookie, credenziali del sito o cronologia.
 - Gli altri due host autorizzati sono `https://api.themoviedb.org/*` e
   `https://image.tmdb.org/*`. Ricevono esclusivamente ricerche di titoli/anni/nomi,
@@ -64,10 +64,11 @@ accesso illimitato o assenza dei limiti previsti dai siti.
 - `sidePanel` apre il pannello; `scripting` permette l'inserimento nei quattro siti;
   `clipboardWrite` copia il prompt; `storage` conserva la bozza in
   `chrome.storage.session`, in memoria per la sessione del browser.
-  La sola credenziale TMDB può essere conservata in `storage.local` se scegli
+  La credenziale TMDB può essere conservata in `storage.local` se scegli
   **Ricorda su questo dispositivo**, oppure in `storage.session`. Nessun uso di
   `storage.sync` o database di film. L'accesso allo storage è limitato ai contesti
   fidati dell'estensione: gli script inseriti nei siti non possono leggere la chiave.
+  In `storage.local` resta anche la preferenza per attivare/disattivare le immagini.
 - La bozza sopravvive alla chiusura del pannello nella stessa finestra. Il riavvio
   del browser, la disattivazione o il ricaricamento dell'estensione la cancellano.
   Non è un archivio di richieste. Una scheda CineMatch già aperta tiene il proprio
@@ -82,28 +83,35 @@ accesso illimitato o assenza dei limiti previsti dai siti.
 2. Inserisci la chiave API v3 o l'API Read Access Token; premi **Verifica e salva**.
    Nessuna credenziale personale è inclusa nello ZIP o nel repository.
 3. Ricarica le schede delle chat dopo l'aggiornamento dell'estensione.
-4. Su una risposta premi **Mostra locandine e cast**. I titoli nel formato
-   `Titolo (anno)` vengono riconosciuti localmente. Il generatore prepara già
-   richieste che favoriscono questo formato.
-5. Apri **Regia** o **Cast** per vedere le fotografie. Le persone sono collegate
-   alla scheda TMDB; puoi cercare anche un singolo attore o regista dal modulo.
+4. Le immagini appaiono **automaticamente sotto il titolo di ciascun film**
+   mentre arriva la risposta, senza pulsanti da premere. Il formato `Titolo (anno)`
+   è riconosciuto localmente, anche con intestazioni numerate come
+   `8. La terrazza (1980) — Regia: Ettore Scola`.
+5. Locandina, regista e primi attori sono già visibili. **Cast completo** espande
+   gli altri interpreti. Persone e film sono collegati alle schede TMDB.
 
-Le schede sono aggiunte sotto la risposta, con stili isolati; il testo originale
+Le schede sono aggiunte direttamente dopo l'intestazione del film, con stili isolati; il testo originale
 non viene riscritto. Anno e titolo devono corrispondere esattamente e senza
 ambiguità per un abbinamento automatico. Un regista dichiarato deve coincidere;
 altrimenti scegli la scheda. **Cambia abbinamento** permette una correzione.
 Se la risposta non ha titoli riconoscibili, usa la ricerca manuale.
 
-**Aggiorna schede** rilegge la sola risposta corrente, utile quando la chat ha
-finito di scrivere. **Nascondi schede** comprime il risultato. Nessuna richiesta
-AI o costo in token API. TMDB è gratuito per uso non commerciale con attribuzione;
+La casella **Mostra automaticamente le immagini nelle risposte** nelle opzioni è
+attiva per impostazione predefinita, anche aggiornando dalla 1.1.0. Puoi disattivarla
+senza cambiare la credenziale. Il salvataggio della chiave e il cambio di preferenza
+aggiornano anche le chat già aperte; dopo l'aggiornamento del codice serve comunque
+ricaricare le pagine. Nessuna richiesta AI o costo in token API.
+TMDB è gratuito per uso non commerciale con attribuzione;
 restano i suoi limiti di servizio. L'estensione mostra logo e dichiarazione TMDB
 nei crediti delle opzioni: https://developer.themoviedb.org/docs/faq.
 
-Richieste concorrenti limitate a tre, con timeout e riprova manuale. Si caricano
-12 riferimenti o persone per volta, con **Carica altri riferimenti** / **Mostra
-altre persone**: è una paginazione, non un limite al numero di film richiesti.
-Le immagini si caricano quando diventano visibili. Le schede hanno una piccola
+Richieste concorrenti limitate a tre, con timeout e riprova manuale. Non c'è un
+numero massimo applicativo di film: le schede vicine all'area visibile si caricano
+da sole e le altre vengono caricate scorrendo. Il cast completo è paginato a
+12 persone con **Mostra altre persone**. Un riferimento deve restare stabile
+per circa 700 ms prima della ricerca: le aggiunte di testo durante lo streaming
+non ripetono le ricerche già eseguite. Le risposte invariate non vengono rianalizzate
+per ogni cambiamento del resto della pagina. Le schede hanno una piccola
 cache solo nella memoria del service worker, con scadenza di cinque minuti e
 massimo 100 richieste; niente archivio progressivo. Immagini e risposte TMDB
 usano `no-store`; restano in memoria nella scheda aperta e possono essere trattate

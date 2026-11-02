@@ -12,6 +12,15 @@ async function getCredential(){
   return session.tmdbCredential??(await chrome.storage.local.get("tmdbCredential")).tmdbCredential??null;
 }
 const tmdb=createTmdbClient({getCredential});
+async function tmdbStatus(){
+  await storageReady;
+  return {ok:true,configured:Boolean(await getCredential()),automatic:(await chrome.storage.local.get('tmdbAutomatic')).tmdbAutomatic!==false};
+}
+async function notifyChats(){
+  const status=await tmdbStatus();
+  const tabs=await chrome.tabs.query({});
+  await Promise.allSettled(tabs.filter(tab=>providerForUrl(tab.url)).map(tab=>chrome.tabs.sendMessage(tab.id,{type:'tmdb-preferences-changed',...status})));
+}
 const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id||!message?.type?.startsWith("tmdb-"))return false;
@@ -21,7 +30,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(!trusted&&!chat)return false;
   (async()=>{
     await storageReady;
-    if(message.type==="tmdb-status")return {ok:true,configured:Boolean(await getCredential())};
+    if(message.type==="tmdb-status")return tmdbStatus();
     if(message.type==="tmdb-options"){await chrome.runtime.openOptionsPage();return {ok:true};}
     if(message.type==="tmdb-save"&&settings){
       const value=credential(message.credential);
@@ -29,9 +38,13 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       const candidate=createTmdbClient({getCredential:async()=>value});await candidate.verify();
       if(message.remember){await chrome.storage.local.set({tmdbCredential:value});await chrome.storage.session.remove("tmdbCredential");}
       else {await chrome.storage.session.set({tmdbCredential:value});await chrome.storage.local.remove("tmdbCredential");}
-      tmdb.clear();return {ok:true};
+      tmdb.clear();await notifyChats();return {ok:true};
     }
-    if(message.type==="tmdb-remove"&&settings){await chrome.storage.local.remove("tmdbCredential");await chrome.storage.session.remove("tmdbCredential");tmdb.clear();return {ok:true};}
+    if(message.type==="tmdb-automatic"&&settings){
+      if(typeof message.enabled!=="boolean")return {ok:false,error:"Impostazione non valida."};
+      await chrome.storage.local.set({tmdbAutomatic:message.enabled});await notifyChats();return {ok:true};
+    }
+    if(message.type==="tmdb-remove"&&settings){await chrome.storage.local.remove("tmdbCredential");await chrome.storage.session.remove("tmdbCredential");tmdb.clear();await notifyChats();return {ok:true};}
     if(message.type==="tmdb-search"&&chat)return {ok:true,...await tmdb.search(message.reference)};
     if(message.type==="tmdb-details"&&chat)return {ok:true,item:await tmdb.details(message.kind,message.id)};
     if(message.type==="tmdb-image"&&chat)return {ok:true,data:await tmdb.image(message.path,message.size)};
