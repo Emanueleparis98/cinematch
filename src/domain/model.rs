@@ -53,9 +53,7 @@ pub struct Facets {
     pub without_genres: Vec<u32>,
     pub countries: Vec<String>,
     pub moods: Vec<String>,
-    /// Temi liberi (nomi di parole chiave TMDB) proposti dall'interprete AI
-    /// quando la richiesta parla di un argomento che non e un mood della
-    /// tassonomia. Restano visibili e rimovibili come i mood.
+    /// Temi liberi: parole chiave TMDB selezionate nel pannello dei filtri.
     pub keywords: Vec<String>,
     pub min_rating: Option<f32>,
     pub max_rating: Option<f32>,
@@ -117,6 +115,7 @@ pub struct Movie {
     pub title: String,
     pub original_title: String,
     pub year: Option<u16>,
+    pub release_date: Option<String>,
     pub overview: String,
     pub poster_path: Option<String>,
     pub backdrop_path: Option<String>,
@@ -156,6 +155,7 @@ pub struct Details {
     pub provider_link: Option<String>,
     pub countries: Vec<String>,
     pub country_codes: Vec<String>,
+    pub origin_country_codes: Vec<String>,
     pub recommendations: Vec<Movie>,
     pub imdb: Option<ImdbRating>,
     pub keywords: Vec<u64>,

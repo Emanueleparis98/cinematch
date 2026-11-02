@@ -16,7 +16,10 @@ fn anni_80_piu_neorealismo_e_impossibile() {
     let tax = Taxonomy::load();
     let f = facets(&["1980s"], &["neorealismo"], &[27]);
     let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(clean.movements.is_empty(), "il neorealismo deve essere rimosso");
+    assert!(
+        clean.movements.is_empty(),
+        "il neorealismo deve essere rimosso"
+    );
     assert!(!msgs.is_empty(), "deve esserci una spiegazione");
     let range = constraints::year_range(&tax, &clean).unwrap().unwrap();
     assert_eq!(range, (1980, 1989));
@@ -31,8 +34,15 @@ fn anni_80_piu_giallo_e_legittimo_ma_ristretto() {
     let range = constraints::year_range(&tax, &clean).unwrap().unwrap();
     assert_eq!(range, (1980, 1982), "il movimento chiude il periodo a 1982");
     let q = to_discover(&tax, &clean, &[], 1).unwrap();
-    assert_eq!(q.countries, vec!["IT".to_string()], "paese implicato dal movimento");
-    assert!(q.without_genres.contains(&16), "animazione esclusa dal giallo");
+    assert_eq!(
+        q.countries,
+        vec!["IT".to_string()],
+        "paese implicato dal movimento"
+    );
+    assert!(
+        q.without_genres.contains(&16),
+        "animazione esclusa dal giallo"
+    );
     assert_eq!(q.genres, vec![27], "Horror esplicito resta obbligatorio");
     assert!(!q.genres_or, "il movimento non allarga un genere richiesto");
 }
@@ -45,7 +55,11 @@ fn genere_estraneo_al_movimento_resta_un_filtro_stretto() {
     let f = facets(&[], &["neorealismo"], &[35]);
     let (clean, _) = constraints::sanitize(&tax, &f);
     let q = to_discover(&tax, &clean, &[], 1).unwrap();
-    assert_eq!(q.genres, vec![35], "nessuna etichetta del movimento aggiunta");
+    assert_eq!(
+        q.genres,
+        vec![35],
+        "nessuna etichetta del movimento aggiunta"
+    );
     assert!(!q.genres_or, "il genere estraneo non allarga la query");
 }
 
@@ -104,39 +118,22 @@ fn due_movimenti_senza_periodo_comune_non_coesistono() {
     assert!(msgs.iter().any(|m| m.contains("New Hollywood")));
 }
 
-#[test]
-fn parsare_la_frase_composita_produce_facce_coerenti() {
-    use cinematch::ai::{IntentProvider, RuleParser};
-    let tax = Taxonomy::load();
-    let intent = RuleParser
-        .parse("giallo italiano anni 80, voto alto, senza commedia", &tax)
-        .expect("parse");
-    let f = intent.facets;
-    assert!(f.decades.contains(&"1980s".to_string()));
-    assert!(f.movements.contains(&"giallo_italiano".to_string()));
-    assert!(f.genres.contains(&9648));
-    assert!(f.without_genres.contains(&35));
-    assert!(f.countries.contains(&"IT".to_string()));
-    assert_eq!(f.min_rating, Some(7.0));
-}
-
-#[test]
-fn una_frase_senza_facce_diventa_ricerca_per_titolo() {
-    use cinematch::ai::{IntentProvider, RuleParser};
-    let tax = Taxonomy::load();
-    let intent = RuleParser.parse("Blade Runner", &tax).expect("parse");
-    assert_eq!(intent.free_text.as_deref(), Some("Blade Runner"));
-}
-
 // ------------------------------------------------ correnti a parola chiave ----
 
 #[test]
 fn le_correnti_a_parola_chiave_dichiarano_la_keyword() {
     let tax = Taxonomy::load();
-    let m = tax.movement("slasher_era").expect("slasher_era e in tassonomia");
-    assert_eq!(m.keyword, "slasher", "la corrente slasher dichiara la sua keyword");
+    let m = tax
+        .movement("slasher_era")
+        .expect("slasher_era e in tassonomia");
+    assert_eq!(
+        m.keyword, "slasher",
+        "la corrente slasher dichiara la sua keyword"
+    );
     // le correnti senza keyword si cercano per geometria (periodo e paese)
-    let plain = tax.movement("neorealismo").expect("neorealismo e in tassonomia");
+    let plain = tax
+        .movement("neorealismo")
+        .expect("neorealismo e in tassonomia");
     assert!(plain.keyword.is_empty());
 }
 
@@ -205,10 +202,7 @@ fn le_parole_chiave_tematiche_restano_strette_vicino_a_una_corrente() {
     };
     let mut f = facets(&[], &[id.as_str()], &[]);
     f.moods.push("malinconico".to_string());
-    let known = vec![
-        ("malinconico".to_string(), 12345u64),
-        (id.clone(), 999u64),
-    ];
+    let known = vec![("malinconico".to_string(), 12345u64), (id.clone(), 999u64)];
     let q = to_discover(&tax, &f, &known, 1).unwrap();
     assert!(q.keywords.contains(&12345), "il tema entra");
     assert!(q.keywords.contains(&999), "la keyword della corrente entra");
@@ -295,7 +289,7 @@ fn tema_libero_e_un_requisito_e_non_un_alternativa() {
 }
 
 #[test]
-fn temi_liberi_troppo_numerosi_vengono_ridotti() {
+fn i_temi_validi_restano_anche_quando_sono_piu_di_tre() {
     let tax = Taxonomy::load();
     let f = Facets {
         keywords: vec![
@@ -309,14 +303,20 @@ fn temi_liberi_troppo_numerosi_vengono_ridotti() {
         ..Default::default()
     };
     let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert_eq!(clean.keywords.len(), 3, "tre temi al massimo");
+    assert_eq!(
+        clean.keywords.len(),
+        4,
+        "nessun tema valido viene eliminato"
+    );
     assert!(!msgs.is_empty(), "la potatura va spiegata");
 }
 
 #[test]
 fn la_ricetta_del_neorealismo_sono_gli_anni_40_e_50_italiani() {
     let tax = Taxonomy::load();
-    let m = tax.movement("neorealismo").expect("il neorealismo e in tassonomia");
+    let m = tax
+        .movement("neorealismo")
+        .expect("il neorealismo e in tassonomia");
     let (decades, countries, genres) = constraints::movement_recipe(&tax, m);
     assert_eq!(decades, vec!["1940s".to_string(), "1950s".to_string()]);
     assert_eq!(countries, vec!["IT".to_string()]);

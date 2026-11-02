@@ -7,8 +7,8 @@
 //! dura quanto la sessione e non tocca il disco.
 
 use egui::{
-    Align, Align2, Color32, FontId, Frame, Id, Layout, Margin, Response, RichText, Sense,
-    Stroke, Ui,
+    Align, Align2, Color32, FontId, Frame, Id, Layout, Margin, Response, RichText, Sense, Stroke,
+    Ui,
 };
 
 use crate::domain::constraints::{movement_recipe, Availability, Prune};
@@ -32,10 +32,10 @@ pub enum FacetAction {
     Decade(String),
     Movement(String),
     Genre(u32),
+    ExcludeGenre(u32),
     Country(String),
     Mood(String),
-    /// Tema libero (nome di parola chiave TMDB): proposto dall'interprete AI o
-    /// scritto a mano nella sezione temi.
+    /// Tema libero: nome di una parola chiave TMDB scelto nel pannello.
     Keyword(String),
     Rating(Option<f32>),
     MaxRating(Option<f32>),
@@ -126,7 +126,12 @@ pub fn panel_toggle(ui: &mut Ui, open: bool, active: usize) -> Response {
         hover * 0.65,
     );
     p.rect_filled(rect, lumen::radius(lumen::RADIUS), fill);
-    p.rect_stroke(rect, lumen::radius(lumen::RADIUS), Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
+    p.rect_stroke(
+        rect,
+        lumen::radius(lumen::RADIUS),
+        Stroke::new(1.0_f32, stroke),
+        egui::StrokeKind::Inside,
+    );
     p.text(
         egui::pos2(rect.left() + pad, rect.center().y),
         Align2::LEFT_CENTER,
@@ -187,7 +192,7 @@ pub fn sections(
     guide_open: &mut bool,
     messages: &[String],
     info: &[String],
-    ai_notes: &[String],
+    notes: &[String],
 ) -> Vec<FacetAction> {
     let mut out = Vec::new();
     let q = norm(query);
@@ -224,9 +229,9 @@ pub fn sections(
         .map(|d| {
             let selected = f.decades.contains(&d.id);
             let av = match (mlo, mhi) {
-                (Some(lo), Some(hi)) if d.to < lo || d.from > hi => Availability::blocked(
-                    format!("I movimenti scelti coprono il periodo {lo}–{hi}"),
-                ),
+                (Some(lo), Some(hi)) if d.to < lo || d.from > hi => Availability::blocked(format!(
+                    "I movimenti scelti coprono il periodo {lo}–{hi}"
+                )),
                 _ => Availability::ok(),
             };
             (d.label.clone(), selected, av)
@@ -266,7 +271,7 @@ pub fn sections(
             let selected = f.genres.contains(&g.id);
             let excluded = f.without_genres.contains(&g.id);
             let av = if excluded {
-                Availability::soft("Escluso: scrivi «senza X» o riattivalo dal pannello".to_string())
+                Availability::soft("Escluso dai risultati; seleziona per includerlo".to_string())
             } else {
                 prune
                     .genres
@@ -330,6 +335,17 @@ pub fn sections(
                         .unwrap_or(0);
                     FacetAction::Genre(id)
                 });
+                ui.add_space(6.0);
+                ui.menu_button("Escludi generi…", |ui| {
+                    for genre in &tax.genres {
+                        if ui
+                            .selectable_label(f.without_genres.contains(&genre.id), &genre.name)
+                            .clicked()
+                        {
+                            out.push(FacetAction::ExcludeGenre(genre.id));
+                        }
+                    }
+                });
                 if !filtering && total > primary.len() {
                     ui.add_space(6.0);
                     let label = if show_all {
@@ -360,7 +376,7 @@ pub fn sections(
             (c.name.clone(), selected, av)
         })
         .collect();
-    let title_hit = wanted(&q, "Paese e lingua", COUNTRY_ALIASES);
+    let title_hit = wanted(&q, "Paese di origine", COUNTRY_ALIASES);
     let (items, show) = filter_items(all_countries, &q, filtering, title_hit);
     if show {
         sep(ui, &mut drawn);
@@ -383,7 +399,7 @@ pub fn sections(
         let acts = section(
             ui,
             "paesi",
-            "Paese e lingua",
+            "Paese di origine",
             f.countries.len(),
             false,
             filtering,
@@ -527,7 +543,7 @@ pub fn sections(
     // ---- fine ----
 
     // ---- spiegazioni ----
-    if !messages.is_empty() || !info.is_empty() || !ai_notes.is_empty() {
+    if !messages.is_empty() || !info.is_empty() || !notes.is_empty() {
         ui.add_space(10.0);
         Frame::NONE
             .fill(theme::CARD)
@@ -543,12 +559,20 @@ pub fn sections(
                 );
                 ui.add_space(2.0);
                 for m in messages {
-                    ui.label(RichText::new(format!("• {m}")).size(11.0).color(theme::WARN));
+                    ui.label(
+                        RichText::new(format!("• {m}"))
+                            .size(11.0)
+                            .color(theme::WARN),
+                    );
                 }
                 for m in info {
-                    ui.label(RichText::new(format!("· {m}")).size(11.0).color(theme::TEXT));
+                    ui.label(
+                        RichText::new(format!("· {m}"))
+                            .size(11.0)
+                            .color(theme::TEXT),
+                    );
                 }
-                for n in ai_notes {
+                for n in notes {
                     ui.label(RichText::new(format!("◦ {n}")).size(11.0).color(theme::DIM));
                 }
             });
@@ -685,9 +709,11 @@ pub fn guide_window(ctx: &egui::Context, tax: &Taxonomy, open: &mut bool) -> Vec
 // ------------------------------------------------------------ componenti ---
 
 fn badge_size(ui: &Ui, n: usize) -> (f32, f32) {
-    let galley = ui
-        .painter()
-        .layout_no_wrap(n.to_string(), FontId::proportional(11.0), Color32::PLACEHOLDER);
+    let galley = ui.painter().layout_no_wrap(
+        n.to_string(),
+        FontId::proportional(11.0),
+        Color32::PLACEHOLDER,
+    );
     ((galley.size().x + 10.0).max(18.0), galley.size().y)
 }
 
@@ -753,7 +779,11 @@ fn help_button(ui: &mut Ui) -> Response {
     p.circle_filled(
         rect.center(),
         10.5,
-        theme::mix(theme::alpha(theme::CARD, 210), theme::ACCENT_DIM, hover * 0.5),
+        theme::mix(
+            theme::alpha(theme::CARD, 210),
+            theme::ACCENT_DIM,
+            hover * 0.5,
+        ),
     );
     p.circle_stroke(
         rect.center(),
@@ -791,7 +821,9 @@ fn text_input(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Respons
         ui.painter().rect_stroke(
             inner.response.rect,
             lumen::radius(lumen::RADIUS_SM),
-            Stroke::new(1.0_f32, theme::ACCENT), egui::StrokeKind::Inside);
+            Stroke::new(1.0_f32, theme::ACCENT),
+            egui::StrokeKind::Inside,
+        );
     }
     inner.inner
 }
@@ -803,8 +835,7 @@ fn search_field(ui: &mut Ui, text: &mut String, hint: &str) -> Response {
     let field_w = (avail - 28.0).max(80.0);
     ui.horizontal(|ui| {
         let resp = text_input(ui, text, hint, field_w);
-        let (rect, click) =
-            ui.allocate_exact_size(egui::vec2(20.0, 26.0), Sense::click());
+        let (rect, click) = ui.allocate_exact_size(egui::vec2(20.0, 26.0), Sense::click());
         if !text.is_empty() {
             let hover = ui
                 .ctx()
@@ -847,10 +878,9 @@ fn pill(ui: &mut Ui, label: &str) -> Response {
     p.rect_stroke(
         rect,
         lumen::radius(lumen::RADIUS_SM),
-        Stroke::new(
-            1.0_f32,
-            theme::mix(theme::BORDER, theme::ACCENT, hover),
-        ), egui::StrokeKind::Inside);
+        Stroke::new(1.0_f32, theme::mix(theme::BORDER, theme::ACCENT, hover)),
+        egui::StrokeKind::Inside,
+    );
     p.galley(
         rect.min + egui::vec2(7.0, 4.0),
         galley,
@@ -879,14 +909,11 @@ pub(crate) fn active_pills(ui: &mut Ui, tax: &Taxonomy, f: &Facets) -> Vec<Facet
     }
     for id in &f.without_genres {
         if let Some(name) = tax.genre_name(*id) {
-            items.push((format!("senza {name}"), FacetAction::Genre(*id)));
+            items.push((format!("senza {name}"), FacetAction::ExcludeGenre(*id)));
         }
     }
     for code in &f.countries {
-        items.push((
-            tax.country_label(code),
-            FacetAction::Country(code.clone()),
-        ));
+        items.push((tax.country_label(code), FacetAction::Country(code.clone())));
     }
     for id in &f.moods {
         if let Some(m) = tax.mood(id) {
@@ -988,20 +1015,25 @@ fn section(
     if active > 0 {
         let (w, _) = badge_size(ui, active);
         let brect = egui::Rect::from_center_size(
-            egui::pos2(rect.left() + 2.0 + galley.size().x + 6.0 + w * 0.5, rect.center().y),
+            egui::pos2(
+                rect.left() + 2.0 + galley.size().x + 6.0 + w * 0.5,
+                rect.center().y,
+            ),
             egui::vec2(w, 15.0),
         );
         paint_badge(p, brect, active);
     }
 
-    let chev = ui
-        .ctx()
-        .animate_bool_with_time(id.with("chev"), open, 0.14);
+    let chev = ui.ctx().animate_bool_with_time(id.with("chev"), open, 0.14);
     chevron(
         p,
         egui::pos2(rect.right() - 11.0, rect.center().y),
         chev,
-        theme::mix(theme::FAINT, theme::ACCENT, hover.max(if forced_open { 1.0 } else { 0.0 })),
+        theme::mix(
+            theme::FAINT,
+            theme::ACCENT,
+            hover.max(if forced_open { 1.0 } else { 0.0 }),
+        ),
     );
 
     let mut clear_clicked = false;
@@ -1058,10 +1090,7 @@ fn chevron(painter: &egui::Painter, center: egui::Pos2, t: f32, color: Color32) 
         center + egui::vec2(-2.0, -4.0),
         center + egui::vec2(-4.0, -2.0),
     );
-    let p1 = lerp(
-        center + egui::vec2(2.0, 0.0),
-        center + egui::vec2(0.0, 2.0),
-    );
+    let p1 = lerp(center + egui::vec2(2.0, 0.0), center + egui::vec2(0.0, 2.0));
     let p2 = lerp(
         center + egui::vec2(-2.0, 4.0),
         center + egui::vec2(4.0, -2.0),
@@ -1081,7 +1110,13 @@ fn chip_row(
 ) {
     ui.horizontal_wrapped(|ui| {
         for (label, selected, av) in items {
-            let resp = theme::chip(ui, &label, selected, selected || av.allowed, av.reason.as_deref());
+            let resp = theme::chip(
+                ui,
+                &label,
+                selected,
+                selected || av.allowed,
+                av.reason.as_deref(),
+            );
             if resp.clicked() {
                 out.push(make(&label));
             }
@@ -1200,7 +1235,9 @@ fn metric_chip(
     p.rect_stroke(
         rect,
         lumen::radius(lumen::RADIUS_SM),
-        Stroke::new(1.0_f32, stroke), egui::StrokeKind::Inside);
+        Stroke::new(1.0_f32, stroke),
+        egui::StrokeKind::Inside,
+    );
     let galley = p.layout_no_wrap(
         label.to_owned(),
         FontId::new(11.0, egui::FontFamily::Name(fonts::LUMEN_MONO.into())),
@@ -1238,7 +1275,8 @@ fn menu_item(ui: &mut Ui, label: &str, selected: bool) -> bool {
         } else {
             theme::alpha(theme::CARD_HOVER, (150.0 * hover) as u8)
         };
-        ui.painter().rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
+        ui.painter()
+            .rect_filled(rect, lumen::radius(lumen::RADIUS_SM), fill);
     }
     let p = ui.painter();
     let galley = p.layout_no_wrap(
@@ -1249,7 +1287,11 @@ fn menu_item(ui: &mut Ui, label: &str, selected: bool) -> bool {
     p.galley(
         egui::pos2(rect.left() + 8.0, rect.center().y - galley.size().y * 0.5),
         galley,
-        if selected { theme::ACCENT_3 } else { theme::TEXT },
+        if selected {
+            theme::ACCENT_3
+        } else {
+            theme::TEXT
+        },
     );
     if selected {
         p.text(
@@ -1346,14 +1388,19 @@ fn votes_popup(
                 close = true;
             }
             if let Some(c) = current {
-                if !VOTES.contains(&c) && menu_item(ui, &format!("{} (attuale)", theme::thousands(c)), true)
+                if !VOTES.contains(&c)
+                    && menu_item(ui, &format!("{} (attuale)", theme::thousands(c)), true)
                 {
                     chosen = Some(FacetAction::Votes(Some(c)));
                     close = true;
                 }
             }
             for v in VOTES {
-                if menu_item(ui, &format!("{} e più", theme::thousands(*v)), current == Some(*v)) {
+                if menu_item(
+                    ui,
+                    &format!("{} e più", theme::thousands(*v)),
+                    current == Some(*v),
+                ) {
                     chosen = Some(FacetAction::Votes(Some(*v)));
                     close = true;
                 }
@@ -1473,15 +1520,9 @@ fn filter_items(
 
 /// Linea sottile disegnata a mano: piu' discreta del separatore di egui.
 fn hairline(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width(), 1.0),
-        Sense::hover(),
-    );
-    ui.painter().rect_filled(
-        rect,
-        lumen::radius(0.0),
-        theme::alpha(theme::BORDER, 170),
-    );
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), Sense::hover());
+    ui.painter()
+        .rect_filled(rect, lumen::radius(0.0), theme::alpha(theme::BORDER, 170));
 }
 
 fn sep(ui: &mut Ui, drawn: &mut usize) {
@@ -1555,11 +1596,12 @@ pub(crate) fn apply_action(f: &mut Facets, action: FacetAction) {
         FacetAction::Decade(id) => toggle(&mut f.decades, id),
         FacetAction::Movement(id) => toggle(&mut f.movements, id),
         FacetAction::Genre(id) => {
-            if f.without_genres.contains(&id) {
-                toggle(&mut f.without_genres, id);
-            } else {
-                toggle(&mut f.genres, id);
-            }
+            f.without_genres.retain(|g| *g != id);
+            toggle(&mut f.genres, id);
+        }
+        FacetAction::ExcludeGenre(id) => {
+            f.genres.retain(|g| *g != id);
+            toggle(&mut f.without_genres, id);
         }
         FacetAction::Country(code) => toggle(&mut f.countries, code),
         FacetAction::Mood(id) => toggle(&mut f.moods, id),
@@ -1618,10 +1660,25 @@ pub(crate) fn apply_action(f: &mut Facets, action: FacetAction) {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inclusione_ed_esclusione_di_un_genere_sono_mutuamente_esclusive() {
+        let mut f = Facets::default();
+        apply_action(&mut f, FacetAction::Genre(27));
+        assert_eq!(f.genres, vec![27]);
+        apply_action(&mut f, FacetAction::ExcludeGenre(27));
+        assert!(f.genres.is_empty());
+        assert_eq!(f.without_genres, vec![27]);
+        apply_action(&mut f, FacetAction::ExcludeGenre(27));
+        assert!(f.without_genres.is_empty());
+        apply_action(&mut f, FacetAction::ExcludeGenre(27));
+        apply_action(&mut f, FacetAction::Genre(27));
+        assert!(f.without_genres.is_empty());
+        assert_eq!(f.genres, vec![27]);
+    }
 
     #[test]
     fn norm_ignora_maiuscole_e_accenti() {
@@ -1632,7 +1689,7 @@ mod tests {
     #[test]
     fn gli_alias_trovano_le_sezioni() {
         assert!(wanted("voto", "Metriche", METRIC_ALIASES));
-        assert!(wanted("paesi", "Paese e lingua", COUNTRY_ALIASES));
+        assert!(wanted("paesi", "Paese di origine", COUNTRY_ALIASES));
         assert!(!wanted("horror", "Genere", GENRE_ALIASES));
         assert!(wanted("generi", "Genere", GENRE_ALIASES));
     }
@@ -1667,5 +1724,4 @@ mod tests {
             "il campo di ricerca sfora il pannello: {width}"
         );
     }
-
 }

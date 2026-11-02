@@ -1,502 +1,103 @@
 # CineMatch
 
-App desktop Windows in Rust per esplorare film su TMDB con una **barra di ricerca
-combinata a vincoli**: non tutte le combinazioni di tassonomia sono ammesse, e il
-programma spiega sempre il perche.
+Catalogo cinematografico desktop per Windows: filtri combinabili, tassonomia,
+correnti e guida alla scoperta dei film. Versione 0.11.0.
 
-L'interfaccia ha due sale, commutabili dalla rail di sinistra: la **Sala 01**
-(chat) per chiedere in liberta e ricevere fino a cinque film pertinenti, la
-**Sala 02** (catalogo) per esplorare con il pannello dei filtri.
+Il catalogo è la schermata iniziale e il centro del prodotto. Ricerca chat,
+provider AI, rilevamento dei modelli e relative impostazioni sono stati rimossi.
+Non sono richiesti modelli locali o credenziali per servizi AI.
 
-Esempio: `anni '80` + `Neorealismo` + `Horror` e impossibile — il Neorealismo copre
-il 1943–1954 in Italia, quindi non puo coesistere con gli anni '80. Se scegli prima
-gli anni '80, il Neorealismo **non e selezionabile**; se scegli prima il Neorealismo,
-il periodo si stringe automaticamente al 1943–1954.
+## Uso
 
-Viceversa `anni '80` + `Giallo Italiano` + `Horror` e legittimo: il periodo effettivo
-diventa 1980–1982, il paese implicato e l'Italia, e il motore esclude d'ufficio i
-generi estranei al movimento.
+1. Inserisci una credenziale TMDB: API Key v3 oppure Read Access Token v4.
+2. Esplora i film con i filtri oppure cerca un titolo nella barra del catalogo.
+3. Usa la guida alle correnti per leggere periodo, paesi e ricetta dei filtri.
+4. Apri una scheda per trama, persone, durata, voti e disponibilità riportata.
 
-## Installazione (Windows)
+La credenziale TMDB è conservata nel Windows Credential Manager. SIMKL è
+facoltativo: consente di gestire visti, lista e voti del proprio account.
 
-La pagina di download e:
+## Filtri e correnti
 
-<https://emanueleparis98.github.io/cinematch/>
+- Decenni, correnti, generi, paesi, mood e parole chiave TMDB.
+- Inclusione dei generi ed esclusione tramite «Escludi generi…»; entrambe
+  rimangono visibili nel riepilogo dei criteri attivi.
+- Voto minimo e massimo TMDB, numero minimo di voti, durata e ordinamento.
+- Ricerca nel pannello, criteri rimovibili e combinazioni incompatibili spiegate.
+- «Sblocca» propone rinunce da scegliere, senza allargamenti silenziosi.
 
-In alternativa, l'installer e il manifesto aggiornamenti sono nelle
-[release GitHub](https://github.com/Emanueleparis98/cinematch/releases).
-CineMatch e un'app Windows 10/11 a 64 bit e l'installer e **per-utente**:
-installa in `%LocalAppData%\Programs\CineMatch` e non chiede i permessi di
-amministratore. La configurazione resta in `%APPDATA%\CineMatch`.
+Le correnti sono percorsi di esplorazione definiti dalla tassonomia: periodo,
+paesi, generi ed eventuale keyword. Non sono un censimento certificato
+dell'appartenenza di ogni opera a un movimento. La guida mostra la combinazione.
 
-### Aggiornamenti
+I generi espliciti sono in AND; i paesi sono alternative. I temi restano vincoli,
+senza troncamento arbitrario a tre. Una keyword non risolta viene segnalata e
+impedisce di presentare una ricerca più larga come equivalente a quella chiesta.
 
-L'app installata controlla la release piu recente all'avvio e ogni sei ore.
-Quando c'e una nuova versione compare un puntino sull'ingranaggio delle
-Impostazioni; download e installazione partono solo quando premi
-**Scarica e installa**. Il setup e completo, viene verificato con SHA-256 e
-poi avviato dall'app. Configurazione, chiavi API, cache dei poster e dati
-locali non vengono toccati.
+## Risultati e pagine
 
-La pipeline di release e pronta per la firma Authenticode: se nel repository
-sono presenti i secret `SIGN_PFX_BASE64` e `SIGN_PFX_PASSWORD`, CI firma
-eseguibile e installer. Senza certificato la release e comunque pubblicata,
-ma Windows puo mostrare l'avviso "editore sconosciuto".
+La ricerca testuale cerca titoli originali, tradotti e alternativi. Con filtri
+attivi, le schede della pagina corrente vengono verificate e ordinate localmente.
+Le pagine si riferiscono alla ricerca TMDB originaria: una pagina vuota può
+essere seguita da una pagina con corrispondenze.
+
+Quando il totale non rappresenta i film filtrati, la barra indica il numero
+**in pagina**. Questo vale anche per decenni non contigui e visti nascosti.
+La navigazione rispetta il limite operativo delle prime 500 pagine.
+
+Una nuova ricerca annulla quella precedente; risultati obsoleti non
+sovrascrivono la selezione attuale. Il caricamento ha uno stato esplicito.
+
+Le soglie applicate dagli ordinamenti sono indicate nei filtri. «Più recenti»
+usa normalmente almeno 50 voti e 60 minuti quando non sono stati scelti valori
+espliciti. «Prossimamente» seleziona date future e ordina per popolarità.
+Il voto massimo esclude i titoli privi di valutazioni.
+
+## Dati e integrazioni
+
+- **TMDB:** catalogo, immagini e schede; richiede connessione. L'API è gratuita
+  per uso non commerciale secondo le condizioni e attribuzioni della fonte.
+- **SIMKL:** collegamento tramite codice, sincronizzazione e gestione di visti,
+  lista e voti. Le scritture avvengono su azione dell'utente.
+- **IMDb:** dataset non commerciale opzionale scaricato localmente per mostrare
+  i voti; non è una lettura in tempo reale del sito IMDb.
+- **Aggiornamenti:** manifesto GitHub e verifica del setup scaricato.
+
+Senza rete non sono garantiti dati o immagini assenti dalle cache. Il catalogo
+non richiede l'archivio narrativo ipotizzato nei piani precedenti, ora storici.
+
+## Scorciatoie
+
+| Comando | Azione |
+| --- | --- |
+| `/` oppure `Ctrl+K` | Fuoco nella ricerca del catalogo |
+| `Ctrl+B` | Mostra o nasconde i filtri |
+| `Ctrl+S` nelle impostazioni | Salva le modifiche |
+| `Esc` | Chiude prima guida, impostazioni o scheda attiva |
+
+Dimensione minima: 800×600. Filtri e dettagli usano pannelli alternativi per
+lasciare spazio alla griglia.
 
 ## Sviluppo
 
 ```powershell
-.\run.ps1
+cargo test --locked --offline --all-targets
+cargo clippy --locked --offline --all-targets -- -D warnings
+cargo build --locked --offline --release
+cargo check --locked --offline --features wgpu
 ```
 
-Il launcher chiude l'istanza aperta, ricompila in release (incrementale) e avvia
-il binario fresco. In fondo alle Impostazioni c'e `build gg/mm hh:mm`: se la
-data non e quella di adesso, la finestra aperta e una build vecchia. In alternativa:
+La build predefinita usa OpenGL; wgpu è opzionale. Installer con Inno Setup 6:
 
 ```powershell
-cargo run --release
+ISCC.exe /DMyAppVersion=0.11.0 installer\cinematch.iss
 ```
 
-Al primo avvio si apre la finestra **Impostazioni**: serve una chiave API TMDB
-(gratuita).
-
-1. Crea un account su [themoviedb.org](https://www.themoviedb.org/signup)
-2. Vai su [Impostazioni → API](https://www.themoviedb.org/settings/api)
-3. Incolla **una delle due credenziali** nel campo e premi *Salva*:
-   - **API Key v3** (32 caratteri esadecimali) → inviata come parametro `api_key`
-   - **API Read Access Token v4** (JWT, inizia con `eyJ`) → inviato come header
-     `Authorization: Bearer`
-
-CineMatch riconosce da sola il formato (il campo lo dice sotto la casella) e, se
-incolli il token v4, ne ricava anche la chiave v3 dal claim `aud` come ripiego.
-Il pulsante **Verifica credenziale** fa una lettura di prova e riporta l'esito senza
-salvare nulla.
-
-La chiave viene salvata nel **Windows Credential Manager**, non in
-`config.json`: non resta in chiaro nella cartella dell'app.
-
-## SIMKL (facoltativo)
-
-CineMatch legge e scrive su SIMKL: film visti, lista "Da vedere" e voti
-personali da 1 a 10. Nella scheda compaiono `VISTO SU SIMKL`, `DA VEDERE SU
-SIMKL`, il voto e i pulsanti **Segna visto**, **Da vedere** e **Rimuovi**. La
-sincronizzazione e incrementale e parte solo all'avvio, su richiesta o dopo
-un'azione; nessun polling in background.
-
-Il **Client ID pubblico** dell'app CineMatch e incluso: basta collegare
-l'account.
-
-1. In CineMatch: **Impostazioni -> Tracciamento**.
-2. Premi **Connetti SIMKL**, apri il link e inserisci il codice a 8 caratteri.
-
-Il token di accesso viene salvato nel **Windows Credential Manager**, non in
-`config.json`; "Scollega SIMKL" cancella token e copia locale. Il Client ID e
-pubblico (identifica solo l'app), non e un segreto.
-
-Se lasci un film a metà in un'altra app collegata a SIMKL, la home mostra
-**Riprendi** prima delle piste, con la percentuale; sotto le piste compare
-**Dalla tua lista** con i film da vedere.
-
-## Sala 01 · Chat dei consigli (la casa)
-
-CineMatch si apre sulla **Sala 01**: scrivi in liberta, anche a modo tuo, e la
-risposta e una conversazione con **fino a cinque film reali** presi da TMDB.
-Ogni film ha una card con poster, voto TMDB e IMDb, regia, durata, dove si vede,
-il **perche** quel film risponde alla richiesta e un **consiglio** pratico (come
-guardarlo, a cosa fare attenzione). I criteri espliciti restano vincolanti: se nessun film li rispetta, la chat lo dice e permette di modificarli. La selezione contiene fino a cinque film con dati verificati, senza riempire la lista con titoli estranei.
-
-La home mette al primo posto titolo e richiesta, seguiti da **quattro spunti
-vivi**, prima del cartellone. Se hai collegato SIMKL, i film da riprendere
-compaiono a destra sulle finestre larghe e sotto gli spunti su quelle strette.
-Un clic su uno spunto o su «Sorprendimi» prepara soltanto il testo: puoi
-modificarlo prima di premere **Cerca**, senza chiamate AI o TMDB anticipate.
-Invio invia, Shift+Invio va a capo. Nella conversazione il campo resta in basso;
-`/` riporta il fuoco alla richiesta.
-
-Il layout si adatta da 800×600 alla finestra massimizzata: contenuto e campo
-condividono i margini, le card passano da due colonne a una e la loro altezza
-segue i testi. Il campo multilinea scorre al proprio interno senza coprire
-la barra di stato. «Riprendi» usa locandine compatte e titoli su piu righe;
-la scheda film sfrutta l'altezza disponibile mantenendo la chiusura fissa.
-
-La barra laterale mostra **Consigli · Sala 01** e **Catalogo · Sala 02**.
-Nella scheda film sinossi, regia e disponibilita precedono tracciamento e
-contenuti secondari; il poster resta come riferimento, senza un secondo
-backdrop sopra le informazioni.
-
-- **Quattro spunti locali, sempre legali**: le card nascono dalla tassonomia
-  (correnti, atmosfere, periodi, scoperte) e vengono confrontate con i filtri
-  attivi tramite lo stesso motore di vincoli della griglia. Se una combinazione
-  richiederebbe una correzione, la card non compare. Il catalogo si costruisce
-  in memoria, senza rete.
-- **Piste stabili**: i quattro spunti restano fermi mentre leggi o passi da una
-  sala all'altra. «Altre piste» cambia il quartetto senza ripetere subito le
-  proposte precedenti; se cambi i filtri, gli spunti si aggiornano per rispettarli.
-  «Sorprendimi» prepara una proposta locale non visibile, senza inviarla.
-- **Cartellone trasparente**: «In sala» distingue caricamento, errore e nessun
-  risultato. In caso di errore puoi riprovare; se c'e un cartellone precedente,
-  resta visibile con un avviso. Quando mancano i dati sui provider, la scheda
-  lo dichiara senza affermare che il film sia indisponibile.
-
-- **Due sale, due stati**: la rail a sinistra cambia sala (Consigli, Catalogo,
-  Impostazioni); la striscia in alto porta marchio, contesto e controlli finestra.
-  La chat conserva la bozza, il catalogo conserva ricerca, filtri e larghezza del
-  pannello; i filtri compaiono solo in Sala 02. Filtri e scheda film non stanno
-  mai aperti insieme.
-- **Il contesto segue i seguiti**: l'app conserva il contesto per i seguiti
-  espliciti («no, senza commedia», «e uno piu recente?», «e se fossero italiani?»).
-  Una richiesta nuova riparte da criteri puliti: non si porta dietro i temi del
-  messaggio precedente. «Nuova chat» azzera tutto (niente file: tutto in memoria).
-- **Anche le domande fuori tema**: se chiedi qualcosa che non riguarda il cinema
-  («qual e la capitale della Francia?»), l'intro risponde in una riga e i film
-  sono il ponte verso la sala: il paese, il tema o, se non c'e un legame, i film
-  del momento. La domanda non viene mai scambiata per un titolo.
-- **Registi e attori**: «film di Vittorio De Sica», «regia di...», «film con...»
-  risolvono la persona su TMDB e usano la filmografia. Gli omonimi vengono
-  disambiguati per ruolo e popolarita; il film appena visto resta fuori.
-- **I film non si inventano**: l'interprete produce i filtri, il motore di
-  vincoli li valida, la ricerca interroga TMDB e il **curatore** puo solo
-  scegliere e commentare i candidati reali. Gli id fuori elenco vengono scartati;
-  se l'AI manca o sbaglia, la scelta e deterministica (voto pesato dai voti) e la
-  chat funziona lo stesso, modalita regole compresa.
-- **Intro in streaming**: la presentazione arriva parola per parola (SSE), poi
-  compaiono le card in sequenza. Se il servizio ignora lo streaming la risposta
-  unica viene letta lo stesso; se la curatela non arriva in tempo, la scelta e
-  deterministica e la chat non si blocca.
-- **Temi liberi e tassonomia**: la chat distingue le facce della tassonomia
-  («neorealismo comico romantico») dai temi semantici («cani e gatti amici»,
-  «viaggio nello spazio»). I temi vivono solo nella chat: non cambiano i filtri
-  della griglia e non diventano keyword TMDB fuzzy. La ricerca usa concetti,
-  keyword esatte e titoli di riferimento, poi verifica la trama dei candidati.
-- **Criteri vincolanti**: ogni concetto del tema e ogni filtro esplicito devono trovare riscontro. Con zero risultati l'app spiega il limite e conserva i filtri. In catalogo «Sblocca» propone rinunce da scegliere; in chat il comando fisso «Criteri» porta alle chip rimovibili e a «Modifica criteri». Puoi cambiare piu valori e premere «Applica criteri»: la modifica crea una nuova risposta senza alterare lo stato del catalogo.
-- **Preferenze esplicite**: la memoria usa le richieste dell'utente, senza trasformare i film proposti in gusti approvati. «Ben diretto» orienta la curatela senza aggiungere un voto minimo arbitrario.
-- **Schede prima della scelta**: durata, paese e keyword vengono verificati prima della curatela, anche nelle ricerche per titolo o simili. La lingua originale non sostituisce il paese di produzione. I consigli pratici usano durata e abbonamenti forniti dalle schede, senza inventare edizioni o doppiaggi.
-- **Da chat a griglia**: «Vedi tutti i N in griglia» compare solo quando i criteri
-  sono davvero rappresentabili come filtri (niente temi liberi) e porta gli stessi
-  filtri nella griglia, con l'intento in cache: nessuna chiamata AI nuova.
-  La richiesta naturale «altri» riusa lo stesso contesto, esclude i film appena
-  visti e legge le pagine successive per trovare altri titoli pertinenti, non necessariamente cinque. La ricerca si ferma a 20 pagine per fonte per mantenere il lavoro limitato. Toccare un
-  filtro a mano riporta alla griglia. La scheda film resta quella di sempre (clic
-  sul poster).
-
-## Aspetto e interazioni
-
-- **LUMEN**: editoriale e cinematografico. Fondo ink (`#08090C`), superfici piatte,
-  avorio per il testo, ember (`#FF5C35`) per i comandi e celadon per le
-  disponibilita. Niente gradienti, aloni o bolle: solo linee sottili, tipografia e
-  poster.
-- **Tipografia inclusa**: Fraunces per i titoli, Instrument Sans per il testo e
-  JetBrains Mono per etichette, metadati e comandi. I font (licenza OFL) stanno in
-  `assets/fonts`; i ripieghi CJK arrivano solo quando servono davvero.
-- **Shell**: rail da 72 px (Sala 01, Sala 02, Impostazioni), striscia superiore da
-  48 px con marchio, contesto e controlli finestra, barra di stato da 28 px con
-  versione, sorgente e provider. La finestra si trascina dalla striscia e si
-  ridimensiona dai bordi.
-- **Barra di stato onesta**: «PRONTO» diventa verde solo dopo una richiesta di
-  rete riuscita, «LAVORO» e ambra durante le operazioni, «OFFLINE» e rosso quando
-  l'ultima richiesta fallisce. Le etichette TMDB/OpenRouter indicano la
-  configurazione, non la connessione.
-- **Sala 01**: casa con hero, collage di poster reali, composer e quattro spunti
-  locali in griglia 2x2; risultati con un film in evidenza e le altre card sotto.
-  Il composer resta fisso sopra la barra di stato durante la conversazione. Stop,
-  riprova e «Vedi tutti in griglia» restano dove erano.
-- **Sala 02**: poster 2:3 senza riquadro, titolo e metadati sotto, filo ember sulla
-  card selezionata. Colonne responsive: due con i filtri a 800 px, tre senza;
-  a 1220 px quattro con i filtri e cinque senza. Il pager sta in basso, fuori
-  dallo scroll.
-- **Filtri**: pannello a fisarmonica su fondo ink, testata ferma (titolo,
-  conteggio, azzera, aiuto, ricerca interna), pill dei filtri attivi, sezioni in
-  mono maiuscolo e chip piatte con bordo ember quando attive.
-- **Scheda film**: pannello laterale fisso con backdrop e poster, titolo Fraunces,
-  fatti, stato SIMKL con voto e Da vedere, dove vederlo, disponibilita e simili.
-- **Impostazioni**: pagina intera con colonna centrata: TMDB, interprete, lingua,
-  dati IMDb, aggiornamenti e salvataggio. «Chiudi» o `Esc` tornano alla vista.
-- **Ridimensionamento**: minimo 800x600; i testi vanno a capo e i pannelli non si
-  sovrappongono. A 1220x660 la griglia passa a cinque colonne senza filtri
-  (quattro con i filtri) e la scheda resta leggibile.
-- **Da tastiera**: il fuoco e sempre visibile (filo ember) su card, chip e
-  pulsanti; Tab naviga, Invio/Spazio attivano, `/` porta al campo di ricerca,
-  `Esc` chiude scheda, filtri, guida o impostazioni. I toast entrano scivolando ed
-  escono in dissolvenza.
-## Barra di ricerca (Griglia)
-
-Nella scheda **Griglia** l'unico campo accetta sia un titolo sia una frase in
-linguaggio naturale:
-
-| Input | Interpretazione |
-|---|---|
-| `Blade Runner` | ricerca per titolo |
-| `giallo italiano anni 80, voto alto, senza commedia` | facce: periodo 1980s, movimento Giallo Italiano, genere Mistero, escluso Commedia, paese IT, voto ≥ 7 |
-| `film del neorealismo italiano di guerra con voti maggiori di 8` | corrente Neorealismo, paese IT, genere Guerra, voto ≥ 8 |
-| `thriller americano con almeno 5000 voti, voto tra 6 e 8` | voto 6–8 e almeno 5000 voti |
-| `tipo Parasite` | film simili a Parasite (endpoint recommendations) |
-| `"Il Padrino" anni 70` | titolo tra virgolette + periodo |
-
-Puoi scrivere in modo libero e colloquiale: l'interprete estrae quello che riconosce
-(periodo, corrente, paese, genere, voto, numero di voti, durata, ordinamento) e ignora
-il resto. Gli argomenti che non stanno in tassonomia diventano **temi liberi**
-(parole chiave TMDB verificate a runtime) e restano visibili come chip, cosi puoi
-toglierli con un clic.
-
-L'interprete predefinito e **a regole, offline e istantaneo**. Nelle impostazioni puoi
-attivare **DeepSeek** (V4.1 Flash, sforzo massimo), **OpenRouter** oppure **Ollama**
-locale: l'AI propone solo le facce, **la validazione resta al motore di vincoli** -
-gli identificativi dei film vengono verificati su TMDB.
-
-## Pannello dei filtri
-
-Il pannello **Filtri** e una fisarmonica con la testata sempre ferma in
-alto. Vive solo nella Griglia: in Chat sparisce, ma stato e larghezza restano
-memorizzati e tornano al rientro. Si apre un pannello per volta: aprire i filtri
-chiude la scheda film e viceversa.
-
-- **Testata sticky**: titolo «Filtri», numero di filtri accesi, «Azzera», aiuto
-  e ricerca interna (non interroga TMDB: filtra le voci del pannello). Sotto, i
-  filtri attivi diventano **pill rimovibili** con un clic, comprese le correnti.
-- **Minimizza e riapri**: il pulsante «Filtri» nella barra di comando
-  (scorciatoia Ctrl+B) chiude il pannello per lasciare piu' spazio ai poster; lo
-  stesso pulsante lo riapre alla larghezza di prima, anche dopo un passaggio in
-  Chat. Il badge sul pulsante continua a mostrare i filtri accesi, cosi' non si
-  perdono di vista.
-- **Sezioni**: Periodo, Genere, Paese e lingua, Mood e temi, Metriche. Genere parte
-  aperto con i dodici generi piu usati («Tutti i generi» mostra gli altri); Paese
-  mostra otto paesi («Tutti i paesi»). Una sezione si apre da sola se ha filtri
-  accesi; la ricerca apre e isola le voci che combaciano. Lo stato di apertura dura
-  quanto la sessione e non tocca il disco.
-- **Periodo, genere, paese, mood/tema**: le chip spiegano sempre perche una faccia e
-  bloccata o sconsigliata. Le correnti non hanno una lista di chip: si accendono
-  dalla guida e restano nella testata, rimovibili con un clic.
-- **Metriche a menu**: Voto minimo, Voto massimo, Voti minimi e Durata sono quattro
-  chip che aprono un menu con i valori rapidi (voto alto ≥ 7, capolavori ≥ 8, sotto
-  il 6, ecc.) e uno slider per la sfumatura. «Nessuno» spegne la metrica. Il voto e
-  l'intervallo TMDB 0-10; i voti minimi usano una scala da 10 a 500.000; la durata e
-  in minuti. Se ordini per voto senza soglia, contano solo i titoli con almeno 50
-  voti. «Più recenti» considera solo i film già usciti, nasconde i corti sotto i 60
-  minuti e i titoli con meno di 50 voti o senza poster; durata e voti minimi restano
-  regolabili dalle metriche. «Prossimamente» parte da oggi e ordina per
-  popolarità: nasconde le schede senza poster e non applica soglie di voti o
-  durata, che prima dell'uscita non sono affidabili.
-- **Sblocca**: quando la griglia ha al massimo tre film, compare una striscia
-  con i tre compromessi più piccoli. Ognuno toglie un solo vincolo (voto, durata,
-  genere, periodo, paese, mood, tema o corrente), dice quanti film sblocca e
-  mostra due titoli di anteprima, privilegiando quelli non ancora in griglia; un
-  clic applica la rinuncia e cerca subito. Le varianti che non aggiungono film
-  restano fuori. I conteggi sono stime TMDB: il filtro poster può ridurre le card
-  mostrate.
-- **Temi liberi**: arrivano dall'interprete AI o dalla casella «aggiungi un tema»
-  (invio per confermare). Restano pill rimovibili come le altre facce; se TMDB non ha
-  quella parola chiave, l'app lo dice nel riquadro *Perche* e prosegue.
-- **Guida alle correnti** (pulsante «?» o link in fondo al pannello): si apre la
-  finestra **Correnti del cinema**, con ricerca e l'elenco di tutte le correnti. Per
-  il Neorealismo: anni 1940-1950, Italia, generi tipici Dramma/Guerra; per lo
-  Slasher: anni '70-'80, USA, parola chiave TMDB `slasher`. «Applica» accende quei
-  filtri (periodo, paese, parola chiave) e la corrente, che resta visibile nella
-  testata: tutto e rimovibile. Cosi il motivo di ogni risultato resta sempre sotto i
-  tuoi occhi.
-
-## Collegamento AI e rilevamento dei modelli
-
-In *Impostazioni → Interprete delle richieste* scegli il provider:
-
-- **DeepSeek**: incolli la chiave API, il modello predefinito è `deepseek-flash`
-  (V4.1 Flash) e lo sforzo di ragionamento è **Massimo**. L'ID
-  `deepseek-v4.1-flash` non è valido sull'API diretta: l'alias corretto è
-  `deepseek-flash`.
-- **OpenRouter**: incolli la chiave e premi **Rileva modelli**; l'elenco mostra
-  tutti i modelli pubblicati, con nome e contesto.
-- **Ollama**: indichi il collegamento locale e il modello.
-
-Anche le chiavi di DeepSeek e OpenRouter stanno nel **Windows Credential
-Manager**, non in `config.json`.
-
-| Pulsante | Cosa fa |
-|---|---|
-| **Rileva modelli** | interroga `GET /models` (DeepSeek/OpenRouter) o `/api/tags` (Ollama) e riempie il menu con i modelli usabili: provider, contesto e costo relativo quando disponibile |
-| **Verifica risposta AI** | manda al modello scelto una frase di prova e controlla che risponda in **JSON conforme**, mostrando le facce estratte |
-
-All'avvio, se il provider è configurato, l'elenco dei modelli viene caricato da solo.
-La chiamata AI parte **solo con Invio o «Cerca»** (non mentre digiti) e
-l'interpretazione viene messa in cache: cambiare pagina o filtri non costa altre
-chiamate. Le risposte AI e i dati TMDB (titoli, trame, note) sono trattati come
-**dati non fidati** nei prompt: non possono dettare istruzioni al modello.
-
-Per provare tutto da riga di comando:
-
-```powershell
-cargo run --example app_probe -- "film del neorealismo italiano di guerra con voti maggiori di 8"
-```
-
-## Motore di vincoli (`src/domain/constraints.rs`)
-
-Le regole applicate, in ordine:
-
-1. **R4 · temporalita**: `year_range()` interseca i decenni scelti con i periodi dei
-   movimenti. Se l'intersezione e vuota il movimento viene rimosso con spiegazione.
-2. **R3 · geografia**: i paesi del movimento diventano impliciti se non ne scegli
-   nessuno; se ne scegli uno incompatibile viene rimosso.
-3. **R2 · semantica del genere**: `genres_forbidden` di un movimento blocca la chip e
-   finisce in `without_genres` della query TMDB.
-4. **R5 · mood**: i mood incompatibili (es. *Soprannaturale* con Neorealismo) vengono
-   rimossi.
-5. **R6 · backtracking**: qualunque modifica rilancia la propagazione su tutte le
-   facce, in entrambe le direzioni.
-6. **R7 · traduzione della corrente**: i generi impliciti di un movimento sono alternative quando non scegli un genere. Un genere esplicito rimane obbligatorio: Horror con Giallo Italiano non viene allargato a Mistero o Thriller.
-7. **R5 · validazione sui dati reali**: i filtri non vengono allentati automaticamente. Con zero risultati puoi scegliere un compromesso da «Sblocca» o modificare i criteri della chat.
-8. **R8 · identita della corrente**: la geometria (paese + periodo + genere) ha
-   molto richiamo ma anche rumore: *giallo italiano anni 80* su TMDB restituisce
-   circa 600 titoli dove i gialli veri sono un terzo. Per le correnti che la
-   comunita TMDB marca bene esiste una **parola chiave TMDB** (Slasher Era →
-   `slasher`): la query la usa come identita della corrente, in alternativa agli
-   altri argomenti; le altre correnti restano sulla geometria. La ricerca interroga
-   sempre e solo TMDB, in tempo reale.
-
-`pruning()` dice alla UI quali facce sono selezionabili e perche; `sanitize()` corregge
-lo stato e produce i messaggi mostrati nel riquadro *Perche*; `to_discover()` traduce
-lo stato in query TMDB; `app::discover_strict()` conserva tutti i filtri; gli allargamenti sono azioni esplicite dell'utente.
-
-La tassonomia vive in `assets/taxonomy.json`: decenni, generi (id TMDB), paesi,
-mood (keyword TMDB, risolte a runtime) e movimenti con periodo, paesi e compatibilita
-di genere. Per aggiungere una corrente basta una voce nel JSON — nessun codice.
-
-## Correnti: dalla guida a TMDB
-
-Ogni corrente e una **combinazione di filtri TMDB**: periodo, paese e, dove la
-comunita TMDB la cura bene, una **parola chiave** (Slasher Era → `slasher`; le
-altre 16 correnti si riconoscono per periodo e paese). La finestra **Correnti del
-cinema** mostra la combinazione di ognuna e con «Applica» la accende: i filtri
-compaiono accesi nel pannello, la corrente resta in alto come pill rimovibile e la
-ricerca interroga **sempre e solo TMDB, in tempo reale**.
-
-Fino alla versione precedente esisteva in piu un *elenco canonico* per corrente,
-costruito offline incrociando Wikidata e Wikipedia e usato per sostituire i
-risultati di TMDB con un insieme verificato a mano. E stato rimosso: i risultati
-arrivano sempre dalla ricerca live su TMDB, con i filtri che vedi.
-
-## Voto IMDb (facoltativo)
-
-Dai dati pubblici IMDb (`datasets.imdbws.com/title.ratings.tsv.gz`, ~7 MB compressi,
-~29 MB scompattati, nessuna chiave e nessun limite) si scarica una volta sola
-l'archivio dei voti. Il file e ordinato per identificativo **in ordine alfabetico**
-(`tt10000000` viene prima di `tt9999999`, quindi un confronto per numero sbaglierebbe):
-CineMatch costruisce un indice di salti ogni 2048 righe con la chiave di testo del
-file e legge solo il blocco che serve, quindi **non tiene in memoria** i 29 MB di
-dati. L'indice, se manca o e di un formato precedente, si ricostruisce da solo al
-primo consulto. Nella scheda film il voto IMDb compare accanto a quello TMDB. Il
-pulsante e in Impostazioni → *Dati locali*; senza download la funzione resta spenta
-e invisibile.
-
-## Architettura
-
-```
-src/
-├─ main.rs            bootstrap eframe (glow di default; wgpu con `--features wgpu`)
-├─ app.rs             stato, barra di comando, ricerca asincrona, pannelli
-├─ update.rs          manifesto release, download setup, SHA-256, avvio installer
-├─ domain/
-│  ├─ taxonomy.rs     caricamento tassonomia (decenni, generi, paesi, mood, correnti)
-│  ├─ model.rs        Facets, Movie, Details, ordinamento
-│  ├─ constraints.rs  motore di vincoli (R1..R8)
-│  └─ suggestions.rs  catalogo locale e ricambio degli spunti della casa
-├─ tmdb/              client HTTP (throttle 75 ms, retry, cache in memoria)
-├─ ai/                trait IntentProvider + parser a regole + LLM pluggable
-│                     (chat, curatela dei film, rilevamento modelli, verifica)
-├─ ui/                tema, facce, chat, griglia virtualizzata, scheda, immagini
-└─ infra/             config, chiavi (Credential Manager), voti IMDb
-installer/         Inno Setup per-utente
-site/              pagina download statica (GitHub Pages)
-```
-
-La CI in `.github/workflows/` testa e compila l'app su Windows, esegue
-`clippy -- -D warnings`, controlla le dipendenze con RustSec/OSV, crea il setup,
-genera `latest.json`, pubblica release e pagina di download e verifica che il
-manifesto e l'installer pubblicati siano scaricabili con lo stesso SHA-256.
-
-- **Griglia virtualizzata** (`ScrollArea::show_rows`): con 20 risultati o con 20.000
-  si disegna solo cio che e visibile.
-- **Renderer glow (OpenGL) per default**: misurato a riposo ~190 MB di memoria
-  privata contro ~420 MB del backend wgpu/DX12 su Windows (il valore assoluto
-  dipende dal driver grafico; il rapporto resta di circa due volte). Il backend
-  wgpu entra solo con `cargo build --release --features wgpu`; in quella build
-  `CINEMATCH_RENDERER=wgpu` lo sceglie se un driver preferisce Vulkan/DX12.
-- **Poster**: memoria → disco (`%APPDATA%\CineMatch\cache`) → rete, decodifica in
-  thread separati. Al riavvio i poster sono gia li.
-- **Titoli non latini**: i film giapponesi e coreani arrivano con il titolo originale
-  (リング, 呪怨) e i font di base di egui non coprono quei glifi: quando servono
-  entrano come ripiego i font di sistema `Yu Gothic` e `Malgun Gothic`, caricati una
-  volta sola. Una ricerca italiana normale non carica nulla.
-- **Richieste annullabili**: un contatore di generazione scarta le risposte obsolete;
-  il testo e debounced a 320 ms.
-- **Throttle** sulle chiamate TMDB (75 ms tra richieste, ~13 req/s, sotto il limite di
-  ~50 req/s per IP) con retry su 429/5xx.
-
-## Installer e release
-
-Il setup e in `installer/cinematch.iss` (Inno Setup 6); lo script di release
-`.github/workflows/release.yml` compila e pubblica tutto su GitHub Releases.
-Per una build locale, dopo aver installato Inno Setup 6:
-
-```powershell
-cargo build --release
-ISCC.exe /DMyAppVersion=0.10.20 installer\cinematch.iss
-```
-
-Il risultato e `dist\CineMatch-Setup-0.10.20.exe`. Il manifesto
-`dist\latest.json` viene generato dalla CI dopo la firma e contiene versione,
-URL, dimensione e SHA-256 del setup.
-
-Per pubblicare una nuova versione: aggiorna `version` in `Cargo.toml`, commit,
-poi crea e spingi un tag `vX.Y.Z`. La CI esegue i test, compila l'exe, crea
-l'installer, genera `latest.json` e pubblica la release. Il workflow Pages
-pubblica `site/` su <https://emanueleparis98.github.io/cinematch/> quando cambia
-la pagina. La pagina legge l'ultima release dall'API GitHub e aggiorna da sola
-versione, dimensione e link di download.
-
-### Firma Authenticode
-
-Senza un certificato l'installer viene pubblicato lo stesso, ma Windows puo
-mostrare l'avviso "editore sconosciuto". Per firmarlo serve un certificato
-Authenticode in formato PFX:
-
-1. Converti il certificato in base64:
-   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("CineMatch.pfx"))`
-2. Su GitHub: Settings -> Secrets and variables -> Actions, crea
-   `SIGN_PFX_BASE64` con la stringa e `SIGN_PFX_PASSWORD` con la password.
-3. Al prossimo tag la CI firma eseguibile e installer. Senza i secret la release
-   viene comunque pubblicata e il workflow lascia un avviso nel summary.
-
-Per firmare una release gia pubblicata, dopo aver aggiunto i secret lancia
-Actions -> Release -> Run workflow con la versione desiderata: la CI ricostruisce e
-sostituisce gli asset della release.
-
-L'updater e disattivato in debug, quando l'exe gira da `target` e quando e
-impostata la variabile `CINEMATCH_NO_UPDATE=1`; `run.ps1` avvia una build di
-sviluppo e non deve mai sostituirla.
-
-## Test
-
-```powershell
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo audit
-```
-
-I test in `tests/constraints_golden.rs` coprono i casi della discussione: anni '80 +
-neorealismo bloccato, anni '80 + giallo ristretto al 1982, movimento scelto dopo il
-decennio, Dogme 95 + Fantasy bloccato, mood soprannaturale rimosso, parsing della
-frase composta, filtri su voto/voti, temi liberi in AND, ricetta delle combinazioni,
-piu le regole delle correnti a parola chiave (keyword dichiarata in tassonomia,
-risoluzione una volta sola, keyword in OR e tema in AND). I test in `src/ai/`
-verificano le regole dell'interprete, comprese le negazioni («italiano di guerra» non
-e un «senza guerra»), e la curatela della chat: id inventati scartati, doppioni,
-ordine preservato, parsing tollerante e streaming parziale dell'intro. I test di
-`domain::suggestions` verificano che ogni spunto passi il motore di vincoli, resti
-riconoscibile dal parser a regole e non si ripeta al ricambio successivo.
-
-Gli strumenti di sviluppo sono tre: `app_probe` (frase → facce → TMDB, senza
-finestra), `chat_probe` (messaggio → candidati → curatela, anche su piu turni)
-e `imdb_probe` (controllo dell'indice dei voti IMDb).
+`/NOLAUNCH=1` installa senza avviare automaticamente l'app.
+I test automatici usano dati controllati e non chiamano provider AI.
 
 ## Attribuzione
 
-Questo prodotto usa l'API TMDB ma non e approvato o certificato da TMDB.
-Uso non commerciale secondo i termini TMDB.
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+Uso non commerciale secondo i termini TMDB. I dataset IMDb sono soggetti alle
+condizioni per uso personale e non commerciale.

@@ -45,7 +45,10 @@ pub fn poster_url(path: &str, size: &str) -> String {
 #[derive(Clone, Debug)]
 pub enum Credential {
     Query(String),
-    Bearer { token: String, fallback_key: Option<String> },
+    Bearer {
+        token: String,
+        fallback_key: Option<String>,
+    },
 }
 
 /// Estrae il claim `aud` da un JWT: per i token TMDB coincide con la API Key v3.
@@ -124,7 +127,108 @@ pub fn describe_credential(raw: &str) -> (String, bool) {
 
 /// Limiti di uscita per la query: il periodo scelto e `today` si intersecano.
 /// Gli ordinamenti normali si fermano a oggi; `Upcoming` parte da oggi.
-fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String>) {
+pub(crate) fn discover_params(
+    q: &DiscoverQuery,
+    today: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let mut p: Vec<(String, String)> = vec![
+        ("include_adult".into(), "false".into()),
+        ("sort_by".into(), q.sort.as_tmdb().into()),
+        ("page".into(), q.page.max(1).to_string()),
+    ];
+    if !q.genres.is_empty() {
+        let separator = if q.genres_or { "|" } else { "," };
+        p.push((
+            "with_genres".into(),
+            q.genres
+                .iter()
+                .map(|g| g.to_string())
+                .collect::<Vec<_>>()
+                .join(separator),
+        ));
+    }
+    if !q.without_genres.is_empty() {
+        p.push((
+            "without_genres".into(),
+            q.without_genres
+                .iter()
+                .map(|g| g.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+        ));
+    }
+    if !q.keywords.is_empty() {
+        let separator = if q.keywords_or { "|" } else { "," };
+        p.push((
+            "with_keywords".into(),
+            q.keywords
+                .iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>()
+                .join(separator),
+        ));
+    }
+    if !q.countries.is_empty() {
+        p.push(("with_origin_country".into(), q.countries.join("|")));
+    }
+    // Le date si intersecano con oggi: «Più recenti» e gli altri
+    // ordinamenti mostrano solo film già usciti; «Prossimamente» parte da
+    // oggi e ordina per data crescente.
+    let (gte, lte) = date_bounds(q, today);
+    if matches!((&gte, &lte), (Some(a), Some(b)) if a > b) {
+        return Err("Il periodo selezionato non contiene film con questo ordinamento. Cambia periodo oppure ordinamento.".into());
+    }
+    if let Some(g) = gte {
+        p.push(("primary_release_date.gte".into(), g));
+    }
+    if let Some(l) = lte {
+        p.push(("primary_release_date.lte".into(), l));
+    }
+    if let Some(r) = q.min_rating {
+        p.push(("vote_average.gte".into(), format!("{:.1}", r)));
+        // TMDB rifiuta la query se vote_count.gte compare due volte:
+        // il filtro esplicito sui voti, se c'e, sostituisce questo minimo.
+    }
+    if let Some(r) = q.max_rating {
+        p.push(("vote_average.lte".into(), format!("{:.1}", r)));
+    }
+    if let Some(v) = minimum_votes(q) {
+        // il filtro sui voti e piu forte di quello implicito del voto minimo
+        p.push(("vote_count.gte".into(), v.to_string()));
+    }
+    if let Some((a, b)) = q.runtime {
+        p.push(("with_runtime.gte".into(), a.to_string()));
+        p.push(("with_runtime.lte".into(), b.to_string()));
+    } else if q.sort == Sort::Newest {
+        // Un lungometraggio, non un corto da zero minuti.
+        p.push(("with_runtime.gte".into(), "60".into()));
+    }
+    Ok(p)
+}
+
+pub(crate) fn minimum_votes(q: &DiscoverQuery) -> Option<u32> {
+    q.min_votes
+        .or_else(|| {
+            if matches!(q.sort, Sort::Rating | Sort::Newest) {
+                Some(50)
+            } else if q.min_rating.is_some() {
+                Some(25)
+            } else if q.max_rating.is_some() {
+                Some(1)
+            } else {
+                None
+            }
+        })
+        .map(|v| {
+            if q.min_rating.is_some() || q.max_rating.is_some() {
+                v.max(1)
+            } else {
+                v
+            }
+        })
+}
+
+pub(crate) fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String>) {
     let mut gte = q.year.map(|(a, _)| format!("{a}-01-01"));
     let mut lte = q.year.map(|(_, b)| format!("{b}-12-31"));
     match q.sort {
@@ -156,8 +260,7 @@ pub struct Tmdb {
     keyword_cache: Arc<Mutex<HashMap<String, Option<u64>>>>,
     person_cache: Arc<Mutex<HashMap<String, Vec<Person>>>>,
     credits_cache: Arc<Mutex<HashMap<u64, PersonCredits>>>,
-    /// Solo il client della chat lo imposta: stop interrompe richieste e
-    /// letture del corpo senza toccare la griglia.
+    /// Annulla richieste superate da una nuova ricerca del catalogo.
     cancel: Option<Arc<AtomicBool>>,
 }
 
@@ -191,8 +294,7 @@ impl Tmdb {
         }
     }
 
-    /// Client della chat: stessa rete e stesse cache, ma con un token di
-    /// annullamento tutto suo. La griglia continua a usare l'originale.
+    /// Stesse cache, token indipendente: una nuova ricerca ferma quella precedente.
     pub fn cancellable(&self) -> (Self, Arc<AtomicBool>) {
         let cancel = Arc::new(AtomicBool::new(false));
         let copy = Self {
@@ -239,7 +341,11 @@ impl Tmdb {
         }
     }
 
-    fn get<T: DeserializeOwned>(&self, path: &str, params: &[(String, String)]) -> Result<T, String> {
+    fn get<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        params: &[(String, String)],
+    ) -> Result<T, String> {
         let url = format!("{API_BASE}{path}");
         let mut last_err = String::from("richiesta non eseguita");
         let mut auth = self.cred.clone();
@@ -253,8 +359,11 @@ impl Tmdb {
                 return Err(CANCELLED.into());
             }
             let request = self.http.get(&url);
-            let request = if params.iter().any(|(key,_)| key == "language") { request }
-                else { request.query(&[("language", self.lang.as_str())]) };
+            let request = if params.iter().any(|(key, _)| key == "language") {
+                request
+            } else {
+                request.query(&[("language", self.lang.as_str())])
+            };
             let request = match &auth {
                 Credential::Query(key) => request.query(&[("api_key", key.as_str())]),
                 Credential::Bearer { token, .. } => request.bearer_auth(token),
@@ -365,89 +474,7 @@ impl Tmdb {
     }
 
     pub fn discover(&self, q: &DiscoverQuery) -> Result<PagedMovies, String> {
-        let mut p: Vec<(String, String)> = vec![
-            ("include_adult".into(), "false".into()),
-            ("sort_by".into(), q.sort.as_tmdb().into()),
-            ("page".into(), q.page.max(1).to_string()),
-        ];
-        if !q.genres.is_empty() {
-            let separator = if q.genres_or { "|" } else { "," };
-            p.push((
-                "with_genres".into(),
-                q.genres
-                    .iter()
-                    .map(|g| g.to_string())
-                    .collect::<Vec<_>>()
-                    .join(separator),
-            ));
-        }
-        if !q.without_genres.is_empty() {
-            p.push((
-                "without_genres".into(),
-                q.without_genres
-                    .iter()
-                    .map(|g| g.to_string())
-                    .collect::<Vec<_>>()
-                    .join(","),
-            ));
-        }
-        if !q.keywords.is_empty() {
-            let separator = if q.keywords_or { "|" } else { "," };
-            p.push((
-                "with_keywords".into(),
-                q.keywords
-                    .iter()
-                    .map(|k| k.to_string())
-                    .collect::<Vec<_>>()
-                    .join(separator),
-            ));
-        }
-        if !q.countries.is_empty() {
-            p.push(("with_origin_country".into(), q.countries.join("|")));
-        }
-        // Le date si intersecano con oggi: «Più recenti» e gli altri
-        // ordinamenti mostrano solo film già usciti; «Prossimamente» parte da
-        // oggi e ordina per data crescente.
-        let (gte, lte) = date_bounds(q, &crate::infra::winclock::today_iso());
-        if matches!((&gte, &lte), (Some(a), Some(b)) if a > b) {
-            return Err("Il periodo selezionato non contiene film con questo ordinamento. Cambia periodo oppure ordinamento.".into());
-        }
-        if let Some(g) = gte {
-            p.push(("primary_release_date.gte".into(), g));
-        }
-        if let Some(l) = lte {
-            p.push(("primary_release_date.lte".into(), l));
-        }
-        if let Some(r) = q.min_rating {
-            p.push(("vote_average.gte".into(), format!("{:.1}", r)));
-            // TMDB rifiuta la query se vote_count.gte compare due volte:
-            // il filtro esplicito sui voti, se c'e, sostituisce questo minimo.
-            if q.min_votes.is_none() {
-                p.push(("vote_count.gte".into(), "25".into()));
-            }
-        }
-        if let Some(r) = q.max_rating {
-            p.push(("vote_average.lte".into(), format!("{:.1}", r)));
-        }
-        if let Some(v) = q.min_votes {
-            // il filtro sui voti e piu forte di quello implicito del voto minimo
-            p.push(("vote_count.gte".into(), v.to_string()));
-        } else if q.sort == Sort::Rating && q.min_rating.is_none() {
-            // ordinare per voto senza un minimo di voti farebbe emergere titoli
-            // con due voti: una soglia minima tiene l'ordinamento credibile.
-            p.push(("vote_count.gte".into(), "50".into()));
-        } else if q.sort == Sort::Newest {
-            // «Piu recenti»: fuori i titoli senza seguito (spesso corti o
-            // schede vuote). 50 voti e la stessa soglia dell'ordinamento per voto.
-            p.push(("vote_count.gte".into(), "50".into()));
-        }
-        if let Some((a, b)) = q.runtime {
-            p.push(("with_runtime.gte".into(), a.to_string()));
-            p.push(("with_runtime.lte".into(), b.to_string()));
-        } else if q.sort == Sort::Newest {
-            // Un lungometraggio, non un corto da zero minuti.
-            p.push(("with_runtime.gte".into(), "60".into()));
-        }
+        let p = discover_params(q, &crate::infra::winclock::today_iso())?;
         let key = Self::cache_key("/discover/movie", &p);
         if let Some(hit) = self.list_cached(&key) {
             return Ok(hit);
@@ -475,12 +502,18 @@ impl Tmdb {
     /// Risolve anche un titolo internazionale quando il catalogo UI è italiano.
     /// La lingua fa parte della chiave: nessuna contaminazione della cache UI.
     pub fn search_english(&self, query: &str) -> Result<PagedMovies, String> {
-        let params = vec![("query".into(),query.into()),("include_adult".into(),"false".into()),
-            ("page".into(),"1".into()),("language".into(),"en-US".into())];
-        let key = Self::cache_key("/search/movie",&params);
-        if let Some(hit) = self.list_cached(&key) { return Ok(hit); }
-        let result: PagedMovies = self.get("/search/movie",&params)?;
-        self.list_store(key,&result);
+        let params = vec![
+            ("query".into(), query.into()),
+            ("include_adult".into(), "false".into()),
+            ("page".into(), "1".into()),
+            ("language".into(), "en-US".into()),
+        ];
+        let key = Self::cache_key("/search/movie", &params);
+        if let Some(hit) = self.list_cached(&key) {
+            return Ok(hit);
+        }
+        let result: PagedMovies = self.get("/search/movie", &params)?;
+        self.list_store(key, &result);
         Ok(result)
     }
 
@@ -568,7 +601,8 @@ impl Tmdb {
         self.details_cache.lock().ok()?.get(&id).cloned()
     }
 
-    pub fn details(&self, id: u64) -> Result<Details, String> {        if let Ok(c) = self.details_cache.lock() {
+    pub fn details(&self, id: u64) -> Result<Details, String> {
+        if let Ok(c) = self.details_cache.lock() {
             if let Some(hit) = c.get(&id) {
                 return Ok(hit.clone());
             }
@@ -621,7 +655,7 @@ impl Tmdb {
     }
 }
 
-/// Varianti morfologiche minime per le keyword inglesi dell'AI. Non sono un
+/// Varianti morfologiche minime per le keyword inglesi. Non sono un
 /// traduttore: servono solo a non perdere «dogs» quando TMDB indicizza «dog».
 fn keyword_variants(keyword: &str) -> Vec<String> {
     let mut out = vec![keyword.to_string()];
@@ -646,6 +680,36 @@ fn keyword_variants(keyword: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recenti_con_voto_minimo_generano_un_solo_limite_sui_voti() {
+        let q = crate::domain::constraints::DiscoverQuery {
+            sort: crate::domain::model::Sort::Newest,
+            min_rating: Some(7.0),
+            ..Default::default()
+        };
+        let params = super::discover_params(&q, "2026-11-02").unwrap();
+        let limits = params
+            .iter()
+            .filter(|(k, _)| k == "vote_count.gte")
+            .collect::<Vec<_>>();
+        assert_eq!(limits.len(), 1);
+        assert_eq!(limits[0].1, "50");
+        assert!(params
+            .iter()
+            .any(|(k, v)| k == "with_runtime.gte" && v == "60"));
+    }
+
+    #[test]
+    fn il_massimo_sul_voto_esclude_i_titoli_senza_valutazioni() {
+        let q = crate::domain::constraints::DiscoverQuery {
+            max_rating: Some(5.0),
+            ..Default::default()
+        };
+        let params = super::discover_params(&q, "2026-11-02").unwrap();
+        assert!(params
+            .iter()
+            .any(|(k, v)| k == "vote_count.gte" && v == "1"));
+    }
     use super::{date_bounds, keyword_variants, Tmdb, CANCELLED};
     use crate::domain::constraints::DiscoverQuery;
     use crate::domain::model::Sort;
@@ -752,7 +816,7 @@ mod tests {
     }
 
     #[test]
-    fn annullare_la_chat_ferma_la_richiesta() {
+    fn annullare_la_ricerca_ferma_la_richiesta() {
         let (tmdb, cancel) = Tmdb::new("x".into(), "it-IT".into()).cancellable();
         cancel.store(true, Ordering::Relaxed);
         assert_eq!(tmdb.ping().unwrap_err(), CANCELLED);

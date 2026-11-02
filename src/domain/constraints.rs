@@ -12,13 +12,22 @@ pub struct Availability {
 
 impl Availability {
     pub fn ok() -> Self {
-        Self { allowed: true, reason: None }
+        Self {
+            allowed: true,
+            reason: None,
+        }
     }
     pub fn soft(reason: String) -> Self {
-        Self { allowed: true, reason: Some(reason) }
+        Self {
+            allowed: true,
+            reason: Some(reason),
+        }
     }
     pub fn blocked(reason: String) -> Self {
-        Self { allowed: false, reason: Some(reason) }
+        Self {
+            allowed: false,
+            reason: Some(reason),
+        }
     }
 }
 
@@ -139,16 +148,17 @@ pub fn forbidden_genres(tax: &Taxonomy, f: &Facets) -> Vec<u32> {
 pub fn pruning(tax: &Taxonomy, f: &Facets) -> Prune {
     let mut p = Prune::default();
 
-    let active: Vec<&Movement> = f.movements.iter().filter_map(|id| tax.movement(id)).collect();
+    let active: Vec<&Movement> = f
+        .movements
+        .iter()
+        .filter_map(|id| tax.movement(id))
+        .collect();
 
     for g in &tax.genres {
         let mut av = Availability::ok();
         for m in &active {
             if m.genres_forbidden.contains(&g.id) {
-                av = Availability::blocked(format!(
-                    "«{}» non appartiene a «{}»",
-                    g.name, m.label
-                ));
+                av = Availability::blocked(format!("«{}» non appartiene a «{}»", g.name, m.label));
                 break;
             }
             if !m.genres_core.contains(&g.id) && !m.genres_allowed.contains(&g.id) {
@@ -248,7 +258,11 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
                     msgs.push(format!(
                         "Rimosso «{}»: nessun paese in comune con {}.",
                         m.label,
-                        if names.is_empty() { "i movimenti scelti".to_string() } else { names }
+                        if names.is_empty() {
+                            "i movimenti scelti".to_string()
+                        } else {
+                            names
+                        }
                     ));
                     continue;
                 }
@@ -295,11 +309,17 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
             }
         }
 
-        let active: Vec<&Movement> = f.movements.iter().filter_map(|id| tax.movement(id)).collect();
+        let active: Vec<&Movement> = f
+            .movements
+            .iter()
+            .filter_map(|id| tax.movement(id))
+            .collect();
         f.moods.retain(|mid| {
             let bad = match tax.mood(mid) {
                 None => true,
-                Some(mo) => active.iter().any(|m| mo.incompatible_movements.contains(&m.id)),
+                Some(mo) => active
+                    .iter()
+                    .any(|m| mo.incompatible_movements.contains(&m.id)),
             };
             if bad {
                 let label = tax
@@ -336,8 +356,7 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
             f.min_votes = Some(1_000_000);
         }
     }
-    // temi liberi: brevi, senza doppioni, al massimo tre (ognuno e un
-    // requisito in AND sulla ricerca).
+    // Ogni tema scelto resta un requisito in AND; niente troncamenti nascosti.
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut rejected: Vec<String> = Vec::new();
     f.keywords.retain_mut(|k| {
@@ -352,11 +371,6 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
     for k in rejected {
         msgs.push(format!("Tema «{k}» scartato: vuoto o troppo lungo."));
     }
-    if f.keywords.len() > 3 {
-        for k in f.keywords.drain(3..) {
-            msgs.push(format!("Tema «{k}» rimosso: con piu di tre temi non esce nulla."));
-        }
-    }
     if let Some((a, b)) = f.runtime {
         if a > b {
             f.runtime = Some((b, a));
@@ -367,7 +381,11 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
 }
 
 /// Mood selezionati di cui non conosciamo ancora l'id keyword TMDB.
-pub fn unresolved_keywords(tax: &Taxonomy, f: &Facets, known: &[(String, u64)]) -> Vec<(String, String)> {
+pub fn unresolved_keywords(
+    tax: &Taxonomy,
+    f: &Facets,
+    known: &[(String, u64)],
+) -> Vec<(String, String)> {
     f.moods
         .iter()
         .filter(|id| !known.iter().any(|(k, _)| k == *id))

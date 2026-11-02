@@ -41,7 +41,7 @@ fn main() -> eframe::Result<()> {
         // 660 resta sopra la taskbar. La posizione fissa evita che la
         // cascata di Windows porti la finestra fuori schermo.
         // Il minimo resta sotto la misura iniziale: i layout si adattano
-        // fino a 800x600, senza tagliare composer o pannelli.
+        // fino a 800x600, mantenendo utilizzabili griglia e pannelli.
         .with_inner_size([1220.0, 660.0])
         .with_position([20.0, 20.0])
         .with_min_inner_size([800.0, 600.0])

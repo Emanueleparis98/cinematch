@@ -3,8 +3,6 @@
 //! di non cancellare le chiavi dal file.
 
 pub const TMDB: &str = "tmdb-api-key";
-pub const DEEPSEEK: &str = "deepseek-api-key";
-pub const OPENROUTER: &str = "openrouter-api-key";
 
 const SERVICE: &str = "CineMatch";
 

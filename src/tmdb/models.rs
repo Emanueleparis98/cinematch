@@ -44,6 +44,7 @@ impl From<ApiMovie> for Movie {
     fn from(a: ApiMovie) -> Self {
         Movie {
             year: parse_year(&a.release_date),
+            release_date: (!a.release_date.is_empty()).then_some(a.release_date),
             id: a.id,
             title: a.title,
             original_title: a.original_title,
@@ -211,10 +212,14 @@ pub struct ExternalIds {
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
-pub struct CollectionRef { pub id:u64 }
+pub struct CollectionRef {
+    pub id: u64,
+}
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiDetails {
+    #[serde(default)]
+    pub origin_country: Vec<String>,
     #[serde(default)]
     pub popularity: f32,
     #[serde(default)]
@@ -262,7 +267,8 @@ pub struct ApiDetails {
 }
 
 impl ApiDetails {
-    pub fn into_details(self, region: &str) -> Details {        let genre_ids = self.genres.iter().map(|g| g.id).collect::<Vec<u32>>();
+    pub fn into_details(self, region: &str) -> Details {
+        let genre_ids = self.genres.iter().map(|g| g.id).collect::<Vec<u32>>();
         let imdb_id = self
             .external_ids
             .as_ref()
@@ -273,6 +279,7 @@ impl ApiDetails {
             title: self.title.clone(),
             original_title: self.original_title.clone(),
             year: parse_year(&self.release_date),
+            release_date: (!self.release_date.is_empty()).then_some(self.release_date),
             overview: self.overview.clone(),
             poster_path: self.poster_path.clone(),
             backdrop_path: self.backdrop_path.clone(),
@@ -309,10 +316,28 @@ impl ApiDetails {
             }
         }
         Details {
-            cast_full:self.credits.as_ref().map(|c|c.cast.iter().take(128).map(|a|a.name.clone()).collect()).unwrap_or_default(),
-            directors:self.credits.as_ref().map(|c|c.crew.iter().filter(|m|m.job.eq_ignore_ascii_case("Director")).map(|m|m.name.clone()).collect()).unwrap_or_default(),
-            collection_id: self.belongs_to_collection.map(|c|c.id),
-            wikidata_id: self.external_ids.as_ref().and_then(|e| e.wikidata_id.clone()),
+            origin_country_codes: self.origin_country,
+            cast_full: self
+                .credits
+                .as_ref()
+                .map(|c| c.cast.iter().take(128).map(|a| a.name.clone()).collect())
+                .unwrap_or_default(),
+            directors: self
+                .credits
+                .as_ref()
+                .map(|c| {
+                    c.crew
+                        .iter()
+                        .filter(|m| m.job.eq_ignore_ascii_case("Director"))
+                        .map(|m| m.name.clone())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            collection_id: self.belongs_to_collection.map(|c| c.id),
+            wikidata_id: self
+                .external_ids
+                .as_ref()
+                .and_then(|e| e.wikidata_id.clone()),
             keywords: self.keywords.map(|k| k.ids()).unwrap_or_default(),
             movie,
             tagline: self.tagline.clone().unwrap_or_default(),
@@ -329,7 +354,11 @@ impl ApiDetails {
                 .iter()
                 .map(|c| c.name.clone())
                 .collect(),
-            country_codes: self.production_countries.iter().map(|c| c.iso_3166_1.clone()).collect(),
+            country_codes: self
+                .production_countries
+                .iter()
+                .map(|c| c.iso_3166_1.clone())
+                .collect(),
             recommendations: self
                 .recommendations
                 .map(|p| p.results.into_iter().map(Movie::from).collect())

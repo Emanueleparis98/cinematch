@@ -1,3 +1,5 @@
+> Documento storico, superato dalla scelta del catalogo con filtri nella versione 0.11.0. Non è il piano attuale del prodotto.
+
 # CineMatch: nuova ricerca conversazionale
 
 ## Obiettivo e impegno

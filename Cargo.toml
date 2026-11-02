@@ -1,8 +1,8 @@
 [package]
 name = "cinematch"
-version = "0.10.20"
+version = "0.11.0"
 edition = "2021"
-description = "CineMatch - esplorazione cinematografica a vincoli con supporto AI"
+description = "CineMatch - catalogo cinematografico con filtri e correnti"
 
 [build-dependencies]
 winres = "0.1"

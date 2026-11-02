@@ -1,11 +1,11 @@
 ﻿; CineMatch - installer Windows per-utente (nessun UAC).
 ; Compilare dalla root del progetto:
-;   ISCC.exe /DMyAppVersion=0.10.20 installer\cinematch.iss
+;   ISCC.exe /DMyAppVersion=0.11.0 installer\cinematch.iss
 ; Il setup completo aggiorna l'installazione esistente e non tocca
 ; %APPDATA%\CineMatch (configurazione, chiavi e cache).
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.10.20"
+  #define MyAppVersion "0.11.0"
 #endif
 
 #define MyAppName "CineMatch"
@@ -22,7 +22,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases/latest
-AppComments=Esplorazione cinematografica a vincoli, con chat e ricerca TMDB.
+AppComments=Catalogo cinematografico con filtri, tassonomia e correnti.
 AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}

@@ -1,108 +1,107 @@
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-
-use crate::ai::{
-    build_provider, classify_chat_action, curator, list_models, llm_config, model_details,
-    ChatAction, Cleared, Intent, IntentProvider, LlmKind, LlmProvider, ModelInfo, Theme,
-    ThemeConcept, DEEPSEEK_BASE, DEEPSEEK_MODEL, OPENROUTER_BASE, OPENROUTER_MODEL,
-};
 use crate::domain::constraints::{self, Prune};
 use crate::domain::model::{Details, Facets, Movie, Sort, TrackState};
-use crate::domain::suggestions;
 use crate::domain::taxonomy::Taxonomy;
 use crate::infra::config::Config;
 use crate::integrations::simkl;
-use crate::tmdb::client::{describe_credential, poster_url, Tmdb};
-use crate::tmdb::models::{PagedMovies, Person};
+use crate::tmdb::client::{describe_credential, Tmdb};
 use crate::ui::facets::{FacetAction, Section};
-use crate::update;
 use crate::ui::images::ImageStore;
-use crate::ui::{chat, detail, facets, fx, grid, lumen, theme, unlock};
-
+use crate::ui::{detail, facets, fx, grid, lumen, theme, unlock};
+use crate::update;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 const MAX_QUERY_CHARS: usize = 300;
-/// Pagine TMDB lette per una ricerca per titolo con filtri locali.
-const TITLE_PAGE_CAP: u32 = 3;
-/// Larghezza iniziale del pannello filtri. Egui ricorda poi l'eventuale
-/// ridimensionamento fatto dall'utente.
 const FILTERS_WIDTH: f32 = 360.0;
-/// Il cartellone "In sala" della home si aggiorna una volta all'ora.
-const IN_SALA_REFRESH: Duration = Duration::from_secs(60 * 60);
-/// Se il cartellone non arriva, riprova tra 15 minuti.
-const IN_SALA_RETRY: Duration = Duration::from_secs(15 * 60);
+const RESIZE_EDGE: f32 = 6.0;
 
 struct Results {
+    total_is_exact: bool,
     facets: Facets,
     removed: Vec<String>,
-    /// Come e stata impostata la ricerca (paesi implicati, temi…):
-    /// informazioni, non vincoli rilassati.
     info: Vec<String>,
-    ai_notes: Vec<String>,
+    notes: Vec<String>,
     movies: Vec<Movie>,
     total: u32,
     total_pages: u32,
     headline: String,
     error: Option<String>,
     keyword_pairs: Vec<(String, u64)>,
-    /// Intento interpretato in questa ricerca, riusato per evitare chiamate AI ripetute.
-    intent: Option<(String, Intent)>,
 }
-
-#[allow(clippy::large_enum_variant)] // messaggi effimeri: boxare ogni variante aggiungerebbe indirezione
+#[allow(clippy::large_enum_variant)]
 enum Msg {
-    Results { gen: u64, payload: Box<Results> },
-    /// Compromessi calcolati dopo i risultati: la griglia li mostra appena
-    /// arrivano, senza aspettare le chiamate TMDB aggiuntive.
-    Unlocks { gen: u64, unlocks: Vec<unlock::Unlock> },
-    Details { gen: u64, res: Result<Details, String> },
-    Check { key: String, res: Result<String, String> },
-    /// Verifica della chiave TMDB durante il primo avvio.
-    OnboardingChecked { key: String, res: Result<String, String> },
-    Models { gen: u64, res: Result<Vec<ModelInfo>, String> },
-    AiCheck { config: crate::infra::config::AiCfg, res: Result<String, String> },
-    /// Esito del download dei voti IMDb.
-    Imdb { res: Result<String, String> },
-    /// Avanzamento del download dei voti IMDb (byte scompattati).
-    ImdbProgress { done: u64 },
-    /// Film in sala per la home (indipendenti dalla griglia).
-    NowPlaying { gen: u64, res: Result<Vec<Movie>, String> },
-    /// Frammento dell'intro della chat (effetto macchina da scrivere).
-    ChatStream { gen: u64, index: usize, chunk: String },
-    /// Avanzamento della pipeline di chat: 1 interprete, 2 TMDB, 3 curatela.
-    ChatStage { gen: u64, index: usize, stage: u8 },
-    /// Risposta di chat completata (o fallita).
-    ChatDone { gen: u64, payload: Box<ChatPayload> },
-    /// Esito del controllo del manifesto aggiornamenti.
+    Results {
+        gen: u64,
+        payload: Box<Results>,
+    },
+    Unlocks {
+        gen: u64,
+        unlocks: Vec<unlock::Unlock>,
+    },
+    Details {
+        gen: u64,
+        res: Result<Details, String>,
+    },
+    Check {
+        key: String,
+        res: Result<String, String>,
+    },
+    OnboardingChecked {
+        key: String,
+        res: Result<String, String>,
+    },
+    Imdb {
+        res: Result<String, String>,
+    },
+    ImdbProgress {
+        done: u64,
+    },
     UpdateChecked(Result<Option<update::Manifest>, String>),
-    /// Avanzamento del download del setup.
-    UpdateProgress { done: u64, total: u64 },
-    /// Setup scaricato e verificato (o errore).
+    UpdateProgress {
+        done: u64,
+        total: u64,
+    },
     UpdateDownloaded(Result<PathBuf, String>),
-    /// Codice dispositivo SIMKL ottenuto (o errore).
     SimklCode {
         gen: u64,
         res: Result<simkl::DeviceCode, String>,
     },
-    /// Autorizzazione SIMKL completata (o errore).
     SimklAuth {
         gen: u64,
         res: Result<simkl::Tokens, String>,
     },
-    /// Sincronizzazione libreria SIMKL completata.
     SimklSynced {
         gen: u64,
         res: Result<(simkl::Store, simkl::Tokens, simkl::SyncReport), String>,
     },
-    /// Scrittura su SIMKL completata.
     SimklWritten {
         gen: u64,
         res: Result<(simkl::Tokens, simkl::WriteOutcome), String>,
     },
-    /// Poster TMDB risolto per una card SIMKL della home.
-    Poster { id: u64, url: Option<String> },
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    Griglia,
+}
+#[derive(Clone, PartialEq)]
+struct SettingsDraft {
+    tmdb_key: String,
+    language: String,
+    simkl_client_id: String,
+    simkl_hide_watched: bool,
+}
+impl SettingsDraft {
+    fn from(cfg: &Config) -> Self {
+        Self {
+            tmdb_key: cfg.tmdb_api_key.clone(),
+            language: cfg.language.clone(),
+            simkl_client_id: cfg.simkl.client_id.clone(),
+            simkl_hide_watched: cfg.simkl.hide_watched,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -117,653 +116,23 @@ struct UpdateUi {
     /// Ultima versione gia annunciata con un toast.
     announced: Option<String>,
 }
-
-/// Le due viste della zona centrale: la chat (casa) e la griglia (esplorazione).
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ViewMode {
-    Chat,
-    Griglia,
-}
-
-/// Tutto cio che serve alla vista per disegnare una risposta di chat.
-struct ChatPayload {
-    references: Vec<chat::CardSource>,
-    research: Option<crate::search::ConversationState>,
-    index: usize,
-    intro: String,
-    cards: Vec<chat::Card>,
-    understood: String,
-    limit: Option<String>,
-    notes: Vec<String>,
-    total: u32,
-    facets: Facets,
-    keyword_pairs: Vec<(String, u64)>,
-    /// Contesto effettivo prima della ricerca: serve ai seguiti e al retry.
-    context: Intent,
-    /// La griglia puo rappresentare questi criteri senza perdere i temi.
-    grid_ready: bool,
-    /// Intento interpretato, riusato dalla griglia senza nuove chiamate AI.
-    intent: Option<(String, Intent)>,
-    error: Option<String>,
-}
-
-/// Esito della ricerca della chat: candidati reali, criteri davvero usati e
-/// una spiegazione onesta quando non tutti i criteri sono coperti.
-pub struct ChatPoolResult {
-    pub movies: Vec<Movie>,
-    pub total: u32,
-    pub facets: Facets,
-    pub keyword_pairs: Vec<(String, u64)>,
-    pub limit: Option<String>,
-    pub grid_ready: bool,
-    pub reasons: HashMap<u64, String>,
-    pub relevance: HashMap<u64, f32>,
-}
-
-struct PersonPool {
-    result: ChatPoolResult,
-    label: String,
-    person: String,
-}
-
-#[derive(Clone, PartialEq)]
-struct SettingsDraft {
-    tmdb_key: String,
-    provider: String,
-    deepseek_key: String,
-    deepseek_model: String,
-    effort: String,
-    openrouter_key: String,
-    openrouter_model: String,
-    ollama_url: String,
-    ollama_model: String,
-    language: String,
-    simkl_client_id: String,
-    simkl_hide_watched: bool,
-}
-
-impl SettingsDraft {
-    fn from(cfg: &Config) -> Self {
-        Self {
-            tmdb_key: cfg.tmdb_api_key.clone(),
-            provider: cfg.ai.provider.clone(),
-            deepseek_key: cfg.ai.api_key.clone(),
-            deepseek_model: cfg.ai.model.clone(),
-            effort: cfg.ai.effort.clone(),
-            openrouter_key: cfg.ai.openrouter_api_key.clone(),
-            openrouter_model: cfg.ai.openrouter_model.clone(),
-            ollama_url: cfg.ai.base_url.clone(),
-            ollama_model: cfg.ai.ollama_model.clone(),
-            language: cfg.language.clone(),
-            simkl_client_id: cfg.simkl.client_id.clone(),
-            simkl_hide_watched: cfg.simkl.hide_watched,
-        }
-    }
-
-    fn ai_cfg(&self) -> crate::infra::config::AiCfg {
-        crate::infra::config::AiCfg {
-            provider: self.provider.clone(),
-            base_url: self.ollama_url.trim().to_string(),
-            model: self.deepseek_model.trim().to_string(),
-            api_key: self.deepseek_key.trim().to_string(),
-            effort: self.effort.trim().to_string(),
-            openrouter_api_key: self.openrouter_key.trim().to_string(),
-            openrouter_model: self.openrouter_model.trim().to_string(),
-            ollama_model: self.ollama_model.trim().to_string(),
-        }
-    }
-
-    fn can_detect(&self) -> bool {
-        match self.provider.as_str() {
-            "deepseek" => !self.deepseek_key.trim().is_empty(),
-            "openrouter" => true,
-            "ollama" => true,
-            _ => false,
-        }
-    }
-}
-
-fn verified_status<T: PartialEq>(
-    tested: &T,
-    current: &T,
-    res: Result<String, String>,
-) -> Option<String> {
-    if tested != current {
-        return None;
-    }
-    Some(match res {
-        Ok(m) => format!("✔ {m}"),
-        Err(e) => format!("✕ {e}"),
-    })
-}
-
-/// Minuscole, senza punteggiatura: il confronto fra titoli non dipende da
-/// virgolette, accenti o spazi doppi.
-fn normalize_title(raw: &str) -> String {
-    raw.to_lowercase()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn last_cards(entries: &[chat::Entry]) -> Vec<chat::Card> {
-    entries
-        .iter()
-        .rev()
-        .find(|e| !e.answer.cards.is_empty())
-        .map(|e| e.answer.cards.clone())
-        .unwrap_or_default()
-}
-
-fn looks_like_explain(text: &str) -> bool {
-    let lower = text.to_lowercase();
-    ["perche", "perché", "spiega", "spiegami", "come mai"]
-        .iter()
-        .any(|cue| lower.contains(cue))
-}
-
-fn looks_like_compare(text: &str) -> bool {
-    let lower = text.to_lowercase();
-    ["confronta", "confronto", "differenza tra", "meglio tra"]
-        .iter()
-        .any(|cue| lower.contains(cue))
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PersonRole {
-    Any,
-    Director,
-    Actor,
-}
-
-#[derive(Clone)]
-struct PersonQuery {
-    name: String,
-    role: PersonRole,
-}
-
-fn is_generic_person_name(name: &str) -> bool {
-    let words = normalize_title(name);
-    if words.split_whitespace().count() != 1 {
-        return false;
-    }
-    const GENERIC: [&str; 21] = [
-        "film",
-        "cinema",
-        "commedia",
-        "horror",
-        "dramma",
-        "thriller",
-        "azione",
-        "romantico",
-        "fantascienza",
-        "animazione",
-        "documentario",
-        "guerra",
-        "amore",
-        "famiglia",
-        "cani",
-        "gatti",
-        "cane",
-        "gatto",
-        "mare",
-        "spazio",
-        "viaggio",
-    ];
-    GENERIC.contains(&words.as_str())
-}
-
-fn person_query(text: &str) -> Option<PersonQuery> {
-    let lower = text.to_lowercase();
-    const CUES: [(&str, PersonRole); 13] = [
-        ("film diretti da ", PersonRole::Director),
-        ("diretto da ", PersonRole::Director),
-        ("diretti da ", PersonRole::Director),
-        ("regia di ", PersonRole::Director),
-        ("regista ", PersonRole::Director),
-        ("registi ", PersonRole::Director),
-        ("film interpretati da ", PersonRole::Actor),
-        ("interpretato da ", PersonRole::Actor),
-        ("interpretati da ", PersonRole::Actor),
-        ("attrice ", PersonRole::Actor),
-        ("attore ", PersonRole::Actor),
-        ("film con ", PersonRole::Actor),
-        ("film di ", PersonRole::Any),
-    ];
-    for (cue, role) in CUES {
-        let Some(pos) = lower.find(cue) else { continue };
-        let rest = &text[pos + cue.len()..];
-        let end = rest
-            .find(['?', '.', ',', ';', '!', '\n'])
-            .unwrap_or(rest.len());
-        let mut name = rest[..end]
-            .trim()
-            .trim_matches(['"', '“', '”', '\'', ' '])
-            .to_string();
-        if let Some((first, _)) = name.split_once(" e ") {
-            name = first.trim().to_string();
-        }
-        if name.len() < 3
-            || name.len() > 80
-            || is_generic_person_name(&name)
-            || normalize_title(&name).is_empty()
-        {
-            continue;
-        }
-        return Some(PersonQuery { name, role });
-    }
-    None
-}
-
-fn choose_person<'a>(results: &'a [Person], query: &PersonQuery) -> Option<&'a Person> {
-    let target = normalize_title(&query.name);
-    let exact = results
-        .iter()
-        .filter(|p| normalize_title(&p.name) == target)
-        .collect::<Vec<_>>();
-    let pool = if exact.is_empty() {
-        results
-            .iter()
-            .filter(|p| {
-                let name = normalize_title(&p.name);
-                target.len() >= 5 && (name.contains(&target) || target.contains(&name))
-            })
-            .collect::<Vec<_>>()
-    } else {
-        exact
-    };
-    if pool.is_empty() {
-        return None;
-    }
-    let score = |p: &Person| {
-        let role_bonus = match query.role {
-            PersonRole::Director if p.known_for_department.eq_ignore_ascii_case("Directing") => 0.5,
-            PersonRole::Actor if p.known_for_department.eq_ignore_ascii_case("Acting") => 0.5,
-            _ => 0.0,
-        };
-        p.popularity + role_bonus
-    };
-    pool.into_iter().max_by(|a, b| {
-        score(a)
-            .partial_cmp(&score(b))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
-}
-
-fn seen_title_in_query(text: &str) -> Option<String> {
-    let lower = text.to_lowercase();
-    const CUES: [&str; 6] = [
-        "ho gia visto ",
-        "ho già visto ",
-        "l'ho gia visto ",
-        "l'ho già visto ",
-        "ho visto ",
-        "l'ho visto ",
-    ];
-    for cue in CUES {
-        let Some(pos) = lower.find(cue) else { continue };
-        let rest = &text[pos + cue.len()..];
-        let end = rest
-            .find([',', '.', '?', ';', '!', '\n'])
-            .unwrap_or(rest.len());
-        let mut title = rest[..end].trim().trim_matches(['"', '“', '”', '\'', ' ']).to_string();
-        if let Some((first, _)) = title.split_once(" e ") {
-            title = first.trim().to_string();
-        }
-        if title.len() >= 3 {
-            return Some(title);
-        }
-    }
-    None
-}
-
-fn cards_mentioned(entries: &[chat::Entry], text: &str) -> Vec<chat::Card> {
-    let hay = normalize_title(text);
-    let mut found: Vec<(usize, chat::Card)> = Vec::new();
-    for card in entries
-        .iter()
-        .flat_map(|e| e.answer.cards.iter())
-    {
-        let title = normalize_title(&card.movie.title);
-        if title.len() < 4 {
-            continue;
-        }
-        if let Some(pos) = hay.find(&title) {
-            if !found.iter().any(|(_, c)| c.movie.id == card.movie.id) {
-                found.push((pos, card.clone()));
-            }
-        }
-    }
-    found.sort_by_key(|(pos, _)| *pos);
-    found.into_iter().map(|(_, card)| card).collect()
-}
-
-fn explanation_text(tax: &Taxonomy, card: &chat::Card) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    let year = card
-        .movie
-        .year
-        .map(|y| format!(" ({y})"))
-        .unwrap_or_default();
-    lines.push(format!("«{}»{}", card.movie.title, year));
-    if let Some(meta) = &card.meta {
-        let mut facts: Vec<String> = Vec::new();
-        if let Some(dir) = &meta.director {
-            facts.push(format!("regia di {dir}"));
-        }
-        if let Some(runtime) = meta.runtime {
-            facts.push(format!("{runtime} min"));
-        }
-        if !facts.is_empty() {
-            lines.push(facts.join(" · "));
-        }
-    }
-    let genres = card
-        .movie
-        .genre_ids
-        .iter()
-        .filter_map(|g| tax.genre_name(*g))
-        .take(3)
-        .collect::<Vec<_>>();
-    if !genres.is_empty() {
-        lines.push(genres.join(" · "));
-    }
-    if card.movie.votes > 0 {
-        lines.push(format!(
-            "TMDB {:.1} su {} voti.",
-            card.movie.rating,
-            theme::thousands(card.movie.votes)
-        ));
-    }
-    if !card.perche.trim().is_empty() {
-        lines.push(card.perche.trim().to_string());
-    }
-    if !card.consiglio.trim().is_empty() {
-        lines.push(format!("Consiglio: {}", card.consiglio.trim()));
-    }
-    if let Some(meta) = &card.meta {
-        if !meta.flatrate.is_empty() {
-            lines.push(format!(
-                "In abbonamento su {}.",
-                meta.flatrate.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
-            ));
-        } else if !meta.rent.is_empty() {
-            lines.push(format!(
-                "A noleggio su {}.",
-                meta.rent.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
-            ));
-        }
-    }
-    lines.join("\n")
-}
-
-fn comparison_text(tax: &Taxonomy, a: &chat::Card, b: &chat::Card) -> String {
-    let line = |card: &chat::Card| -> String {
-        let mut bits = vec![format!("«{}»", card.movie.title)];
-        if let Some(year) = card.movie.year {
-            bits.push(format!("{year}"));
-        }
-        if let Some(meta) = &card.meta {
-            if let Some(dir) = &meta.director {
-                bits.push(format!("di {dir}"));
-            }
-            if let Some(runtime) = meta.runtime {
-                bits.push(format!("{runtime} min"));
-            }
-        }
-        if card.movie.votes > 0 {
-            bits.push(format!(
-                "TMDB {:.1} ({} voti)",
-                card.movie.rating,
-                theme::thousands(card.movie.votes)
-            ));
-        }
-        let genres = card
-            .movie
-            .genre_ids
-            .iter()
-            .filter_map(|g| tax.genre_name(*g))
-            .take(3)
-            .collect::<Vec<_>>();
-        if !genres.is_empty() {
-            bits.push(genres.join(" · "));
-        }
-        format!("• {}", bits.join(" · "))
-    };
-    let mut lines = vec![
-        "Ecco i dati che ho, senza inventare altro:".to_string(),
-        line(a),
-        line(b),
-    ];
-    let mut notes: Vec<String> = Vec::new();
-    if (a.movie.rating - b.movie.rating).abs() >= 0.2 && a.movie.votes > 0 && b.movie.votes > 0 {
-        let (better, worse) = if a.movie.rating > b.movie.rating {
-            (a, b)
-        } else {
-            (b, a)
-        };
-        notes.push(format!(
-            "«{}» ha il voto TMDB più alto ({:.1} contro {:.1}).",
-            better.movie.title, better.movie.rating, worse.movie.rating
-        ));
-    }
-    let runtime = |card: &chat::Card| card.meta.as_ref().and_then(|m| m.runtime);
-    if let (Some(ra), Some(rb)) = (runtime(a), runtime(b)) {
-        if ra.abs_diff(rb) >= 15 {
-            let short = if ra < rb { a } else { b };
-            notes.push(format!(
-                "«{}» è più corto ({} min contro {}).",
-                short.movie.title,
-                ra.min(rb),
-                ra.max(rb)
-            ));
-        }
-    }
-    if a.movie.votes > 0 && b.movie.votes > 0 && a.movie.votes.abs_diff(b.movie.votes) >= 1000 {
-        let (popular, other) = if a.movie.votes > b.movie.votes {
-            (a, b)
-        } else {
-            (b, a)
-        };
-        notes.push(format!(
-            "«{}» ha molti più voti ({} contro {}).",
-            popular.movie.title,
-            theme::thousands(popular.movie.votes),
-            theme::thousands(other.movie.votes)
-        ));
-    }
-    if notes.is_empty() {
-        notes.push("Sono due proposte vicine: scegli in base al genere o alla durata.".into());
-    }
-    lines.push(notes.join(" "));
-    lines.join("\n")
-}
-
-/// Se il modello scritto non esiste più, sceglie il predefinito del provider.
-fn preferred_model(provider: &str, current: &str, models: &[ModelInfo]) -> Option<String> {
-    if models.iter().any(|m| m.id == current.trim()) {
-        return None;
-    }
-    let preferred = match provider {
-        "deepseek" => DEEPSEEK_MODEL,
-        "openrouter" => OPENROUTER_MODEL,
-        _ => "",
-    };
-    models
-        .iter()
-        .find(|m| m.id == preferred)
-        .or_else(|| models.first())
-        .map(|m| m.id.clone())
-}
-
-fn effort_picker(ui: &mut egui::Ui, effort: &mut String, model: Option<&ModelInfo>) {
-    const LEVELS: [(&str, &str); 7] = [
-        ("max", "Massimo"),
-        ("xhigh", "Molto alto"),
-        ("high", "Alto"),
-        ("medium", "Medio"),
-        ("low", "Basso"),
-        ("minimal", "Minimo"),
-        ("none", "Disattivato"),
-    ];
-    let support = model.and_then(|m| m.reasoning.as_ref());
-    if model.is_some() && support.is_none() {
-        ui.label(
-            egui::RichText::new(
-                "Questo modello non espone lo sforzo di ragionamento: usa il suo comportamento predefinito.",
-            )
-            .size(10.0)
-            .color(theme::DIM),
-        );
-        return;
-    }
-    let allowed = |id: &str| match support {
-        // DeepSeek diretto: i cinque livelli storici.
-        None => matches!(id, "max" | "high" | "medium" | "low" | "none"),
-        Some(s) => {
-            (s.efforts.is_empty() || s.efforts.iter().any(|e| e == id))
-                && !(id == "none" && s.mandatory)
-        }
-    };
-    if let Some(s) = support {
-        // Il livello salvato potrebbe non esistere per questo modello.
-        if !allowed(effort) {
-            let next = s
-                .default_effort
-                .as_deref()
-                .filter(|d| allowed(d))
-                .or_else(|| LEVELS.iter().map(|(id, _)| *id).find(|id| allowed(id)));
-            if let Some(next) = next {
-                *effort = next.to_string();
-            }
-        }
-    }
-    ui.horizontal_wrapped(|ui| {
-        ui.label(
-            egui::RichText::new("Sforzo di ragionamento")
-                .size(11.0)
-                .color(theme::DIM),
-        );
-        for (id, label) in LEVELS {
-            if allowed(id) {
-                ui.selectable_value(
-                    effort,
-                    id.to_string(),
-                    egui::RichText::new(label).size(11.0),
-                );
-            }
-        }
-    });
-    ui.label(
-        egui::RichText::new(if support.is_some() {
-            "Il modello dichiara solo i livelli qui sopra. Massimo costa più token ed è più lento."
-        } else {
-            "Massimo ragiona di più: risposte più curate, ma più lente e più token."
-        })
-        .size(10.0)
-        .color(theme::DIM),
-    );
-}
-
-fn model_picker(ui: &mut egui::Ui, field: &mut String, models: &[ModelInfo], hint: &str) {
-    if models.is_empty() {
-        ui.add(
-            egui::TextEdit::singleline(field)
-                .hint_text(hint)
-                .desired_width(f32::INFINITY),
-        );
-        ui.label(
-            egui::RichText::new(
-                "Premi «Rileva modelli» per vedere l'elenco completo di quelli usabili con questa chiave.",
-            )
-            .size(10.0)
-            .color(theme::DIM),
-        );
-        return;
-    }
-    let selected = models
-        .iter()
-        .find(|m| m.id == field.trim())
-        .map(|m| m.menu_label())
-        .unwrap_or_else(|| field.clone());
-    egui::ComboBox::from_id_salt("model_pick")
-        .selected_text(egui::RichText::new(selected).size(11.5))
-        .width(ui.available_width())
-        .height(380.0)
-        .show_ui(ui, |ui| {
-            for m in models {
-                if ui
-                    .selectable_label(
-                        field.trim() == m.id,
-                        egui::RichText::new(m.menu_label()).size(11.5),
-                    )
-                    .clicked()
-                {
-                    *field = m.id.clone();
-                }
-            }
-        });
-    if let Some(m) = models.iter().find(|m| m.id == field.trim()) {
-        ui.label(
-            egui::RichText::new(model_details(m))
-                .size(10.0)
-                .color(theme::DIM),
-        );
-    }
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("oppure id a mano:")
-                .size(10.0)
-                .color(theme::DIM),
-        );
-        ui.add(egui::TextEdit::singleline(field).desired_width(230.0));
-    });
-}
-
 pub struct App {
+    search_cancel: Option<Arc<AtomicBool>>,
+    total_is_exact: bool,
     ctx: egui::Context,
     tax: Arc<Taxonomy>,
     tmdb: Option<Arc<Tmdb>>,
-    provider: Arc<dyn IntentProvider>,
     cfg: Config,
     rx: Receiver<Msg>,
     tx: Sender<Msg>,
     gen: u64,
     images: ImageStore,
 
-    /// Vista centrale: la chat (default) o la griglia.
     mode: ViewMode,
-    chat: Vec<chat::Entry>,
-    chat_gen: u64,
-    chat_busy: bool,
-    /// «Nuova» chiede conferma quando c'è una conversazione da perdere.
-    new_chat_confirm: bool,
-    /// Token della risposta in corso: stop e «Nuova chat» lo alzano.
-    chat_cancel: Option<Arc<AtomicBool>>,
-    /// Contesto dei seguiti della chat: separato dai filtri della griglia.
-    chat_context: Intent,
-    research_state: crate::search::ConversationState,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
-    chat_jump: bool,
 
-    /// Bozza del composer della chat: separata dalla ricerca della griglia.
-    chat_draft: String,
     /// Quattro spunti locali della casa, rigenerati dai filtri attivi.
-    suggestions: Vec<suggestions::Suggestion>,
     /// Catalogo gia' validato per lo stato corrente dei filtri.
-    suggestion_pool: Vec<suggestions::Suggestion>,
-    suggestion_base: Facets,
-    suggestion_cycle: u64,
-    /// Film in sala per la home: indipendenti dai risultati della griglia.
-    home_now_playing: Vec<Movie>,
-    home_now_playing_busy: bool,
-    home_now_playing_error: Option<String>,
-    home_now_playing_next: Option<Instant>,
-    home_now_playing_gen: u64,
-    /// Ricerca TMDB della griglia: resta com'e quando si passa alla chat.
     grid_query: String,
     /// Ricerca dentro il pannello filtri (non tocca la ricerca TMDB).
     facet_query: String,
@@ -775,7 +144,7 @@ pub struct App {
     prune: Prune,
     messages: Vec<String>,
     info: Vec<String>,
-    ai_notes: Vec<String>,
+    notes: Vec<String>,
 
     movies: Vec<Movie>,
     total: u32,
@@ -795,18 +164,14 @@ pub struct App {
 
     detail: Option<Details>,
     detail_loading: bool,
-    /// Spiegazione della scelta: dalla card della chat (perché + consiglio)
     /// oppure dai criteri attivi della griglia.
     detail_why: Option<(String, String)>,
-    /// Al prossimo disegno della scheda chat porta il focus sulla chiusura.
-    detail_focus: bool,
     /// Generazioni delle richieste scheda: una risposta vecchia non
     /// deve sovrascrivere il film aperto dopo.
     detail_gen: u64,
 
     keyword_map: Vec<(String, u64)>,
     dirty: Option<Instant>,
-    /// Widget che deve ricevere il fuoco al prossimo frame (composer o ricerca).
     focus: Option<ViewMode>,
     show_settings: bool,
     settings: SettingsDraft,
@@ -821,10 +186,6 @@ pub struct App {
     /// codice di autorizzazione in corso e stato dell'ultima sincronizzazione.
     simkl_tokens: Option<simkl::Tokens>,
     simkl_store: simkl::Store,
-    /// Picks della home calcolate quando lo store cambia, non a ogni frame.
-    simkl_cards: Option<(Vec<simkl::Playback>, Vec<simkl::TrackedMovie>)>,
-    /// Poster TMDB delle card SIMKL della home: None = in caricamento.
-    poster_cache: HashMap<u64, Option<String>>,
     simkl_auth: Option<simkl::DeviceCode>,
     simkl_cancel: Arc<AtomicBool>,
     /// Cambia a ogni collegamento/ scollegamento: i risultati vecchi non
@@ -837,16 +198,8 @@ pub struct App {
     simkl_status: Option<String>,
     simkl_error: Option<String>,
     /// Errore di scrittura legato a un film: la scheda lo mostra accanto
-    /// ai comandi, non solo nelle Impostazioni.
     simkl_write_error: Option<(u64, String)>,
     update: UpdateUi,
-    models: Vec<ModelInfo>,
-    models_gen: u64,
-    models_status: Option<String>,
-    detecting: bool,
-    ai_check: Option<String>,
-    ai_checking: bool,
-    ai_cache: Option<(String, Intent)>,
     toast: Option<(String, Instant)>,
     boot_done: bool,
 
@@ -856,15 +209,22 @@ pub struct App {
     /// I font CJK (titoli giapponesi, coreani) si caricano una volta sola.
     cjk_loaded: bool,
 }
-
 impl App {
     pub fn new(ctx: &egui::Context, cfg: Config) -> Self {
-        Self::with_local_data(ctx, cfg, simkl::load_tokens().ok().flatten(), simkl::load_store())
+        Self::with_local_data(
+            ctx,
+            cfg,
+            simkl::load_tokens().ok().flatten(),
+            simkl::load_store(),
+        )
     }
-
-    fn with_local_data(ctx: &egui::Context, cfg: Config, simkl_tokens: Option<simkl::Tokens>, simkl_store: simkl::Store) -> Self {
+    fn with_local_data(
+        ctx: &egui::Context,
+        cfg: Config,
+        simkl_tokens: Option<simkl::Tokens>,
+        simkl_store: simkl::Store,
+    ) -> Self {
         let tax = Arc::new(Taxonomy::load());
-        let provider = build_provider(&cfg.ai);
         let tmdb = Self::build_tmdb(&cfg);
         let (tx, rx) = channel();
         let facets = Facets::default();
@@ -872,34 +232,17 @@ impl App {
         let settings = SettingsDraft::from(&cfg);
         let first_run = !cfg.has_key();
         let mut app = Self {
+            search_cancel: None,
+            total_is_exact: true,
             ctx: ctx.clone(),
             tax,
             tmdb,
-            provider,
             cfg,
             rx,
             tx,
             gen: 0,
             images: ImageStore::new(),
-            mode: ViewMode::Chat,
-            chat: Vec::new(),
-            chat_gen: 0,
-            chat_busy: false,
-            new_chat_confirm: false,
-            chat_cancel: None,
-            chat_context: Intent::default(),
-            research_state: Default::default(),
-            chat_jump: false,
-            chat_draft: String::new(),
-            suggestions: Vec::new(),
-            suggestion_pool: Vec::new(),
-            suggestion_base: Facets::default(),
-            suggestion_cycle: 0,
-            home_now_playing: Vec::new(),
-            home_now_playing_busy: false,
-            home_now_playing_error: None,
-            home_now_playing_next: None,
-            home_now_playing_gen: 0,
+            mode: ViewMode::Griglia,
             grid_query: String::new(),
             facet_query: String::new(),
             guide_open: false,
@@ -908,7 +251,7 @@ impl App {
             prune,
             messages: Vec::new(),
             info: Vec::new(),
-            ai_notes: Vec::new(),
+            notes: Vec::new(),
             movies: Vec::new(),
             total: 0,
             total_pages: 0,
@@ -922,7 +265,6 @@ impl App {
             detail: None,
             detail_loading: false,
             detail_why: None,
-            detail_focus: false,
             detail_gen: 0,
             keyword_map: Vec::new(),
             dirty: None,
@@ -936,8 +278,6 @@ impl App {
             onboarding_busy: false,
             simkl_tokens,
             simkl_store,
-            simkl_cards: None,
-            poster_cache: HashMap::new(),
             simkl_auth: None,
             simkl_cancel: Arc::new(AtomicBool::new(false)),
             simkl_epoch: 0,
@@ -948,13 +288,6 @@ impl App {
             simkl_error: None,
             simkl_write_error: None,
             update: UpdateUi::default(),
-            models: Vec::new(),
-            models_gen: 0,
-            models_status: None,
-            detecting: false,
-            ai_check: None,
-            ai_checking: false,
-            ai_cache: None,
             toast: None,
             boot_done: false,
             imdb_busy: false,
@@ -962,11 +295,6 @@ impl App {
             imdb_status: None,
             cjk_loaded: false,
         };
-        // Se c'e gia un servizio AI configurato, l'elenco modelli si carica da solo
-        // all'avvio: aprendo le Impostazioni lo trovi pronto.
-        if app.settings.can_detect() {
-            app.detect_models();
-        }
         // La libreria SIMKL si aggiorna all'avvio, ma non più di una volta
         // ogni 15 minuti: niente polling in background.
         if app.simkl_tokens.is_some() && simkl::sync_due(app.simkl_store.last_sync) {
@@ -974,7 +302,138 @@ impl App {
         }
         app
     }
-
+    fn switch_mode(&mut self, mode: ViewMode) {
+        let from_settings = self.show_settings;
+        self.mode = mode;
+        self.show_settings = false;
+        if from_settings {
+            self.focus = Some(mode);
+        }
+    }
+    fn spawn_search(&mut self) {
+        self.dirty = None;
+        let Some(tmdb) = self.tmdb.clone() else {
+            self.loading = false;
+            self.first_run = true;
+            return;
+        };
+        if let Some(cancel) = self.search_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        let (tmdb, cancel) = tmdb.cancellable();
+        self.search_cancel = Some(cancel);
+        self.gen += 1;
+        let gen = self.gen;
+        self.loading = true;
+        self.results_error = None;
+        self.grid_reset_scroll = true;
+        self.unlocks.clear();
+        let text = self
+            .grid_query
+            .trim()
+            .chars()
+            .take(MAX_QUERY_CHARS)
+            .collect::<String>();
+        let (eff, removed) = constraints::sanitize(&self.tax, &self.facets);
+        let mut kw = self.keyword_map.clone();
+        let tax = self.tax.clone();
+        let page = self.page;
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let mut payload = Results {
+                total_is_exact: true,
+                facets: eff.clone(),
+                removed,
+                info: Vec::new(),
+                notes: Vec::new(),
+                movies: Vec::new(),
+                total: 0,
+                total_pages: 0,
+                headline: String::new(),
+                error: None,
+                keyword_pairs: Vec::new(),
+            };
+            resolve_keywords(
+                &tmdb,
+                &tax,
+                &eff,
+                &mut kw,
+                &mut payload.keyword_pairs,
+                &mut payload.info,
+            );
+            let outcome = (|| {
+                require_keywords(&tax, &eff, &kw)?;
+                if !text.is_empty() {
+                    if eff.is_empty() && eff.sort == Sort::Popularity {
+                        let p = tmdb.search(&text, page)?;
+                        return Ok((
+                            p.results.into_iter().map(Movie::from).collect(),
+                            p.total_results,
+                            p.total_pages,
+                            format!("Risultati per «{text}»"),
+                        ));
+                    }
+                    let upstream = tmdb.search(&text, page)?;
+                    let raw = upstream.results.into_iter().map(Movie::from).collect();
+                    let details =
+                        verified_details(&tmdb, &tax, &eff, &kw, &filter_movies(raw, &tax, &eff))?;
+                    let mut movies = details.into_values().map(|d| d.movie).collect::<Vec<_>>();
+                    sort_movies(&mut movies, eff.sort);
+                    payload.total_is_exact = false;
+                    payload.info.push("Ricerca per titolo: filtri e ordinamento applicati alla pagina corrente. Le pagine si riferiscono alla ricerca TMDB completa.".into());
+                    return Ok((
+                        movies,
+                        upstream.total_results,
+                        upstream.total_pages,
+                        format!("Risultati per «{text}»"),
+                    ));
+                }
+                if wants_trending(&eff) {
+                    let p = tmdb.trending(page)?;
+                    return Ok((
+                        p.results.into_iter().map(Movie::from).collect(),
+                        p.total_results,
+                        p.total_pages,
+                        "Tendenze della settimana".into(),
+                    ));
+                }
+                payload.total_is_exact = !constraints::decade_gap(&tax, &eff)
+                    && eff.runtime.is_none()
+                    && eff.sort != Sort::Newest;
+                discover_strict(&tmdb, &tax, &eff, &kw, page, &mut payload.info)
+            })();
+            match outcome {
+                Ok((movies, total, pages, headline)) => {
+                    payload.movies = movies;
+                    payload.total = total;
+                    payload.total_pages = pages.min(500);
+                    payload.headline = headline;
+                }
+                Err(e) => payload.error = Some(e),
+            }
+            let unlockable = text.is_empty()
+                && page == 1
+                && payload.error.is_none()
+                && payload.movies.len() <= 3
+                && payload.removed.is_empty();
+            let seen = payload.movies.iter().map(|m| m.id).collect::<HashSet<_>>();
+            let current_total = payload.total;
+            let _ = tx.send(Msg::Results {
+                gen,
+                payload: Box::new(payload),
+            });
+            ctx.request_repaint();
+            if unlockable {
+                let unlocks = unlock_options(&tmdb, &tax, &eff, &kw, current_total, &seen);
+                if !unlocks.is_empty() {
+                    let _ = tx.send(Msg::Unlocks { gen, unlocks });
+                    ctx.request_repaint();
+                }
+            }
+        });
+        self.ctx.request_repaint();
+    }
     fn build_tmdb(cfg: &Config) -> Option<Arc<Tmdb>> {
         if cfg.has_key() {
             Some(Arc::new(Tmdb::new(
@@ -985,9 +444,6 @@ impl App {
             None
         }
     }
-
-    // ----------------------------------------------------------- messaggi ----
-
     fn poll(&mut self) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
@@ -1008,25 +464,22 @@ impl App {
                         });
                         let hidden = before - p.movies.len();
                         if hidden > 0 {
-                            p.total = p.total.saturating_sub(hidden as u32);
-                            p.info
-                                .push(format!("{hidden} film già visti nascosti."));
+                            p.total_is_exact = false;
+                            p.info.push(format!("{hidden} film già visti nascosti."));
                         }
                     }
                     self.facets = p.facets;
+                    self.total_is_exact = p.total_is_exact;
                     self.prune = constraints::pruning(&self.tax, &self.facets);
                     self.messages = p.removed;
                     self.info = p.info;
-                    self.ai_notes = p.ai_notes;
+                    self.notes = p.notes;
                     for pair in p.keyword_pairs {
                         if !self.keyword_map.iter().any(|(k, _)| k == &pair.0) {
                             self.keyword_map.push(pair);
                         }
                     }
                     self.headline = p.headline;
-                    if p.intent.is_some() {
-                        self.ai_cache = p.intent;
-                    }
                     self.net = Some(net_ok);
                     if let Some(err) = p.error {
                         self.movies.clear();
@@ -1085,7 +538,9 @@ impl App {
                 }
                 Msg::Check { key, res } => {
                     let net_ok = res.is_ok();
-                    let Some(status) = verified_status(&key.as_str(), &self.settings.tmdb_key.trim(), res) else {
+                    let Some(status) =
+                        verified_status(&key.as_str(), &self.settings.tmdb_key.trim(), res)
+                    else {
                         continue;
                     };
                     if net_ok {
@@ -1106,10 +561,9 @@ impl App {
                             if self.save_settings() {
                                 self.first_run = false;
                                 self.show_settings = false;
-                                self.mode = ViewMode::Chat;
-                                self.chat_draft = "Un film italiano degli anni '90, ben votato e non troppo lungo".into();
-                                self.focus = Some(ViewMode::Chat);
-                                self.toast("Chiave salvata. Scrivi cosa vuoi vedere.");
+                                self.mode = ViewMode::Griglia;
+                                self.focus = Some(ViewMode::Griglia);
+                                self.toast("Chiave salvata. Esplora il catalogo con i filtri.");
                             } else {
                                 self.settings_check =
                                     Some("✕ Non sono riuscito a salvare la chiave.".into());
@@ -1118,45 +572,7 @@ impl App {
                         Err(e) => self.settings_check = Some(format!("✕ {e}")),
                     }
                 }
-                Msg::Models { gen, res } => {
-                    if gen != self.models_gen {
-                        continue;
-                    }
-                    self.detecting = false;
-                    match res {
-                        Ok(models) => {
-                            let count = models.len();
-                            let provider = self.settings.provider.clone();
-                            let current = match provider.as_str() {
-                                "deepseek" => self.settings.deepseek_model.clone(),
-                                "openrouter" => self.settings.openrouter_model.clone(),
-                                "ollama" => self.settings.ollama_model.clone(),
-                                _ => String::new(),
-                            };
-                            if let Some(id) = preferred_model(&provider, &current, &models) {
-                                match provider.as_str() {
-                                    "deepseek" => self.settings.deepseek_model = id,
-                                    "openrouter" => self.settings.openrouter_model = id,
-                                    "ollama" => self.settings.ollama_model = id,
-                                    _ => {}
-                                }
-                            }
-                            self.models_status =
-                                Some(format!("✔ {count} modelli disponibili"));
-                            self.models = models;
-                        }
-                        Err(e) => {
-                            self.models_status = Some(format!("✕ {e}"));
-                            self.models.clear();
-                        }
-                    }
-                }
-                Msg::AiCheck { config, res } => {
-                    self.ai_checking = false;
-                    if let Some(status) = verified_status(&config, &self.settings.ai_cfg(), res) {
-                        self.ai_check = Some(status);
-                    }
-                }
+
                 Msg::Imdb { res } => {
                     self.imdb_busy = false;
                     self.imdb_progress = None;
@@ -1175,24 +591,7 @@ impl App {
                         self.imdb_progress = Some((done, 0));
                     }
                 }
-                Msg::NowPlaying { gen, res } => {
-                    if gen != self.home_now_playing_gen {
-                        continue;
-                    }
-                    self.home_now_playing_busy = false;
-                    match res {
-                        Ok(movies) => {
-                            self.home_now_playing = movies;
-                            self.home_now_playing_error = None;
-                            self.home_now_playing_next =
-                                Some(Instant::now() + IN_SALA_REFRESH);
-                        }
-                        Err(error) => {
-                            self.home_now_playing_error = Some(chat::friendly_error(&error).into());
-                            self.home_now_playing_next = Some(Instant::now() + IN_SALA_RETRY);
-                        }
-                    }
-                }
+
                 Msg::UpdateChecked(res) => {
                     self.update.checking = false;
                     self.update.last_check = Some(Instant::now());
@@ -1317,7 +716,7 @@ impl App {
                                 self.simkl_error = Some(e);
                             }
                             self.simkl_store = store;
-                            self.simkl_cards = None;
+
                             self.simkl_status = None;
                             self.apply_track_flags();
                         }
@@ -1380,1247 +779,43 @@ impl App {
                         }
                     }
                 }
-                Msg::Poster { id, url } => {
-                    self.poster_cache.insert(id, url);
-                    self.ctx.request_repaint();
-                }
-                Msg::ChatStream { gen, index, chunk } => {
-                    if gen != self.chat_gen {
-                        continue;
-                    }
-                    if let Some(entry) = self.chat.get_mut(index) {
-                        if entry.answer.state == chat::State::Busy {
-                            entry.answer.intro.push_str(&chunk);
-                        }
-                    }
-                }
-                Msg::ChatStage { gen, index, stage } => {
-                    if gen != self.chat_gen {
-                        continue;
-                    }
-                    if let Some(entry) = self.chat.get_mut(index) {
-                        if entry.answer.state == chat::State::Busy {
-                            entry.answer.stage = stage;
-                        }
-                    }
-                }
-                Msg::ChatDone { gen, payload } => {
-                    if gen != self.chat_gen {
-                        continue;
-                    }
-                    self.chat_busy = false;
-                    // Dopo la risposta il campo torna pronto: l'utente puo'
-                    // scrivere subito senza doverlo cliccare.
-                    if self.mode == ViewMode::Chat && !self.show_settings && !self.guide_open {
-                        self.focus = Some(ViewMode::Chat);
-                    }
-                    let mut p = *payload;
-                    let research_intent = p.research.as_ref().map(|s| s.active.clone());
-                    let text_only = p.research.is_some() && p.understood.is_empty();
-                    if let Some(state) = p.research.take() { self.research_state = state; }
-                    if self.cfg.simkl.hide_watched {
-                        let before = p.cards.len();
-                        p.cards.retain(|c| {
-                            self.simkl_store
-                                .get(c.movie.id)
-                                .map(|t| t.status != "completed")
-                                .unwrap_or(true)
-                        });
-                        let hidden = before - p.cards.len();
-                        if hidden > 0 {
-                            p.notes
-                                .push(format!("{hidden} film già visti nascosti."));
-                        }
-                    }
-                    // La chat non tocca la griglia: l'unico passaggio esplicito
-                    // e «Vedi tutti in griglia». Qui si aggiorna solo il
-                    // contesto interno dei seguiti.
-                    self.chat_context = p.context.clone();
-                    for pair in p.keyword_pairs.clone() {
-                        if !self.keyword_map.iter().any(|(k, _)| k == &pair.0) {
-                            self.keyword_map.push(pair);
-                        }
-                    }
-                    let titles: Vec<String> = p
-                        .cards
-                        .iter()
-                        .flat_map(|c| [c.movie.title.clone(), c.movie.original_title.clone()])
-                        .collect();
-                    let text_refs: Vec<&str> = titles.iter().map(|t| t.as_str()).collect();
-                    crate::ui::fonts::ensure_cjk(&self.ctx, &mut self.cjk_loaded, &text_refs);
-                    if let Some(entry) = self.chat.get_mut(p.index) {
-                        entry.answer.research = research_intent;
-                        entry.answer.references = p.references;
-                        entry.answer.text_only = text_only;
-                        entry.answer.state = chat::State::Done;
-                        entry.answer.intro = p.intro;
-                        entry.answer.understood = p.understood;
-                        entry.answer.limit = p.limit;
-                        entry.answer.notes = p.notes;
-                        entry.answer.cards = p.cards;
-                        entry.answer.total = p.total;
-                        entry.answer.error = p.error;
-                        entry.answer.facets = p.facets;
-                        entry.answer.keyword_pairs = p.keyword_pairs;
-                        entry.answer.context = Some(p.context);
-                        entry.answer.grid_ready = p.grid_ready;
-                        entry.answer.intent = p.intent;
-                        entry.answer.done_at = self.ctx.input(|i| i.time);
-                    }
-                    self.apply_track_flags();
-                    self.ctx.request_repaint();
-                }
             }
         }
     }
-
-    fn tick(&mut self) {        if let Some(at) = self.dirty {
+    fn tick(&mut self) {
+        if let Some(at) = self.dirty {
             if at.elapsed() >= Duration::from_millis(320) {
-                // Nota: questa via non chiama l'AI (le facce sono gia state scelte a
                 // mano), quindi il ritardo resta breve anche con un modello attivo.
                 self.dirty = None;
                 self.page = 1;
-                self.launch_search(false);
+                self.launch_search();
             } else {
                 self.ctx.request_repaint_after(Duration::from_millis(70));
             }
         }
     }
 
+    fn schedule_search(&mut self) {
+        self.gen = self.gen.wrapping_add(1);
+        if let Some(cancel) = self.search_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.loading = true;
+        self.results_error = None;
+        self.unlocks.clear();
+        self.dirty = Some(Instant::now());
+    }
     fn toast(&mut self, msg: impl Into<String>) {
         self.toast = Some((msg.into(), Instant::now()));
     }
-
-    /// Se tra i risultati ci sono titoli in scritture non latine (giapponese,
-    /// coreano), carica i font di sistema che le coprono: una volta sola.
     fn ensure_fonts_for_results(&mut self) {
-        let mut texts: Vec<&str> = self
+        let texts: Vec<&str> = self
             .movies
             .iter()
             .flat_map(|m| [m.title.as_str(), m.original_title.as_str()])
             .collect();
-        for entry in &self.chat {
-            for card in &entry.answer.cards {
-                texts.push(card.movie.title.as_str());
-                texts.push(card.movie.original_title.as_str());
-                texts.push(card.movie.overview.as_str());
-            }
-        }
         crate::ui::fonts::ensure_cjk(&self.ctx, &mut self.cjk_loaded, &texts);
     }
-
-    // ----------------------------------------------------------- ricerca -----
-
-    fn spawn_search(&mut self, with_ai: bool) {
-        let Some(tmdb) = self.tmdb.clone() else {
-            self.show_settings = true;
-            self.toast("Inserisci la chiave API TMDB per cercare.");
-            return;
-        };
-        self.gen += 1;
-        let gen = self.gen;
-        self.loading = true;
-        self.results_error = None;
-        self.grid_reset_scroll = true;
-        self.unlocks.clear();
-
-        let text = self
-            .grid_query
-            .trim()
-            .chars()
-            .take(MAX_QUERY_CHARS)
-            .collect::<String>();
-        let base = self.facets.clone();
-        let known = self.keyword_map.clone();
-        let cached = self.ai_cache.clone();
-        let tax = self.tax.clone();
-        let provider = self.provider.clone();
-        let page = self.page;
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-
-        std::thread::spawn(move || {
-            let mut intent: Option<Intent> = None;
-            let mut fresh = false;
-            if with_ai && !text.is_empty() {
-                // Riusa l'interpretazione gia fatta per la stessa frase: nessuna
-                // chiamata AI ripetuta (le pagine successive sono gratis).
-                if let Some((cached_text, cached_intent)) = &cached {
-                    if cached_text == &text {
-                        intent = Some(cached_intent.clone());
-                    }
-                }
-                if intent.is_none() {
-                    if let Ok(it) = provider.parse(&text, &tax) {
-                        intent = Some(it);
-                        fresh = true;
-                    }
-                }
-            }
-            let mut eff = base.clone();
-            if let Some(it) = &intent {
-                merge_facets(&mut eff, &it.facets, &it.cleared);
-            }
-            let (eff, removed) = constraints::sanitize(&tax, &eff);
-
-            let mut title = intent.as_ref().and_then(|i| i.free_text.clone());
-            let similar = intent.as_ref().and_then(|i| i.similar_to.clone());
-            let ai_notes = intent.as_ref().map(|i| i.notes.clone()).unwrap_or_default();
-
-            if title.is_none()
-                && similar.is_none()
-                && !text.is_empty()
-                && eff.is_empty()
-                && intent
-                    .as_ref()
-                    .map(|i| i.cleared.is_empty())
-                    .unwrap_or(true)
-            {
-                title = Some(text.clone());
-            }
-
-            let mut payload = Results {
-                facets: eff.clone(),
-                removed,
-                info: Vec::new(),
-                ai_notes,
-                movies: Vec::new(),
-                total: 0,
-                total_pages: 0,
-                headline: String::new(),
-                error: None,
-                keyword_pairs: Vec::new(),
-                intent: None,
-            };
-
-            // Parole chiave: mood, temi liberi e parole proprie delle correnti.
-            // Quello che non si risolve su TMDB si dice e si ignora, senza
-            // bloccare la ricerca.
-            let mut kw = known;
-            resolve_keywords(
-                &tmdb,
-                &tax,
-                &eff,
-                &mut kw,
-                &mut payload.keyword_pairs,
-                &mut payload.info,
-            );
-
-            if fresh {
-                payload.intent = intent.clone().map(|it| (text.clone(), it));
-            }
-
-            if let Err(error) = require_keywords(&tax, &eff, &kw) {
-                payload.error = Some(error);
-                let _ = tx.send(Msg::Results { gen, payload: Box::new(payload) });
-                ctx.request_repaint();
-                return;
-            }
-            if !payload.removed.is_empty() && with_ai {
-                payload.error = Some(format!("La richiesta contiene criteri incompatibili: {} Correggi la richiesta per continuare.", payload.removed.join(" ")));
-                let _ = tx.send(Msg::Results { gen, payload: Box::new(payload) });
-                ctx.request_repaint();
-                return;
-            }
-            let local_search = title.is_some() || similar.is_some();
-            let quality_newest =
-                similar.is_none() && title.is_none() && eff.sort == Sort::Newest;
-            let quality_visual = similar.is_none()
-                && title.is_none()
-                && matches!(eff.sort, Sort::Newest | Sort::Upcoming);
-            let mut discover_used = false;
-            let outcome: Result<(Vec<Movie>, u32, u32, String), String> =
-                if let Some(name) = similar {
-                    match tmdb.search(&name, 1) {
-                        Ok(p) => match p.results.first() {
-                            Some(first) => {
-                                let seed = first.title.clone();
-                                match tmdb.similar(first.id, page) {
-                                    Ok(rec) => {
-                                        let movies = filter_movies(
-                                            rec.results.into_iter().map(Movie::from).collect(),
-                                            &tax,
-                                            &eff,
-                                        );
-                                        let (total, pages) = if eff.is_empty() {
-                                            (rec.total_results, rec.total_pages)
-                                        } else {
-                                            (movies.len() as u32, 1)
-                                        };
-                                        Ok((movies, total, pages, format!("Simili a «{seed}»")))
-                                    }
-                                    Err(e) => Err(e),
-                                }
-                            }
-                            None => Err(format!("Nessun film trovato per «{name}».")),
-                        },
-                        Err(e) => Err(e),
-                    }
-                } else if let Some(t) = title {
-                    if eff.is_empty() {
-                        match tmdb.search(&t, page) {
-                            Ok(p) => Ok((
-                                p.results.into_iter().map(Movie::from).collect(),
-                                p.total_results,
-                                p.total_pages,
-                                format!("Risultati per «{t}»"),
-                            )),
-                            Err(e) => Err(e),
-                        }
-                    } else {
-                        match search_title_pages(&tmdb, &t) {
-                            Ok((raw, total_results)) => {
-                                let raw_len = raw.len();
-                                let filtered = filter_movies(raw, &tax, &eff);
-                                let filtered_len = filtered.len();
-                                let mut note = format!(
-                                    "Risultati per «{t}» · filtri verificati sulle schede"
-                                );
-                                if total_results as usize > raw_len {
-                                    note.push_str(&format!(
-                                        " · prime {TITLE_PAGE_CAP} pagine di {total_results}"
-                                    ));
-                                }
-                                if filtered.is_empty() {
-                                    payload.ai_notes.push(
-                                        "La ricerca per titolo non supporta i filtri lato server: nessun risultato compatibile nelle prime pagine.".into(),
-                                    );
-                                }
-                                Ok((filtered, filtered_len as u32, 1, note))
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                } else if wants_trending(&eff) {
-                    match tmdb.trending(page) {
-                        Ok(p) => Ok((
-                            p.results.into_iter().map(Movie::from).collect(),
-                            p.total_results,
-                            p.total_pages,
-                            "Tendenze della settimana".into(),
-                        )),
-                        Err(e) => Err(e),
-                    }
-                } else {
-                    discover_used = true;
-                    discover_strict(&tmdb, &tax, &eff, &kw, page, &mut payload.removed)
-                };
-
-            match outcome {
-                Ok((mut movies, mut total, mut pages, headline)) => {
-                    if local_search && !eff.is_empty() {
-                        match verified_details(&tmdb, &tax, &eff, &kw, &movies) {
-                            Ok(details) => movies.retain(|m| details.contains_key(&m.id)),
-                            Err(error) => {
-                                payload.error = Some(error);
-                                movies.clear();
-                            }
-                        }
-                        total = movies.len() as u32;
-                        pages = 1;
-                    }
-                    if quality_visual {
-                        let before = movies.len();
-                        movies.retain(|m| m.poster_path.is_some());
-                        if movies.len() < before {
-                            payload.info.push(format!(
-                                "{} titoli senza poster nascosti.",
-                                before - movies.len()
-                            ));
-                        }
-                    }
-                    if quality_newest
-                        && eff.runtime.is_none()
-                        && eff.min_votes.is_none()
-                        && eff.min_rating.is_none()
-                    {
-                        payload.info.push(
-                            "Piu recenti: solo film usciti, con poster, durata almeno 60 minuti e 50 voti."
-                                .into(),
-                        );
-                    }
-                    if quality_visual && eff.sort == Sort::Upcoming {
-                        payload.info.push(
-                            "Prossimamente: ordinato per popolarita, senza schede senza poster; per i film futuri voti e durata non sono ancora affidabili."
-                                .into(),
-                        );
-                    }
-                    payload.movies = movies;
-                    payload.total = total;
-                    payload.total_pages = pages;
-                    payload.headline = headline;
-                }
-                Err(e) => {
-                    payload.headline = "Errore".into();
-                    payload.error = Some(e);
-                }
-            }
-
-            let grid_len = payload.movies.len();
-            let seen = payload
-                .movies
-                .iter()
-                .map(|m| m.id)
-                .collect::<HashSet<_>>();
-            let current_total = payload.total;
-            let unlockable = discover_used
-                && page == 1
-                && payload.error.is_none()
-                // Se il motore ha già allentato qualcosa, la nota spiega il
-                // compromesso: qui si mostrano solo rinunce scelte dall'utente.
-                && payload.removed.is_empty()
-                && grid_len <= 3;
-            let _ = tx.send(Msg::Results {
-                gen,
-                payload: Box::new(payload),
-            });
-
-            // I risultati partono subito; i compromessi arrivano dopo, perché
-            // ogni variante è una chiamata TMDB. Meglio una griglia pronta e
-            // la striscia «Sblocca» un istante più tardi che il contrario.
-            if unlockable {
-                let unlocks =
-                    unlock_options(&tmdb, &tax, &eff, &kw, current_total, &seen);
-                if !unlocks.is_empty() {
-                    let _ = tx.send(Msg::Unlocks { gen, unlocks });
-                    ctx.request_repaint();
-                }
-            }
-        });
-        self.ctx.request_repaint();
-    }
-
-    // -------------------------------------------------------------- chat -----
-
-    /// Cambia vista senza perdere lo stato dell'altra: la chat resta in
-    /// memoria, la griglia conserva ricerca, filtri e larghezza del pannello.
-    fn switch_mode(&mut self, mode: ViewMode) {
-        if self.mode == mode {
-            return;
-        }
-        // Il widget della vecchia vista sparisce: il testo non deve restare
-        // agganciato a un campo che non c'e piu.
-        if let Some(id) = self.ctx.memory(|m| m.focused()) {
-            self.ctx.memory_mut(|m| m.surrender_focus(id));
-        }
-        self.mode = mode;
-        self.focus = None;
-        if mode == ViewMode::Chat {
-            // La scheda e la guida sono strumenti della griglia: in chat
-            // lasciano tutto lo spazio alla conversazione.
-            self.close_detail();
-            self.guide_open = false;
-        }
-    }
-
-    /// Prepara le quattro card della casa. Se i filtri della griglia sono
-    /// cambiati ricostruisce il catalogo; il quartetto cambia solo su richiesta.
-    /// Tutto avviene in memoria e con la sola tassonomia: nessuna AI, nessuna
-    /// richiesta TMDB prima che l'utente invii un messaggio.
-    fn refresh_home_suggestions(&mut self, change: bool) {
-        let changed = self.suggestion_base != self.facets;
-        if changed || self.suggestion_pool.is_empty() || self.suggestions.is_empty() {
-            self.suggestion_pool = suggestions::candidates(&self.tax, &self.facets);
-            self.suggestion_base = self.facets.clone();
-            self.suggestion_cycle = 0;
-            self.suggestions = suggestions::pick(&self.suggestion_pool, 0, &[], 4);
-            return;
-        }
-        if !change {
-            return;
-        }
-        let avoid = self
-            .suggestions
-            .iter()
-            .map(|s| s.prompt.clone())
-            .collect::<Vec<_>>();
-        self.suggestion_cycle = self.suggestion_cycle.wrapping_add(1);
-        self.suggestions =
-            suggestions::pick(&self.suggestion_pool, self.suggestion_cycle, &avoid, 4);
-    }
-
-    /// Aggiunge una risposta solo testo: spiegazioni e confronti non sono
-    /// nuove ricerche e non devono toccare il contesto.
-    fn push_text_answer(&mut self, user: String, intro: String, understood: String) {
-        if self.chat_busy {
-            self.toast("Attendi la risposta in corso.");
-            return;
-        }
-        let now = self.ctx.input(|i| i.time);
-        self.chat.push(chat::Entry {
-            user,
-            answer: chat::Answer {
-                intro,
-                understood,
-                done_at: now,
-                ..Default::default()
-            },
-        });
-        self.chat_jump = true;
-        self.focus = Some(ViewMode::Chat);
-    }
-
-    fn handle_meta_command(&mut self, text: &str) -> bool {
-        if looks_like_compare(text) {
-            let mentioned = cards_mentioned(&self.chat, text);
-            let latest = last_cards(&self.chat);
-            let pair = if mentioned.len() >= 2 {
-                Some((mentioned[0].clone(), mentioned[1].clone()))
-            } else if let Some(first) = mentioned.first() {
-                latest
-                    .iter()
-                    .find(|c| c.movie.id != first.movie.id)
-                    .map(|second| (first.clone(), second.clone()))
-            } else if latest.len() >= 2 {
-                Some((latest[0].clone(), latest[1].clone()))
-            } else {
-                None
-            };
-            if let Some((a, b)) = pair {
-                self.compare_cards(a, b);
-            } else {
-                self.push_text_answer(
-                    text.to_string(),
-                    "Per un confronto mi servono due film già proposti: prima chiedimi un consiglio."
-                        .into(),
-                    "confronto".into(),
-                );
-            }
-            return true;
-        }
-        if looks_like_explain(text) {
-            let mentioned = cards_mentioned(&self.chat, text);
-            let latest = last_cards(&self.chat);
-            let lower = text.to_lowercase();
-            let frame = ["questo", "questa", "questi", "il primo", "la prima", "consigli"]
-                .iter()
-                .any(|cue| lower.contains(cue));
-            let card = mentioned
-                .into_iter()
-                .next()
-                .or_else(|| if frame || latest.len() == 1 { latest.first().cloned() } else { None });
-            if let Some(card) = card {
-                self.explain_card(card);
-                return true;
-            }
-            if latest.is_empty() {
-                self.push_text_answer(
-                    text.to_string(),
-                    "Prima chiedimi un consiglio: poi posso spiegarti perché ho scelto un film."
-                        .into(),
-                    "spiegazione".into(),
-                );
-                return true;
-            }
-        }
-        false
-    }
-
-    fn explain_card(&mut self, card: chat::Card) {
-        let user = format!("Perché «{}»?", card.movie.title);
-        let intro = explanation_text(&self.tax, &card);
-        self.push_text_answer(user, intro, "spiegazione".into());
-    }
-
-    fn compare_cards(&mut self, a: chat::Card, b: chat::Card) {
-        let user = format!(
-            "Confronta «{}» e «{}»",
-            a.movie.title, b.movie.title
-        );
-        let intro = comparison_text(&self.tax, &a, &b);
-        self.push_text_answer(user, intro, "confronto".into());
-    }
-
-    /// Invia il contenuto del composer come messaggio di chat.
-    fn send_chat(&mut self) {
-        if self.chat_busy {
-            self.toast("Attendi la risposta in corso…");
-            return;
-        }
-        let text = self.chat_draft.trim().to_string();
-        if text.is_empty() {
-            self.toast("Scrivi cosa vuoi vedere: anche in modo libero.");
-            return;
-        }
-        let text = if text.chars().count() > chat::MAX_PROMPT_CHARS {
-            self.toast(format!(
-                "Messaggio accorciato a {} caratteri.",
-                chat::MAX_PROMPT_CHARS
-            ));
-            text.chars().take(chat::MAX_PROMPT_CHARS).collect()
-        } else {
-            text
-        };
-        self.chat_draft.clear();
-        self.chat_jump = true;
-        // Spiegazioni e confronti sono comandi locali: non sono nuove
-        // ricerche e funzionano anche senza una chiamata AI.
-        if !self.provider.is_llm() && self.handle_meta_command(&text) {
-            self.focus = Some(ViewMode::Chat);
-            return;
-        }
-        if self.tmdb.is_none() {
-            self.show_settings = true;
-            self.toast("Inserisci la chiave API TMDB per cercare.");
-            return;
-        }
-        // «Altri» e simili: stessi criteri, ma senza i film gia mostrati.
-        let exclude: Vec<u64> = if !self.provider.is_llm() && classify_chat_action(&text, &self.chat_context) == ChatAction::Replace {
-            self.chat
-                .iter()
-                .flat_map(|e| e.answer.cards.iter().map(|c| c.movie.id))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        self.spawn_chat(text, exclude, None);
-        // Il composer resta a fuoco: la chat e una conversazione, si resta li.
-        self.focus = Some(ViewMode::Chat);
-    }
-
-    /// Ricomincia da zero: la conversazione vive in memoria, niente file.
-    fn new_chat(&mut self) {
-        if let Some(cancel) = self.chat_cancel.take() {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.chat.clear();
-        self.chat_gen += 1;
-        self.chat_busy = false;
-        self.chat_context = Intent::default();
-        self.research_state = Default::default();
-        self.chat_draft.clear();
-        self.chat_jump = false;
-        self.focus = Some(ViewMode::Chat);
-    }
-
-    /// Interrompe la risposta: il worker alza bandiera, chiude lo streaming e
-    /// non avvia altre richieste; i messaggi vecchi restano fuori generazione.
-    fn stop_chat(&mut self) {
-        if !self.chat_busy {
-            return;
-        }
-        if let Some(cancel) = &self.chat_cancel {
-            cancel.store(true, Ordering::Relaxed);
-        }
-        self.chat_gen += 1;
-        self.chat_busy = false;
-        if let Some(entry) = self
-            .chat
-            .iter_mut()
-            .rev()
-            .find(|e| e.answer.state == chat::State::Busy)
-        {
-            entry.answer.state = chat::State::Done;
-            entry.answer.error = Some("Risposta interrotta.".into());
-            entry.answer.done_at = self.ctx.input(|i| i.time);
-        }
-        self.toast("Risposta interrotta.");
-    }
-
-    /// Memoria breve per l'interprete: ultimi scambi, compressi in una riga.
-    /// `upto` esclude il messaggio appena inviato, che il prompt passa a parte.
-    fn chat_history(&self, upto: usize) -> Vec<(String, String)> {
-        let end = upto.min(self.chat.len());
-        let start = end.saturating_sub(3);
-        self.chat[start..end].iter()
-            .map(|entry| ("utente".into(), entry.user.clone())).collect()
-    }
-
-    fn spawn_chat(&mut self, text: String, exclude: Vec<u64>, reuse: Option<Intent>) {
-        self.chat_jump = true;
-        let index = self.chat.len();
-        self.chat.push(chat::Entry {
-            user: text.clone(),
-            answer: chat::Answer::busy(),
-        });
-        self.spawn_chat_worker(index, text, exclude, reuse);
-    }
-
-    /// Riprova una risposta: stessi criteri, esclusi i film già mostrati.
-    fn regenerate(&mut self, index: usize) {
-        if self.chat_busy {
-            self.toast("Attendi la risposta in corso…");
-            return;
-        }
-        let Some(entry) = self.chat.get(index) else {
-            return;
-        };
-        let text = entry.user.clone();
-        let exclude: Vec<u64> = entry.answer.cards.iter().map(|c| c.movie.id).collect();
-        let reuse = if self.provider.is_llm() { None } else { entry
-            .answer
-            .context
-            .clone()
-            .or_else(|| entry.answer.intent.as_ref().map(|(_, it)| it.clone())) };
-        if let Some(entry) = self.chat.get_mut(index) {
-            entry.answer = chat::Answer::busy();
-        }
-        self.spawn_chat_worker(index, text, exclude, reuse);
-    }
-
-    /// «Vedi tutti in griglia»: i filtri capiti dalla chat diventano la
-    /// ricerca della griglia, riusando l'intento (nessuna chiamata AI nuova).
-    fn show_all_in_grid(&mut self, index: usize) {
-        let Some(entry) = self.chat.get(index) else {
-            return;
-        };
-        let user = entry.user.clone();
-        if !entry.answer.grid_ready || entry.answer.facets.is_empty() {
-            self.toast("Questa richiesta non si traduce in filtri del catalogo.");
-            return;
-        }
-        let facets = entry.answer.facets.clone();
-        let pairs = entry.answer.keyword_pairs.clone();
-        let intent = entry.answer.context.clone();
-        self.facets = facets;
-        for pair in pairs {
-            if !self.keyword_map.iter().any(|(k, _)| k == &pair.0) {
-                self.keyword_map.push(pair);
-            }
-        }
-        if let Some(intent) = intent {
-            self.ai_cache = Some((user.clone(), intent));
-        }
-        self.prune = constraints::pruning(&self.tax, &self.facets);
-        self.grid_query = user.chars().take(MAX_QUERY_CHARS).collect();
-        self.page = 1;
-        self.switch_mode(ViewMode::Griglia);
-        self.launch_search(true);
-    }
-
-    /// La chat AI delega al coordinatore `search`; il percorso a regole
-    /// resta esplicito e separato. Nessun ripiego AI verso risultati popolari.
-    fn spawn_chat_worker(
-        &mut self,
-        index: usize,
-        text: String,
-        exclude: Vec<u64>,
-        reuse: Option<Intent>,
-    ) {
-        let Some((tmdb, cancel)) = self.tmdb.as_ref().map(|t| {
-            let (client, cancel) = t.cancellable();
-            (Arc::new(client), cancel)
-        }) else {
-            self.show_settings = true;
-            return;
-        };
-        self.chat_cancel = Some(cancel.clone());
-        self.chat_gen += 1;
-        let gen = self.chat_gen;
-        self.chat_busy = true;
-
-        let base = self.chat_context.clone();
-        let known = self.keyword_map.clone();
-        let tax = self.tax.clone();
-        let provider = self.provider.clone();
-        let history = self.chat_history(index);
-        let research_state = self.research_state.clone();
-        let blocked: HashSet<u64> = if self.cfg.simkl.hide_watched {
-            self.simkl_store.movies.values().filter(|m| m.status == "completed").map(|m|m.tmdb).collect()
-        } else { HashSet::new() };
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-
-        std::thread::spawn(move || {
-            let mut payload = ChatPayload {
-                references: Vec::new(),
-                research: None,
-                index,
-                intro: String::new(),
-                cards: Vec::new(),
-                understood: String::new(),
-                limit: None,
-                notes: Vec::new(),
-                total: 0,
-                facets: Facets::default(),
-                keyword_pairs: Vec::new(),
-                context: base.clone(),
-                grid_ready: false,
-                intent: None,
-                error: None,
-            };
-
-            if provider.is_llm() {
-                let edits = reuse.as_ref().map(|it| crate::search::edits_description(&it.facets));
-                let result = crate::search::TmdbSource::new(&tmdb).map(|s|s.with_blocked(blocked)).and_then(|source| {
-                    crate::search::run(provider.as_ref(), &source, &text, &research_state,
-                        edits.as_deref(), &cancel, &mut |stage| {
-                            let _ = tx.send(Msg::ChatStage { gen, index, stage });
-                            ctx.request_repaint();
-                        })
-                });
-                if cancel.load(Ordering::Relaxed) { return; }
-                match result {
-                    Ok(response) => {
-                        for doc in response.references {
-                            if !payload.references.iter().any(|r|r.url==doc.url) {
-                                payload.references.push(chat::CardSource{title:doc.title,url:doc.url,license:doc.license});
-                            }
-                        }
-                        payload.intro = response.text;
-                        payload.understood = response.understood;
-                        payload.limit = response.notice;
-                        payload.notes = response.notes;
-                        payload.total = response.selections.len() as u32;
-                        payload.research = Some(response.state);
-                        payload.cards = response.selections.into_iter().map(|s| {
-                            let d = s.evidence.details;
-                            let mut sources: Vec<chat::CardSource> = Vec::new();
-                            for doc in s.evidence.documents {
-                                if !sources.iter().any(|s|s.url == doc.url) {
-                                    sources.push(chat::CardSource { title:doc.title, url:doc.url, license:doc.license });
-                                }
-                            }
-                            chat::Card {
-                                movie: d.movie, perche: s.judgment.why, consiglio: s.judgment.caveat,
-                                meta: Some(chat::CardMeta { director: d.director, runtime: d.runtime,
-                                    flatrate: d.flatrate, rent: d.rent, imdb: d.imdb, sources }),
-                            }
-                        }).collect();
-                        payload.context = Intent::default();
-                    }
-                    Err(error) => { payload.error = Some(error); }
-                }
-                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
-                ctx.request_repaint();
-                return;
-            }
-
-            // 1) Interpreta il messaggio. Il contesto dei seguiti e locale
-            //    alla chat: i filtri della griglia non c'entrano.
-            let reuse_ctx = reuse.is_some();
-            let pre_action = classify_chat_action(&text, &base);
-            let pre_follow = pre_action.is_contextual();
-            let empty = Intent::default();
-            // L'AI vede sempre la memoria e decide lei se il messaggio e un
-            // seguito; le regole hanno bisogno della classificazione locale.
-            let parse_active = if provider.is_llm() || pre_follow {
-                &base
-            } else {
-                &empty
-            };
-            let parse_history: &[(String, String)] =
-                if provider.is_llm() || pre_follow { &history } else { &[] };
-            let intent = match reuse {
-                Some(it) => Some(it),
-                None => match provider.parse_chat_cancellable(
-                    &text,
-                    &tax,
-                    parse_history,
-                    parse_active,
-                    &cancel,
-                ) {
-                    Ok(it) => Some(it),
-                    Err(_) if cancel.load(Ordering::Relaxed) => return,
-                    Err(e) => {
-                        payload.notes.push(format!("Interprete non disponibile: {e}"));
-                        None
-                    }
-                },
-            };
-            if cancel.load(Ordering::Relaxed) {
-                return;
-            }
-            let mut action = intent
-                .as_ref()
-                .map(|i| i.action)
-                .unwrap_or(pre_action);
-            if let Some(it) = &intent {
-                // Retrocompatibilita con interpreti che non restituiscono
-                // `action`: la classificazione locale resta la rete di sicurezza.
-                if action == ChatAction::New
-                    && pre_follow
-                    && it.is_empty()
-                    && it.mode != "reset"
-                    && it.mode != "off_topic"
-                {
-                    action = pre_action;
-                }
-            }
-            let follow = reuse_ctx || action.is_contextual();
-            let off_topic = action == ChatAction::OffTopic
-                || intent
-                    .as_ref()
-                    .map(|i| i.mode.eq_ignore_ascii_case("off_topic"))
-                    .unwrap_or(false);
-            let seen_title = seen_title_in_query(&text);
-            let person_lookup = person_query(&text)
-                .or_else(|| {
-                    intent
-                        .as_ref()
-                        .and_then(|i| i.person.clone())
-                        .map(|name| PersonQuery {
-                            name,
-                            role: PersonRole::Any,
-                        })
-                })
-                .or_else(|| {
-                    if follow {
-                        base.person.as_ref().map(|name| PersonQuery {
-                            name: name.clone(),
-                            role: PersonRole::Any,
-                        })
-                    } else {
-                        None
-                    }
-                });
-            let mut eff = if follow {
-                base.facets.clone()
-            } else {
-                Facets::default()
-            };
-            let mut themes = if follow { base.themes.clone() } else { Vec::new() };
-            if let Some(it) = &intent {
-                if reuse_ctx {
-                    eff = it.facets.clone();
-                    themes = it.themes.clone();
-                } else if action == ChatAction::Reset
-                    || it.mode.eq_ignore_ascii_case("reset")
-                {
-                    eff = Facets::default();
-                    themes.clear();
-                } else if provider.is_llm() && it.source == "AI" {
-                    // L'AI di chat riceve il contesto e, per un seguito,
-                    // restituisce lo stato completo. Se non ha capito nulla,
-                    // il contesto attivo resta la base.
-                    if action.is_contextual() && it.is_empty() && !base.is_empty() {
-                        eff = base.facets.clone();
-                        themes = base.themes.clone();
-                        payload
-                            .notes
-                            .push("Ho mantenuto il contesto gia attivo.".into());
-                    } else {
-                        eff = it.facets.clone();
-                        themes = it.themes.clone();
-                    }
-                } else if action.is_contextual() {
-                    // Il parser a regole descrive solo il messaggio: va unito
-                    // al contesto, che un seguito esplicito non deve perdere.
-                    merge_facets(&mut eff, &it.facets, &it.cleared);
-                    merge_themes(&mut themes, &it.themes);
-                } else {
-                    eff = it.facets.clone();
-                    themes = it.themes.clone();
-                }
-                payload.notes.extend(it.notes.clone());
-            }
-            let requested = eff.clone();
-            let (eff, removed) = constraints::sanitize(&tax, &eff);
-            let conflicts = removed.clone();
-            payload.notes.extend(removed);
-            let context_free = intent.as_ref().and_then(|i| i.free_text.clone()).or_else(|| if action.is_contextual() { base.free_text.clone() } else { None });
-            let context_similar = intent
-                .as_ref()
-                .and_then(|i| i.similar_to.clone())
-                .or_else(|| {
-                    if action.is_contextual() {
-                        base.similar_to.clone()
-                    } else {
-                        None
-                    }
-                });
-            let title = context_free.clone();
-            let similar = context_similar.clone();
-            payload.context = Intent {
-                facets: eff.clone(),
-                themes: themes.clone(),
-                free_text: context_free,
-                similar_to: context_similar,
-                action,
-                ..Default::default()
-            };
-            payload.facets = eff.clone();
-            payload.understood = describe_chat(&tax, &eff, &themes);
-            if let Some(it) = intent.clone() {
-                payload.intent = Some((text.clone(), it));
-            }
-
-            if !conflicts.is_empty() {
-                payload.facets = requested.clone();
-                payload.context.facets = requested;
-                payload.understood = describe_chat(&tax, &payload.facets, &themes);
-                payload.limit = Some(format!("I criteri richiedono una correzione: {} Nessun filtro e stato allargato. Modifica i criteri qui sotto.", conflicts.join(" ")));
-                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
-                ctx.request_repaint();
-                return;
-            }
-
-            // 2) Candidati reali. Se l'interprete non ha riconosciuto un
-            //    titolo, una frase o una domanda non diventano titoli.
-            let _ = tx.send(Msg::ChatStage {
-                gen,
-                index,
-                stage: 1,
-            });
-            ctx.request_repaint();
-
-            let mut person_pool = None;
-            let mut person_label = None;
-            let mut person_name = None;
-            if let Some(query) = &person_lookup {
-                match chat_person_pool(
-                    &tmdb,
-                    &tax,
-                    &eff,
-                    query,
-                    seen_title.as_deref(),
-                    &mut payload.notes,
-                    &exclude,
-                ) {
-                    Ok(Some(found)) => {
-                        person_label = Some(found.label.clone());
-                        person_name = Some(found.person.clone());
-                        person_pool = Some(found.result);
-                    }
-                    Ok(None) => {
-                        payload.notes.push(format!(
-                            "Non ho riconosciuto «{}» come regista o attore.",
-                            query.name
-                        ));
-                    }
-                    Err(_) if cancel.load(Ordering::Relaxed) => return,
-                    Err(e) => {
-                        payload.error = Some(e);
-                        let _ = tx.send(Msg::ChatDone {
-                            gen,
-                            payload: Box::new(payload),
-                        });
-                        ctx.request_repaint();
-                        return;
-                    }
-                }
-            }
-            let pool = if let Some(found) = person_pool {
-                found
-            } else {
-                match chat_pool(
-                    &tmdb,
-                    &tax,
-                    &eff,
-                    &themes,
-                    &known,
-                    title.as_deref(),
-                    similar.as_deref(),
-                    &mut payload.notes,
-                    &exclude,
-                ) {
-                    Ok(p) => p,
-                    Err(_) if cancel.load(Ordering::Relaxed) => return,
-                    Err(e) => {
-                        payload.error = Some(e);
-                        let _ = tx.send(Msg::ChatDone {
-                            gen,
-                            payload: Box::new(payload),
-                        });
-                        ctx.request_repaint();
-                        return;
-                    }
-                }
-            };
-            let ChatPoolResult {
-                mut movies,
-                total,
-                facets: used_facets,
-                keyword_pairs,
-                limit,
-                grid_ready,
-                reasons,
-                relevance,
-            } = pool;
-            payload.total = total;
-            payload.facets = used_facets.clone();
-            payload.keyword_pairs = keyword_pairs;
-            payload.limit = limit.clone();
-            payload.grid_ready = grid_ready;
-            payload.understood = describe_chat(&tax, &used_facets, &themes);
-            if let Some(label) = &person_label {
-                payload.understood = label.clone();
-                payload.context.person = person_name.clone();
-                payload.context.free_text = None;
-                payload.context.similar_to = None;
-            } else {
-                if themes.is_empty() {
-                    if let Some(s) = similar.as_deref() {
-                        payload.understood = format!("simili a «{s}»");
-                    } else if let Some(t) = title.as_deref() {
-                        payload.understood =
-                            if payload.understood.eq_ignore_ascii_case("ricerca libera") {
-                                format!("titolo «{t}»")
-                            } else {
-                                format!("titolo «{t}» · {}", payload.understood)
-                            };
-                    }
-                }
-                if off_topic && used_facets.is_empty() && themes.is_empty() {
-                    // Una domanda senza legame con i filtri mostra i film del
-                    // momento: la riga «Capito» lo dice, senza inventare criteri.
-                    payload.understood = "film del momento".into();
-                }
-            }
-            movies.retain(|m| !exclude.contains(&m.id));
-            movies.truncate(20);
-            if cancel.load(Ordering::Relaxed) { return; }
-            let mut verified_keywords = known.clone();
-            verified_keywords.extend(payload.keyword_pairs.clone());
-            resolve_keywords(&tmdb, &tax, &used_facets, &mut verified_keywords, &mut payload.keyword_pairs, &mut payload.notes);
-            let details = match require_keywords(&tax, &used_facets, &verified_keywords).and_then(|()| verified_details(&tmdb, &tax, &used_facets, &verified_keywords, &movies)) {
-                Ok(details) => details,
-                Err(error) => {
-                    if cancel.load(Ordering::Relaxed) { return; }
-                    payload.error = Some(error);
-                    let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
-                    ctx.request_repaint();
-                    return;
-                }
-            };
-            let before = movies.len();
-            movies.retain(|m| details.get(&m.id).is_some_and(|d| d.movie.year.is_some() && !d.movie.overview.trim().is_empty()));
-            sort_movies(&mut movies, used_facets.sort);
-            movies.sort_by(|a, b| relevance.get(&b.id).unwrap_or(&1.0).partial_cmp(relevance.get(&a.id).unwrap_or(&1.0)).unwrap_or(std::cmp::Ordering::Equal));
-            if movies.len() < before {
-                payload.notes.push(format!("{} candidati esclusi: dati mancanti o criteri non verificati.", before - movies.len()));
-            }
-            if movies.is_empty() {
-                payload.limit = Some(if exclude.is_empty() {
-                    "Non ho trovato film verificati con tutti questi criteri. Puoi modificarli o rimuoverne uno qui sotto.".into()
-                } else {
-                    "Non ho trovato altri film verificati nelle pagine esplorate. Puoi modificare un criterio per continuare.".into()
-                });
-                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
-                ctx.request_repaint();
-                return;
-            }
-            // 3) Curatela: sceglie fino a 5 film reali e scrive i commenti (streaming).
-            if cancel.load(Ordering::Relaxed) {
-                return;
-            }
-            let _ = tx.send(Msg::ChatStage {
-                gen,
-                index,
-                stage: 2,
-            });
-            ctx.request_repaint();
-            let make_candidate = |m: &Movie| {
-                let d = &details[&m.id];
-                let mut candidate = candidate_of(&tax, &d.movie, reasons.get(&m.id).cloned(), relevance.get(&m.id).copied().unwrap_or(1.0));
-                candidate.runtime = d.runtime;
-                candidate.director = d.director.clone();
-                candidate.providers = d.flatrate.clone();
-                candidate
-            };
-            let req = curator::Request {
-                user_text: text.clone(),
-                understood: payload.understood.clone(),
-                limit: limit.clone(),
-                history: if follow { history.clone() } else { Vec::new() },
-                candidates: movies.iter().map(make_candidate).collect(),
-            };
-            let _ = tx.send(Msg::ChatStage {
-                gen,
-                index,
-                stage: 3,
-            });
-            ctx.request_repaint();
-            let cur = match provider.curate_cancellable(
-                &req,
-                &cancel,
-                &mut |chunk: &str| {
-                    let _ = tx.send(Msg::ChatStream {
-                        gen,
-                        index,
-                        chunk: chunk.to_string(),
-                    });
-                    ctx.request_repaint();
-                },
-            ) {
-                Ok(c) => c,
-                Err(_) if cancel.load(Ordering::Relaxed) => return,
-                Err(e) => {
-                    // La chat funziona anche senza AI: scelta deterministica.
-                    payload
-                        .notes
-                        .push(format!("Curatela AI non disponibile ({e}): scelta automatica."));
-                    curator::deterministic(&req)
-                }
-            };
-            payload.intro = cur.intro;
-            if cancel.load(Ordering::Relaxed) {
-                return;
-            }
-
-            payload.cards = cur.picks.into_iter().filter_map(|pick| {
-                let d = details.get(&pick.id)?;
-                Some(chat::Card {
-                    movie: d.movie.clone(),
-                    perche: pick.perche,
-                    consiglio: pick.consiglio,
-                    meta: Some(chat::CardMeta {
-                        director: d.director.clone(), runtime: d.runtime,
-                        flatrate: d.flatrate.clone(), rent: d.rent.clone(), imdb: d.imdb,
-                        sources: Vec::new(),
-                    }),
-                })
-            }).collect();
-            if cancel.load(Ordering::Relaxed) {
-                return;
-            }
-            if payload.cards.is_empty() {
-                payload.error = Some("Non sono riuscito a preparare le schede dei film.".into());
-            }
-            // Il rilassamento puo produrre la stessa nota per ogni pagina:
-            // in chat si mostra una volta sola.
-            let mut seen: HashSet<String> = HashSet::new();
-            payload.notes.retain(|n| seen.insert(n.clone()));
-
-            let _ = tx.send(Msg::ChatDone {
-                gen,
-                payload: Box::new(payload),
-            });
-            ctx.request_repaint();
-        });
-        self.ctx.request_repaint();
-    }
-
-    fn apply_chat_actions(&mut self, a: chat::Actions) {
-        if let Some((_index, intent)) = a.criteria {
-            if self.chat_busy {
-                self.toast("Attendi la risposta prima di modificare i criteri.");
-            } else {
-                let text = format!("Criteri aggiornati: {}", describe_chat(&self.tax, &intent.facets, &intent.themes));
-                self.spawn_chat(text, Vec::new(), Some(intent));
-            }
-            return;
-        }
-        // «Film simili» resta nella conversazione: è un seguito, non una
-        // nuova ricerca che sostituisce quella della griglia.
-        if let Some(title) = a.similar_to {
-            self.chat_draft = format!("Film simili a «{title}»");
-            self.send_chat();
-        } else if let Some(id) = a.open_detail {
-            // In chat la scheda è un'anteprima centrale: la conversazione
-            // resta al suo posto e non si salta alla griglia.
-            self.open_detail(id);
-        }
-        if a.stop {
-            self.stop_chat();
-        }
-        if let Some(i) = a.retry {
-            self.regenerate(i);
-        }
-        if let Some(i) = a.show_all {
-            self.show_all_in_grid(i);
-        }
-        if a.new_chat {
-            if self.chat.is_empty() && !self.chat_busy {
-                self.new_chat();
-            } else {
-                self.new_chat_confirm = true;
-            }
-        }
-    }
-
-    // ------------------------------------------------------------ simkl ----
-
     fn simkl_client_id(&self) -> String {
         let typed = self.settings.simkl_client_id.trim();
         if !typed.is_empty() {
@@ -2632,7 +827,6 @@ impl App {
         }
         simkl::CLIENT_ID.to_string()
     }
-
     fn start_simkl_auth(&mut self) {
         if self.simkl_auth.is_some() {
             return;
@@ -2716,14 +910,12 @@ impl App {
             }
         });
     }
-
     fn cancel_simkl_auth(&mut self) {
         self.simkl_epoch += 1;
         self.simkl_cancel.store(true, Ordering::Relaxed);
         self.simkl_auth = None;
         self.simkl_status = Some("Collegamento SIMKL annullato.".into());
     }
-
     fn start_simkl_sync(&mut self, force: bool) {
         if self.simkl_syncing || self.simkl_busy {
             return;
@@ -2750,7 +942,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
     fn start_simkl_write(&mut self, movie: &Movie, op: simkl::WriteOp) -> bool {
         if self.simkl_busy || self.simkl_syncing {
             return false;
@@ -2780,22 +971,17 @@ impl App {
         });
         true
     }
-
     fn simkl_write_current(&mut self, op: simkl::WriteOp) {
         let Some(d) = self.detail.clone() else {
             return;
         };
         self.start_simkl_write(&d.movie, op);
     }
-
     fn reload_simkl_tokens(&mut self) {
         if let Ok(Some(tokens)) = simkl::load_tokens() {
             self.simkl_tokens = Some(tokens);
         }
     }
-
-    /// Riallinea il Credential Manager allo stato corrente dopo un messaggio
-    /// SIMKL di un collegamento ormai vecchio.
     fn restore_simkl_tokens(&self) {
         match &self.simkl_tokens {
             Some(tokens) => {
@@ -2806,7 +992,6 @@ impl App {
             }
         }
     }
-
     fn disconnect_simkl(&mut self) {
         self.simkl_epoch += 1;
         self.simkl_cancel.store(true, Ordering::Relaxed);
@@ -2821,117 +1006,21 @@ impl App {
         self.simkl_pending = None;
         // Scollegare non deve distruggere la cronologia locale: la copia
         // resta e serve a ricollegare senza perdere visti e voti.
-        self.simkl_cards = None;
+
         self.simkl_status = Some("SIMKL scollegato: la copia locale resta sul PC.".into());
     }
-
-    fn ensure_simkl_posters(&mut self) {
-        let Some(tmdb) = self.tmdb.clone() else {
-            return;
-        };
-        let (resume, watchlist) = self.simkl_cards();
-        let mut ids: Vec<u64> = resume.iter().map(|p| p.tmdb).collect();
-        ids.extend(watchlist.iter().map(|m| m.tmdb));
-        ids.sort_unstable();
-        ids.dedup();
-        for id in ids {
-            if self.poster_cache.contains_key(&id) {
-                continue;
-            }
-            self.poster_cache.insert(id, None);
-            let tmdb = tmdb.clone();
-            let tx = self.tx.clone();
-            let ctx = self.ctx.clone();
-            std::thread::spawn(move || {
-                let url = tmdb
-                    .details(id)
-                    .ok()
-                    .and_then(|d| d.movie.poster_path)
-                    .map(|p| poster_url(&p, "w342"));
-                let _ = tx.send(Msg::Poster { id, url });
-                ctx.request_repaint();
-            });
-        }
-    }
-
-    fn simkl_cards(&mut self) -> (Vec<simkl::Playback>, Vec<simkl::TrackedMovie>) {
-        if let Some(cards) = &self.simkl_cards {
-            return cards.clone();
-        }
-        let cards = (
-            self.simkl_store
-                .resume_picks(12)
-                .into_iter()
-                .cloned()
-                .collect(),
-            self.simkl_store
-                .watchlist_picks(12)
-                .into_iter()
-                .cloned()
-                .collect(),
-        );
-        self.simkl_cards = Some(cards.clone());
-        cards
-    }
-
-    fn simkl_resume_cards(&mut self) -> Vec<chat::PersonalCard> {
-        let (resume, _) = self.simkl_cards();
-        resume
-            .into_iter()
-            .map(|playback| {
-                let percent = playback.progress.round() as u32;
-                chat::PersonalCard {
-                    title: if playback.title.is_empty() {
-                        "Film".into()
-                    } else {
-                        playback.title.clone()
-                    },
-                    meta: match playback.year {
-                        Some(year) => format!("{percent}% · {year}"),
-                        None => format!("{percent}%"),
-                    },
-                    movie_id: playback.tmdb,
-                    progress: Some((playback.progress / 100.0).clamp(0.0, 1.0)),
-                    poster: self
-                        .poster_cache
-                        .get(&playback.tmdb)
-                        .cloned()
-                        .flatten(),
-                }
-            })
-            .collect()
-    }
-
-    fn simkl_watchlist_cards(&mut self) -> Vec<chat::PersonalCard> {
-        let (_, watchlist) = self.simkl_cards();
-        watchlist
-            .into_iter()
-            .map(|movie| chat::PersonalCard {
-                title: if movie.title.is_empty() {
-                    "Film".into()
-                } else {
-                    movie.title.clone()
-                },
-                meta: match movie.year {
-                    Some(year) => format!("DA VEDERE · {year}"),
-                    None => "DA VEDERE".into(),
-                },
-                movie_id: movie.tmdb,
-                progress: None,
-                poster: self.poster_cache.get(&movie.tmdb).cloned().flatten(),
-            })
-            .collect()
-    }
-
     fn apply_track_flags(&mut self) {
         let store = &self.simkl_store;
         let flag = |id: u64| track_state(store, id);
         for movie in &mut self.movies {
             movie.track = flag(movie.id);
         }
-        for entry in &mut self.chat {
-            for card in &mut entry.answer.cards {
-                card.movie.track = flag(card.movie.id);
+        if self.cfg.simkl.hide_watched {
+            let before = self.movies.len();
+            self.movies
+                .retain(|m| !store.get(m.id).is_some_and(|s| s.status == "completed"));
+            if self.movies.len() != before {
+                self.total_is_exact = false;
             }
         }
         if let Some(detail) = &mut self.detail {
@@ -2941,7 +1030,6 @@ impl App {
             }
         }
     }
-
     fn patch_track(&mut self, movie_id: u64, op: simkl::WriteOp, outcome: &simkl::WriteOutcome) {
         let key = movie_id.to_string();
         match op {
@@ -2949,57 +1037,60 @@ impl App {
                 self.simkl_store.movies.remove(&key);
             }
             simkl::WriteOp::Watchlist => {
-                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
-                    simkl::TrackedMovie {
-                        simkl_id: 0,
-                        tmdb: movie_id,
-                        slug: String::new(),
-                        status: String::new(),
-                        rating: None,
-                        watched_at: None,
-                        added_at: None,
-                        imdb: None,
-                        title: String::new(),
-                        year: None,
-                    }
-                });
+                let entry =
+                    self.simkl_store
+                        .movies
+                        .entry(key)
+                        .or_insert_with(|| simkl::TrackedMovie {
+                            simkl_id: 0,
+                            tmdb: movie_id,
+                            slug: String::new(),
+                            status: String::new(),
+                            rating: None,
+                            watched_at: None,
+                            added_at: None,
+                            imdb: None,
+                            title: String::new(),
+                            year: None,
+                        });
                 entry.status = "plantowatch".into();
             }
             simkl::WriteOp::Watched => {
-                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
-                    simkl::TrackedMovie {
-                        simkl_id: 0,
-                        tmdb: movie_id,
-                        slug: String::new(),
-                        status: String::new(),
-                        rating: None,
-                        watched_at: None,
-                        added_at: None,
-                        imdb: None,
-                        title: String::new(),
-                        year: None,
-                    }
-                });
-                entry.status = outcome
-                    .status
-                    .clone()
-                    .unwrap_or_else(|| "completed".into());
+                let entry =
+                    self.simkl_store
+                        .movies
+                        .entry(key)
+                        .or_insert_with(|| simkl::TrackedMovie {
+                            simkl_id: 0,
+                            tmdb: movie_id,
+                            slug: String::new(),
+                            status: String::new(),
+                            rating: None,
+                            watched_at: None,
+                            added_at: None,
+                            imdb: None,
+                            title: String::new(),
+                            year: None,
+                        });
+                entry.status = outcome.status.clone().unwrap_or_else(|| "completed".into());
             }
             simkl::WriteOp::Rate(value) => {
-                let entry = self.simkl_store.movies.entry(key).or_insert_with(|| {
-                    simkl::TrackedMovie {
-                        simkl_id: 0,
-                        tmdb: movie_id,
-                        slug: String::new(),
-                        status: String::new(),
-                        rating: None,
-                        watched_at: None,
-                        added_at: None,
-                        imdb: None,
-                        title: String::new(),
-                        year: None,
-                    }
-                });
+                let entry =
+                    self.simkl_store
+                        .movies
+                        .entry(key)
+                        .or_insert_with(|| simkl::TrackedMovie {
+                            simkl_id: 0,
+                            tmdb: movie_id,
+                            slug: String::new(),
+                            status: String::new(),
+                            rating: None,
+                            watched_at: None,
+                            added_at: None,
+                            imdb: None,
+                            title: String::new(),
+                            year: None,
+                        });
                 entry.rating = Some(value);
                 if entry.status.is_empty() {
                     entry.status = "completed".into();
@@ -3014,10 +1105,9 @@ impl App {
                 }
             }
         }
-        self.simkl_cards = None;
+
         self.apply_track_flags();
     }
-
     fn simkl_track(&self, movie: &Movie) -> detail::TrackInfo {
         match self.simkl_store.get(movie.id) {
             Some(tracked) => detail::TrackInfo {
@@ -3049,21 +1139,16 @@ impl App {
             },
         }
     }
-
     fn apply_detail_actions(
         &mut self,
         actions: Vec<detail::DetailAction>,
         current_id: u64,
         title: &str,
-        from_chat: bool,
     ) {
         for action in actions {
             match action {
                 detail::DetailAction::Open(id) => {
                     if id == current_id {
-                        if from_chat {
-                            self.switch_mode(ViewMode::Griglia);
-                        }
                         if self.detail.is_some() {
                             self.page = 1;
                             self.grid_query = title.to_string();
@@ -3073,7 +1158,7 @@ impl App {
                             };
                             self.facet_query.clear();
                             self.resanitize();
-                            self.launch_search(false);
+                            self.launch_search();
                         }
                     } else {
                         self.open_detail(id);
@@ -3106,54 +1191,15 @@ impl App {
             }
         }
     }
-
-    /// Avvia la ricerca. `with_ai` = interpreta il testo con l'interprete attivo.
-    fn launch_search(&mut self, with_ai: bool) {
-        self.spawn_search(with_ai);
+    fn launch_search(&mut self) {
+        self.spawn_search();
     }
-
     fn load_trending(&mut self) {
         if self.movies.is_empty() && !self.loading {
             self.page = 1;
-            self.launch_search(false);
+            self.launch_search();
         }
     }
-
-    /// Carica il cartellone "In sala" se la lista e' scaduta. La home la
-    /// chiama a ogni frame, ma la richiesta parte solo ogni ora.
-    fn maybe_refresh_now_playing(&mut self) {
-        if self.home_now_playing_busy || self.tmdb.is_none() {
-            return;
-        }
-        if let Some(next) = self.home_now_playing_next {
-            let wait = next.saturating_duration_since(Instant::now());
-            if !wait.is_zero() {
-                self.ctx.request_repaint_after(wait);
-                return;
-            }
-        }
-        self.start_now_playing();
-    }
-
-    fn start_now_playing(&mut self) {
-        let Some(tmdb) = self.tmdb.clone() else {
-            return;
-        };
-        self.home_now_playing_busy = true;
-        self.home_now_playing_error = None;
-        self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
-        let gen = self.home_now_playing_gen;
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        std::thread::spawn(move || {
-            let res = tmdb.now_playing().map(|p| {
-                in_sala_movies(p.results.into_iter().map(Movie::from).collect())
-            });
-            let _ = tx.send(Msg::NowPlaying { gen, res });
-            ctx.request_repaint();
-        });
-    }
-
     fn close_detail(&mut self) {
         if let Some(d) = &self.detail {
             let open = egui::Id::unique(("rating-open", d.movie.id));
@@ -3166,13 +1212,7 @@ impl App {
         self.detail = None;
         self.detail_loading = false;
         self.detail_gen = self.detail_gen.wrapping_add(1);
-        if self.mode == ViewMode::Chat {
-            self.focus = Some(ViewMode::Chat);
-        }
     }
-
-    /// Un solo pannello laterale per volta: filtri e scheda non si contendono
-    /// la griglia. Aprire i filtri chiude la scheda.
     fn toggle_filters(&mut self) {
         if self.filters_open {
             self.filters_open = false;
@@ -3181,34 +1221,26 @@ impl App {
             self.filters_open = true;
         }
     }
-
-    /// Contesto della scheda: la card della chat spiega perché il film è lì,
-    /// la griglia mostra i criteri che il risultato rispetta.
-    fn detail_context(&self, id: u64) -> Option<(String, String)> {
-        if let Some(card) = self
-            .chat
-            .iter()
-            .rev()
-            .flat_map(|a| a.answer.cards.iter())
-            .find(|c| c.movie.id == id)
-        {
-            if !card.perche.trim().is_empty() {
-                return Some((card.perche.clone(), card.consiglio.clone()));
-            }
-        }
-        if self.mode == ViewMode::Griglia && self.messages.is_empty() {
-            let desc = describe(&self.tax, &self.facets, None);
-            if desc != "Ricerca libera" {
-                return Some((format!("Rispetta i criteri attivi: {desc}."), String::new()));
-            }
-        }
-        None
+    fn detail_context(&self, _id: u64) -> Option<(String, String)> {
+        (!self.facets.is_empty()).then(|| {
+            (
+                describe(
+                    &self.tax,
+                    &self.facets,
+                    constraints::year_range(&self.tax, &self.facets)
+                        .ok()
+                        .flatten(),
+                ),
+                String::new(),
+            )
+        })
     }
-
     fn open_detail(&mut self, id: u64) {
-        let Some(tmdb) = self.tmdb.clone() else { return };
+        let Some(tmdb) = self.tmdb.clone() else {
+            return;
+        };
         self.detail_why = self.detail_context(id);
-        self.detail_focus = self.mode == ViewMode::Chat;
+
         self.close_detail();
         self.filters_open = false;
         self.detail_loading = true;
@@ -3221,9 +1253,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
-    // ------------------------------------------------------------ facce ------
-
     fn resanitize(&mut self) {
         let (f, msgs) = constraints::sanitize(&self.tax, &self.facets);
         self.facets = f;
@@ -3233,7 +1262,6 @@ impl App {
         self.messages = msgs;
         self.prune = constraints::pruning(&self.tax, &self.facets);
     }
-
     fn apply_actions(&mut self, actions: Vec<FacetAction>) {
         if !actions.is_empty() {
             // Toccare i filtri a mano e esplorazione: si torna alla griglia.
@@ -3242,7 +1270,9 @@ impl App {
         }
         for action in actions {
             if matches!(action, FacetAction::Clear(Section::All)) {
-                self.grid_query.clear(); self.facet_query.clear(); self.ai_notes.clear();
+                self.grid_query.clear();
+                self.facet_query.clear();
+                self.notes.clear();
             }
             facets::apply_action(&mut self.facets, action);
         }
@@ -3251,10 +1281,8 @@ impl App {
         if !self.tmdb.is_some() {
             return;
         }
-        self.dirty = Some(Instant::now());
+        self.schedule_search();
     }
-
-    /// Applica un compromesso: toglie un solo vincolo e riparte subito.
     fn apply_unlock(&mut self, index: usize) {
         let Some(u) = self.unlocks.get(index).cloned() else {
             return;
@@ -3264,85 +1292,9 @@ impl App {
         self.page = 1;
         self.resanitize();
         if self.tmdb.is_some() {
-            self.launch_search(false);
+            self.launch_search();
         }
     }
-
-    /// Verifica della credenziale AI: prova una vera interpretazione con il
-    /// collegamento e il modello scritti nel modulo, senza salvare nulla.
-    fn check_ai(&mut self) {
-        let ai = self.settings.ai_cfg();
-        let Some(config) = llm_config(&ai) else {
-            self.ai_check = Some("✕ Scegli un interprete AI.".to_string());
-            return;
-        };
-        if self.settings.provider == "deepseek" && ai.api_key.trim().is_empty() {
-            self.ai_check = Some("✕ Inserisci la chiave API DeepSeek.".to_string());
-            return;
-        }
-        if self.settings.provider == "openrouter" && ai.openrouter_api_key.trim().is_empty() {
-            self.ai_check = Some("✕ Inserisci la chiave API OpenRouter.".to_string());
-            return;
-        }
-        self.ai_checking = true;
-        self.ai_check = Some("Prova in corso…".to_string());
-        let tax = self.tax.clone();
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        std::thread::spawn(move || {
-            let provider = LlmProvider::new(config);
-            let res = provider.probe(&tax);
-            let _ = tx.send(Msg::AiCheck { config: ai, res });
-            ctx.request_repaint();
-        });
-    }
-
-    /// Interroga il servizio e riempie l'elenco dei modelli utilizzabili.
-    fn detect_models(&mut self) {
-        self.models_gen = self.models_gen.wrapping_add(1);
-        let gen = self.models_gen;
-        let (kind, base, key) = match self.settings.provider.as_str() {
-            "deepseek" => {
-                if self.settings.deepseek_key.trim().is_empty() {
-                    self.models_status = Some("✕ Inserisci la chiave API DeepSeek.".to_string());
-                    self.models.clear();
-                    return;
-                }
-                (
-                    LlmKind::OpenAi,
-                    DEEPSEEK_BASE.to_string(),
-                    self.settings.deepseek_key.trim().to_string(),
-                )
-            }
-            "openrouter" => (
-                LlmKind::OpenAi,
-                OPENROUTER_BASE.to_string(),
-                self.settings.openrouter_key.trim().to_string(),
-            ),
-            "ollama" => (
-                LlmKind::Ollama,
-                if self.settings.ollama_url.trim().is_empty() {
-                    "http://localhost:11434".to_string()
-                } else {
-                    self.settings.ollama_url.trim().to_string()
-                },
-                String::new(),
-            ),
-            _ => return,
-        };
-        self.detecting = true;
-        self.ai_check = None;
-        self.models_status = Some("Interrogo il servizio…".to_string());
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        std::thread::spawn(move || {
-            let res = list_models(kind, &base, &key);
-            let _ = tx.send(Msg::Models { gen, res });
-            ctx.request_repaint();
-        });
-    }
-
-    /// Verifica della credenziale senza salvare: usa la chiave scritta nel campo.
     fn check_credentials(&mut self) {
         let key = self.settings.tmdb_key.trim().to_string();
         if key.is_empty() {
@@ -3360,8 +1312,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
-    /// Verifica la chiave TMDB e, se valida, salva e chiude il primo avvio.
     fn start_onboarding(&mut self) {
         if self.onboarding_busy {
             return;
@@ -3383,8 +1333,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
-    /// Scarica i voti IMDb in background e aggiorna la scheda delle Impostazioni.
     fn start_imdb_download(&mut self) {
         if self.imdb_busy {
             return;
@@ -3406,9 +1354,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
-    // --------------------------------------------------------- aggiornamenti ----
-
     fn maybe_check_updates(&mut self) {
         if !update::enabled()
             || self.update.checking
@@ -3426,7 +1371,6 @@ impl App {
             self.start_update_check(false);
         }
     }
-
     fn start_update_check(&mut self, manual: bool) {
         if !update::enabled() {
             if manual {
@@ -3451,7 +1395,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
     fn start_update_download(&mut self) {
         if self.update.progress.is_some() || self.update.downloaded.is_some() {
             return;
@@ -3473,7 +1416,6 @@ impl App {
             ctx.request_repaint();
         });
     }
-
     fn install_update(&mut self) {
         let Some(path) = self.update.downloaded.clone() else {
             return;
@@ -3489,12 +1431,10 @@ impl App {
             }
         }
     }
-
     fn save_settings(&mut self) -> bool {
         let cfg = Config {
             tmdb_api_key: self.settings.tmdb_key.trim().to_string(),
             language: self.settings.language.clone(),
-            ai: self.settings.ai_cfg(),
             simkl: crate::infra::config::SimklCfg {
                 client_id: {
                     let typed = self.settings.simkl_client_id.trim();
@@ -3511,25 +1451,11 @@ impl App {
             Ok(()) => {
                 self.cfg = cfg.clone();
                 self.tmdb = Self::build_tmdb(&cfg);
-                self.home_now_playing.clear();
-                self.home_now_playing_busy = false;
-                self.home_now_playing_error = None;
-                self.home_now_playing_next = None;
-                self.home_now_playing_gen = self.home_now_playing_gen.wrapping_add(1);
-                self.provider = build_provider(&cfg.ai);
                 self.keyword_map.clear();
-                self.ai_cache = None;
-                self.models_gen = self.models_gen.wrapping_add(1);
-                self.models.clear();
-                self.models_status = None;
-                self.ai_check = None;
-                if self.settings.can_detect() {
-                    self.detect_models();
-                }
-                self.toast(format!("Impostazioni salvate · interprete: {}", self.provider.label()));
+                self.toast("Impostazioni salvate.");
                 if self.tmdb.is_some() {
                     self.page = 1;
-                    self.launch_search(false);
+                    self.launch_search();
                 }
                 true
             }
@@ -3539,23 +1465,6 @@ impl App {
             }
         }
     }
-
-    // --------------------------------------------------------------- ui ------
-
-    /// Nome breve dell'interprete per la barra di stato.
-    fn provider_short(&self) -> &'static str {
-        if !self.provider.is_llm() {
-            return "REGOLE";
-        }
-        match self.cfg.ai.provider.as_str() {
-            "deepseek" => "DEEPSEEK",
-            "openrouter" => "OPENROUTER",
-            "ollama" => "OLLAMA",
-            _ => "REGOLE",
-        }
-    }
-
-    /// Top strip LUMEN: marchio, contesto, controlli finestra.
     fn header(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("header")
             .exact_size(48.0)
@@ -3573,42 +1482,37 @@ impl App {
                 }
                 if drag.double_clicked() {
                     let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
-                    ui.ctx().send_viewport_cmd(
-                        egui::viewport::ViewportCommand::Maximized(!max),
-                    );
+                    ui.ctx()
+                        .send_viewport_cmd(egui::viewport::ViewportCommand::Maximized(!max));
                 }
 
-                ui.allocate_ui_with_layout(r.size(), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.add_space(20.0);
-                    ui.label(lumen::display(22.0, "CINE"));
-                    ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
-                    ui.add_space(18.0);
-                    let title = if self.first_run {
-                        "PRIMO AVVIO"
-                    } else if self.show_settings {
-                        "IMPOSTAZIONI"
-                    } else if self.mode == ViewMode::Griglia {
-                        "CATALOGO · SALA 02"
-                    } else {
-                        "CONSIGLI · SALA 01"
-                    };
-                    ui.label(lumen::mono(9.0, title).color(lumen::IVORY));
+                ui.allocate_ui_with_layout(
+                    r.size(),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.add_space(20.0);
+                        ui.label(lumen::display(22.0, "CINE"));
+                        ui.label(lumen::display_color(22.0, "MATCH", lumen::EMBER));
+                        ui.add_space(18.0);
+                        let title = if self.first_run {
+                            "PRIMO AVVIO"
+                        } else if self.show_settings {
+                            "IMPOSTAZIONI"
+                        } else {
+                            "CATALOGO"
+                        };
+                        ui.label(lumen::mono(9.0, title).color(lumen::IVORY));
 
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.spacing_mut().item_spacing.x = 0.0;
                             let cap = 38.0;
                             if window_caption(ui, CaptionIcon::Close, "Chiudi (Alt+F4)", cap)
                                 .clicked()
                             {
-                                ui.ctx().send_viewport_cmd(
-                                    egui::viewport::ViewportCommand::Close,
-                                );
+                                ui.ctx()
+                                    .send_viewport_cmd(egui::viewport::ViewportCommand::Close);
                             }
-                            let max = ui
-                                .ctx()
-                                .input(|i| i.viewport().maximized.unwrap_or(false));
+                            let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
                             let (icon, tip) = if max {
                                 (CaptionIcon::Restore, "Ripristina")
                             } else {
@@ -3626,9 +1530,9 @@ impl App {
                                     egui::viewport::ViewportCommand::Minimized(true),
                                 );
                             }
-                        },
-                    );
-                });
+                        });
+                    },
+                );
 
                 ui.painter().line_segment(
                     [r.left_bottom(), r.right_bottom()],
@@ -3636,8 +1540,6 @@ impl App {
                 );
             });
     }
-
-    /// Rail LUMEN: Chat, Catalogo, Impostazioni.
     fn rail(&mut self, ui: &mut egui::Ui) {
         let mut switch = None;
         let mut settings = false;
@@ -3654,24 +1556,12 @@ impl App {
                 ui.add_space(12.0);
                 if lumen::nav_item(
                     ui,
-                    lumen::Icon::Home,
-                    "Consigli",
-                    Some("Sala 01"),
-                    self.mode == ViewMode::Chat && !self.show_settings,
-                )
-                .on_hover_text("Sala 01 · chiedi in libertà e ricevi film spiegati")
-                .clicked()
-                {
-                    switch = Some(ViewMode::Chat);
-                }
-                if lumen::nav_item(
-                    ui,
                     lumen::Icon::Grid,
                     "Catalogo",
-                    Some("Sala 02"),
+                    None,
                     self.mode == ViewMode::Griglia && !self.show_settings,
                 )
-                .on_hover_text("Sala 02 · il catalogo con i filtri")
+                .on_hover_text("Esplora il catalogo con filtri e correnti")
                 .clicked()
                 {
                     switch = Some(ViewMode::Griglia);
@@ -3690,22 +1580,16 @@ impl App {
                 if settings_resp.clicked() {
                     settings = true;
                 }
-                ui.with_layout(
-                    egui::Layout::bottom_up(egui::Align::LEFT),
-                    |ui| {
-                        ui.add_space(14.0);
-                        ui.horizontal(|ui| {
-                            ui.add_space(12.0);
-                            ui.label(
-                                lumen::mono(
-                                    9.0,
-                                    format!("v{}", update::current_version()),
-                                )
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    ui.add_space(14.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(12.0);
+                        ui.label(
+                            lumen::mono(9.0, format!("v{}", update::current_version()))
                                 .color(lumen::FAINT),
-                            );
-                        });
-                    },
-                );
+                        );
+                    });
+                });
             });
         if let Some(mode) = switch {
             if self.show_settings {
@@ -3722,10 +1606,8 @@ impl App {
             }
         }
     }
-
-    /// Toolbar della griglia, dentro il contenuto a destra della rail.
     fn grid_toolbar(&mut self, ui: &mut egui::Ui) {
-        if self.mode != ViewMode::Griglia || self.show_settings {
+        if self.mode != ViewMode::Griglia || self.show_settings || self.first_run {
             return;
         }
         let compact = ui.ctx().content_rect().width() < 1150.0;
@@ -3752,102 +1634,85 @@ impl App {
                         let count = if self.loading {
                             "CERCO…".to_string()
                         } else {
-                            format!("{} FILM", theme::thousands(self.total))
+                            if self.total_is_exact {
+                                format!("{} FILM", theme::thousands(self.total))
+                            } else {
+                                format!("{} IN PAGINA", self.movies.len())
+                            }
                         };
                         ui.label(lumen::mono(9.0, count).color(lumen::FAINT));
                     }
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            ui.add_space(14.0);
-                            if lumen::icon_button(
-                                ui,
-                                lumen::Icon::Refresh,
-                                34.0,
-                                "Aggiorna il catalogo",
-                            )
-                            .clicked()
-                            {
-                                refresh = true;
-                            }
-                            egui::ComboBox::from_id_salt("grid-sort")
-                                .selected_text(
-                                    egui::RichText::new(self.facets.sort.label()).size(11.0),
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.add_space(14.0);
+                        if lumen::icon_button(
+                            ui,
+                            lumen::Icon::Refresh,
+                            34.0,
+                            "Aggiorna il catalogo",
+                        )
+                        .clicked()
+                        {
+                            refresh = true;
+                        }
+                        egui::ComboBox::from_id_salt("grid-sort")
+                            .selected_text(egui::RichText::new(self.facets.sort.label()).size(11.0))
+                            .width(if compact { 120.0 } else { 150.0 })
+                            .icon(|ui, rect, _visuals, _open| {
+                                let c = rect.center();
+                                let stroke = egui::Stroke::new(1.2_f32, lumen::MUTED);
+                                ui.painter()
+                                    .line_segment([c + egui::vec2(-4.0, -2.0), c], stroke);
+                                ui.painter()
+                                    .line_segment([c + egui::vec2(4.0, -2.0), c], stroke);
+                            })
+                            .show_ui(ui, |ui| {
+                                for s in Sort::ALL {
+                                    ui.selectable_value(&mut self.facets.sort, s, s.label());
+                                }
+                            });
+                        let active = self.facets.active_count();
+                        if facets::panel_toggle(ui, self.filters_open, active).clicked() {
+                            toggle_filters = true;
+                        }
+                        if lumen::button_sized(ui, "Cerca", true, 80.0).clicked() {
+                            do_search = true;
+                        }
+                        let w = ui.available_width().clamp(140.0, 380.0);
+                        let hint = "Cerca un titolo…";
+                        let field_id = egui::Id::unique("grid-query");
+                        let focused = ui.memory(|m| m.has_focus(field_id));
+                        let frame = egui::Frame::NONE
+                            .fill(lumen::DEEP)
+                            .stroke(egui::Stroke::new(
+                                1.0_f32,
+                                if focused { lumen::EMBER } else { lumen::BORDER },
+                            ))
+                            .corner_radius(lumen::radius(lumen::RADIUS_SM))
+                            .inner_margin(egui::Margin::symmetric(10, 7));
+                        let resp = frame
+                            .show(ui, |ui| {
+                                ui.add_sized(
+                                    [(w - 20.0).max(80.0), 20.0],
+                                    egui::TextEdit::singleline(&mut self.grid_query)
+                                        .id(field_id)
+                                        .frame(egui::Frame::NONE)
+                                        .char_limit(MAX_QUERY_CHARS)
+                                        .hint_text(hint)
+                                        .font(egui::TextStyle::Body),
                                 )
-                                .width(if compact { 120.0 } else { 150.0 })
-                                .icon(|ui, rect, _visuals, _open| {
-                                    let c = rect.center();
-                                    let stroke = egui::Stroke::new(1.2_f32, lumen::MUTED);
-                                    ui.painter().line_segment(
-                                        [c + egui::vec2(-4.0, -2.0), c],
-                                        stroke,
-                                    );
-                                    ui.painter().line_segment(
-                                        [c + egui::vec2(4.0, -2.0), c],
-                                        stroke,
-                                    );
-                                })
-                                .show_ui(ui, |ui| {
-                                    for s in Sort::ALL {
-                                        ui.selectable_value(
-                                            &mut self.facets.sort,
-                                            s,
-                                            s.label(),
-                                        );
-                                    }
-                                });
-                            let active = self.facets.active_count();
-                            if facets::panel_toggle(ui, self.filters_open, active).clicked() {
-                                toggle_filters = true;
-                            }
-                            if lumen::button_sized(ui, "Cerca", true, 80.0).clicked() {
-                                do_search = true;
-                            }
-                            let w = ui.available_width().clamp(140.0, 380.0);
-                            let hint = if compact {
-                                "Cerca o descrivi…"
-                            } else if self.provider.is_llm() {
-                                "Descrivi cosa vuoi vedere…"
-                            } else {
-                                "Titolo, corrente, tema…"
-                            };
-                            let field_id = egui::Id::unique("grid-query");
-                            let focused = ui.memory(|m| m.has_focus(field_id));
-                            let frame = egui::Frame::NONE
-                                .fill(lumen::DEEP)
-                                .stroke(egui::Stroke::new(
-                                    1.0_f32,
-                                    if focused { lumen::EMBER } else { lumen::BORDER },
-                                ))
-                                .corner_radius(lumen::radius(lumen::RADIUS_SM))
-                                .inner_margin(egui::Margin::symmetric(10, 7));
-                            let resp = frame
-                                .show(ui, |ui| {
-                                    ui.add_sized(
-                                        [(w - 20.0).max(80.0), 20.0],
-                                        egui::TextEdit::singleline(&mut self.grid_query)
-                                            .id(field_id)
-                                            .frame(egui::Frame::NONE)
-                                            .char_limit(MAX_QUERY_CHARS)
-                                            .hint_text(hint)
-                                            .font(egui::TextStyle::Body),
-                                    )
-                                })
-                                .inner;
-                            if want_focus {
-                                resp.request_focus();
-                            }
-                            if resp.changed() && !self.provider.is_llm() {
-                                self.dirty = Some(Instant::now());
-                            }
-                            if resp.lost_focus()
-                                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                            {
-                                do_search = true;
-                            }
-                        },
-                    );
+                            })
+                            .inner;
+                        if want_focus {
+                            resp.request_focus();
+                        }
+                        if resp.changed() {
+                            self.schedule_search();
+                        }
+                        if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            do_search = true;
+                        }
+                    });
                 });
             });
 
@@ -3856,7 +1721,7 @@ impl App {
         }
         if self.facets.sort != sort_before {
             self.page = 1;
-            self.dirty = Some(Instant::now());
+            self.schedule_search();
         }
         if toggle_filters {
             self.toggle_filters();
@@ -3864,15 +1729,13 @@ impl App {
         if refresh {
             self.resanitize();
             self.page = 1;
-            self.dirty = Some(Instant::now());
+            self.schedule_search();
         }
         if do_search {
             self.page = 1;
-            self.launch_search(true);
+            self.launch_search();
         }
     }
-
-    /// Barra di stato LUMEN.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::bottom("status")
             .exact_size(28.0)
@@ -3883,74 +1746,64 @@ impl App {
                     [r.left_top(), r.right_top()],
                     egui::Stroke::new(1.0_f32, lumen::BORDER),
                 );
-                ui.allocate_ui_with_layout(r.size(), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    ui.add_space(14.0);
-                    let busy = self.loading
-                        || self.home_now_playing_busy
-                        || self.detail_loading
-                        || self.chat_busy
-                        || self.update.checking
-                        || self.detecting
-                        || self.ai_checking
-                        || self.imdb_busy;
-                    let (color, state) = if busy {
-                        (lumen::EMBER, "LAVORO")
-                    } else {
-                        match self.net {
-                            Some(false) => (lumen::DANGER, "OFFLINE"),
-                            Some(true) => (lumen::CELADON, "PRONTO"),
-                            None => (lumen::FAINT, "PRONTO"),
-                        }
-                    };
-                    let (dot, _) = ui.allocate_exact_size(
-                        egui::vec2(6.0, 6.0),
-                        egui::Sense::hover(),
-                    );
-                    ui.painter().circle_filled(dot.center(), 2.5, color);
-                    ui.label(lumen::mono(9.0, state).color(lumen::MUTED));
-                    ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
-                    ui.label(
-                        lumen::mono(
-                            9.0,
-                            if self.tmdb.is_some() {
-                                "TMDB"
-                            } else {
-                                "TMDB NON CONFIGURATO"
-                            },
-                        )
-                        .color(lumen::FAINT),
-                    );
-                    ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
-                    ui.label(lumen::mono(9.0, self.provider_short()).color(lumen::FAINT));
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
+                ui.allocate_ui_with_layout(
+                    r.size(),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.add_space(14.0);
+                        let busy = self.loading
+                            || self.detail_loading
+                            || self.update.checking
+                            || self.imdb_busy;
+                        let (color, state) = if busy {
+                            (lumen::EMBER, "LAVORO")
+                        } else {
+                            match self.net {
+                                Some(false) => (lumen::DANGER, "ATTENZIONE"),
+                                Some(true) => (lumen::CELADON, "PRONTO"),
+                                None => (lumen::FAINT, "PRONTO"),
+                            }
+                        };
+                        let (dot, _) =
+                            ui.allocate_exact_size(egui::vec2(6.0, 6.0), egui::Sense::hover());
+                        ui.painter().circle_filled(dot.center(), 2.5, color);
+                        ui.label(lumen::mono(9.0, state).color(lumen::MUTED));
+                        ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
+                        ui.label(
+                            lumen::mono(
+                                9.0,
+                                if self.tmdb.is_some() {
+                                    "TMDB"
+                                } else {
+                                    "TMDB NON CONFIGURATO"
+                                },
+                            )
+                            .color(lumen::FAINT),
+                        );
+                        ui.label(lumen::mono(9.0, "·").color(lumen::FAINT));
+                        ui.label(lumen::mono(9.0, "FILTRI E CORRENTI").color(lumen::FAINT));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.add_space(14.0);
                             ui.label(
-                                lumen::mono(
-                                    9.0,
-                                    format!("v{}", update::current_version()),
-                                )
-                                .color(lumen::MUTED),
+                                lumen::mono(9.0, format!("v{}", update::current_version()))
+                                    .color(lumen::MUTED),
                             );
                             if self.update.available.is_some() {
-                                ui.label(
-                                    lumen::mono(9.0, "AGGIORNAMENTO")
-                                        .color(lumen::EMBER),
-                                );
+                                ui.label(lumen::mono(9.0, "AGGIORNAMENTO").color(lumen::EMBER));
                             }
-                        },
-                    );
-                });
+                        });
+                    },
+                );
             });
     }
-
-
     fn left_panel(&mut self, ui: &mut egui::Ui) {
-        // Il pannello e uno strumento della griglia: in chat sparisce del
         // tutto, ma lo stato (aperto, filtri, larghezza) resta intatto.
-        if self.mode != ViewMode::Griglia || !self.filters_open || self.show_settings {
+        if self.mode != ViewMode::Griglia
+            || !self.filters_open
+            || self.show_settings
+            || self.first_run
+        {
             return;
         }
         let (left_max, _) = side_panel_widths(ui.ctx().content_rect().width());
@@ -4002,7 +1855,7 @@ impl App {
                             &mut self.guide_open,
                             &self.messages,
                             &self.info,
-                            &self.ai_notes,
+                            &self.notes,
                         ));
                     });
                 if !actions.is_empty() {
@@ -4010,10 +1863,8 @@ impl App {
                 }
             });
     }
-
     fn right_panel(&mut self, ui: &mut egui::Ui) {
-        // La scheda appartiene alla griglia; la chat resta a tutta larghezza.
-        if self.mode != ViewMode::Griglia || self.show_settings {
+        if self.mode != ViewMode::Griglia || self.show_settings || self.first_run {
             return;
         }
         // I filtri hanno la precedenza: mai due pannelli aperti insieme.
@@ -4040,8 +1891,10 @@ impl App {
                         fx::shimmer(ui, poster, 14.0, now);
                         ui.add_space(12.0);
                         for (i, part) in [0.9_f32, 0.6, 0.75, 0.4].iter().enumerate() {
-                            let (line, _) = ui
-                                .allocate_exact_size(egui::vec2(w * part, 13.0), egui::Sense::hover());
+                            let (line, _) = ui.allocate_exact_size(
+                                egui::vec2(w * part, 13.0),
+                                egui::Sense::hover(),
+                            );
                             fx::shimmer(ui, line, 6.0, now + 0.25 * i as f64);
                             ui.add_space(7.0);
                         }
@@ -4075,116 +1928,17 @@ impl App {
                     Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
                     None => (None, None),
                 };
-                let actions = detail::panel(
-                    ui,
-                    &self.images,
-                    &d,
-                    false,
-                    &track,
-                    why,
-                    consiglio,
-                    false,
-                );
-                self.apply_detail_actions(actions, d.movie.id, &d.movie.title, false);
+                let actions =
+                    detail::panel(ui, &self.images, &d, false, &track, why, consiglio, false);
+                self.apply_detail_actions(actions, d.movie.id, &d.movie.title);
             });
     }
-
-    /// Anteprima centrale della scheda in chat: un dialogo sopra la
-    /// conversazione, senza cambiare vista.
-    fn chat_detail_preview(&mut self, ctx: &egui::Context) {
-        if self.mode != ViewMode::Chat || self.show_settings || self.guide_open {
-            return;
-        }
-        if self.detail.is_none() && !self.detail_loading {
-            return;
-        }
-        let (area_rect, modal) = detail_preview_rect(ctx.content_rect());
-        let d = self.detail.clone();
-        let (why, consiglio) = match &self.detail_why {
-            Some((p, c)) => (Some(p.as_str()), (!c.is_empty()).then_some(c.as_str())),
-            None => (None, None),
-        };
-        let focus_close = d.is_some() && self.detail_focus;
-        if focus_close {
-            self.detail_focus = false;
-        }
-        let mut actions = Vec::new();
-        egui::Area::new(egui::Id::unique("chat-detail-preview"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(area_rect.min)
-            .show(ctx, |ui| {
-                // Limita Tab e focus alla scheda e ai suoi popover.
-                ui.ctx()
-                    .memory_mut(|m| m.set_modal_layer(ui.layer_id()));
-                ui.set_clip_rect(area_rect);
-                ui.painter().rect_filled(
-                    area_rect,
-                    egui::CornerRadius::ZERO,
-                    lumen::alpha(lumen::INK, 205),
-                );
-                // Blocca la chat sotto il velo.
-                let _ = ui.interact(
-                    area_rect,
-                    egui::Id::unique("chat-detail-scrim"),
-                    egui::Sense::CLICK,
-                );
-                ui.painter().rect_filled(
-                    modal,
-                    lumen::radius(lumen::RADIUS),
-                    lumen::INK,
-                );
-                ui.painter().rect_stroke(
-                    modal,
-                    lumen::radius(lumen::RADIUS),
-                    egui::Stroke::new(1.0_f32, lumen::BORDER_HI), egui::StrokeKind::Inside);
-                let inner = modal.shrink(16.0);
-                if let Some(d) = &d {
-                    let track = self.simkl_track(&d.movie);
-                    ui.scope_builder(
-                        egui::UiBuilder::new().max_rect(inner),
-                        |ui| {
-                            ui.set_min_size(inner.size());
-                            ui.set_max_size(inner.size());
-                            ui.set_clip_rect(inner);
-                            actions = detail::panel(
-                                ui,
-                                &self.images,
-                                d,
-                                true,
-                                &track,
-                                why,
-                                consiglio,
-                                focus_close,
-                            );
-                        },
-                    );
-                } else {
-                    ui.painter().text(
-                        modal.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "Carico la scheda…",
-                        egui::FontId::new(9.0, egui::FontFamily::Name(crate::ui::fonts::LUMEN_MONO.into())),
-                        lumen::FAINT,
-                    );
-                }
-            });
-        if let Some(d) = &d {
-            self.apply_detail_actions(actions, d.movie.id, &d.movie.title, true);
-        }
-    }
-
     fn central(&mut self, ui: &mut egui::Ui) {
-        let chat = self.mode == ViewMode::Chat && !self.show_settings && !self.first_run;
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
                     .fill(egui::Color32::TRANSPARENT)
-                    // In chat il composer arriva fino al piè di pagina; la
-                    // griglia conserva il suo respiro sopra e sotto.
-                    .inner_margin(egui::Margin::symmetric(
-                        if chat { 0 } else { 14 },
-                        if chat { 0 } else { 10 },
-                    )),
+                    .inner_margin(egui::Margin::symmetric(14, 10)),
             )
             .show(ui, |ui| {
                 if self.first_run {
@@ -4225,114 +1979,9 @@ impl App {
                     return;
                 }
 
-                if self.mode == ViewMode::Chat {
-                    let ctx = ui.ctx().clone();
-                    self.chat_central(ui, &ctx);
-                } else {
-                    self.grid_central(ui);
-                }
+                self.grid_central(ui);
             });
     }
-
-    /// Casa e conversazione LUMEN. Il composer della conversazione vive in un
-    /// pannello fisso sopra la barra di stato; la casa ha il comando in alto.
-    fn chat_central(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        self.ensure_fonts_for_results();
-        self.ensure_simkl_posters();
-        let now = ctx.input(|i| i.time);
-        if self.chat.is_empty() {
-            self.maybe_refresh_now_playing();
-            self.refresh_home_suggestions(false);
-            let want_focus = self.focus == Some(ViewMode::Chat);
-            let resume_cards = self.simkl_resume_cards();
-            let watchlist_cards = self.simkl_watchlist_cards();
-            let actions = chat::home(
-                ui,
-                &self.images,
-                &self.home_now_playing,
-                self.home_now_playing_busy,
-                self.home_now_playing_error.as_deref(),
-                &mut self.chat_draft,
-                self.chat_busy,
-                self.provider.is_llm(),
-                want_focus,
-                &self.tax,
-                &self.suggestions,
-                &resume_cards,
-                &watchlist_cards,
-            );
-            if want_focus {
-                self.focus = None;
-            }
-            if let Some(id) = actions.open_detail {
-                self.open_detail(id);
-            }
-            if actions.more_suggestions {
-                self.refresh_home_suggestions(true);
-            }
-            if actions.retry_now_playing {
-                self.start_now_playing();
-            }
-            if let Some(text) = actions.prefill {
-                self.chat_draft = text;
-                self.focus = Some(ViewMode::Chat);
-            }
-            if actions.surprise {
-                self.suggestion_cycle = self.suggestion_cycle.wrapping_add(1);
-                let visible: Vec<String> = self
-                    .suggestions
-                    .iter()
-                    .map(|s| s.prompt.clone())
-                    .collect();
-                self.chat_draft = suggestions::surprise(
-                    &self.suggestion_pool,
-                    &visible,
-                    self.suggestion_cycle,
-                );
-                self.focus = Some(ViewMode::Chat);
-            }
-            if actions.send {
-                self.send_chat();
-            }
-        } else {
-            let actions = {
-                let images = &self.images;
-                let tax = &self.tax;
-                let entries = &self.chat;
-                let busy = self.chat_busy;
-                let jump = &mut self.chat_jump;
-                chat::view(
-                    ui, images, tax, entries, busy, now, jump, 20.0,
-                )
-            };
-            self.apply_chat_actions(actions);
-        }
-    }
-
-    /// Composer della conversazione: pannello fisso sopra la barra di stato,
-    /// allineato alla colonna dei risultati.
-    fn chat_composer(&mut self, ui: &mut egui::Ui) {
-        if self.mode != ViewMode::Chat
-            || self.chat.is_empty()
-            || self.show_settings
-            || self.first_run
-            || self.guide_open
-        {
-            return;
-        }
-        let want_focus = self.focus == Some(ViewMode::Chat);
-        let send = chat::docked_composer(ui, &mut self.chat_draft, self.chat_busy, want_focus);
-        if want_focus {
-            self.focus = None;
-        }
-        if send {
-            self.send_chat();
-        }
-    }
-
-
-    /// Griglia a tutta altezza: conteggio e comandi stanno nella barra di
-    /// comando, quindi qui restano i poster.
     fn grid_central(&mut self, ui: &mut egui::Ui) {
         if !self.loading && self.movies.len() <= 3 && !self.unlocks.is_empty() {
             if let Some(i) = unlock::strip(ui, &self.unlocks) {
@@ -4341,18 +1990,12 @@ impl App {
             }
             ui.add_space(12.0);
         }
-        let selected = self.detail.as_ref().map(|d| d.movie.id);
-        let reset_scroll = std::mem::take(&mut self.grid_reset_scroll);
-        let clicked = grid::grid(ui, &self.images, &self.movies, selected, reset_scroll);
-        if let Some(id) = clicked {
-            self.open_detail(id);
-        }
         if self.movies.is_empty() && !self.loading {
             let mut retry = false;
             ui.add_space(30.0);
             ui.vertical_centered(|ui| {
                 if let Some(err) = &self.results_error {
-                    ui.label(lumen::display(20.0, "TMDB non risponde"));
+                    ui.label(lumen::display(20.0, "Ricerca non completata"));
                     ui.add_space(6.0);
                     ui.label(lumen::body(12.0, err).color(lumen::MUTED));
                     ui.add_space(10.0);
@@ -4361,28 +2004,52 @@ impl App {
                     }
                 } else {
                     ui.label(
-                        egui::RichText::new("Nessun risultato con questi vincoli")
-                            .size(15.0)
-                            .color(theme::DIM),
+                        egui::RichText::new(if !self.total_is_exact && self.total_pages > 1 {
+                            "Nessun risultato compatibile in questa pagina"
+                        } else {
+                            "Nessun risultato con questi vincoli"
+                        })
+                        .size(15.0)
+                        .color(theme::DIM),
                     );
                     ui.label(
-                        egui::RichText::new(
-                            "Togli un filtro dal pannello: il motore di vincoli spiega cosa era in conflitto.",
-                        )
+                        egui::RichText::new(if !self.total_is_exact && self.total_pages > 1 {
+                            "Prova la pagina successiva oppure modifica i filtri."
+                        } else {
+                            "Modifica i filtri oppure scegli uno dei suggerimenti disponibili."
+                        })
                         .size(12.0)
                         .color(theme::DIM),
                     );
                 }
             });
             if retry {
-                self.launch_search(false);
+                self.launch_search();
             }
+            return;
+        }
+        let selected = self.detail.as_ref().map(|d| d.movie.id);
+        let reset_scroll = std::mem::take(&mut self.grid_reset_scroll);
+        if self.loading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(lumen::body(12.0, "Aggiorno il catalogo…").color(lumen::MUTED));
+            });
+            ui.add_space(8.0);
+        }
+        let clicked = ui
+            .add_enabled_ui(!self.loading, |ui| {
+                grid::grid(ui, &self.images, &self.movies, selected, reset_scroll)
+            })
+            .inner;
+        if let Some(id) = clicked {
+            self.open_detail(id);
         }
     }
-
-    /// Pager fisso sopra la barra di stato: pagina corrente a sinistra,
-    /// frecce a destra. Non ruba spazio quando c'è una pagina sola.
     fn grid_pager(&mut self, ui: &mut egui::Ui) {
+        if self.first_run {
+            return;
+        }
         if self.mode != ViewMode::Griglia || self.total_pages <= 1 || self.show_settings {
             return;
         }
@@ -4404,29 +2071,18 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.add_space(20.0);
                     ui.label(
-                        lumen::mono(9.0, format!("PAGINA {page} DI {pages}"))
-                            .color(lumen::FAINT),
+                        lumen::mono(9.0, format!("PAGINA {page} DI {pages}")).color(lumen::FAINT),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add_space(20.0);
-                        if pager_button(
-                            ui,
-                            lumen::Icon::ArrowRight,
-                            next,
-                            "Pagina successiva",
-                        )
-                        .clicked()
+                        if pager_button(ui, lumen::Icon::ArrowRight, next, "Pagina successiva")
+                            .clicked()
                         {
                             target = Some((page + 1).min(pages));
                         }
                         ui.add_space(6.0);
-                        if pager_button(
-                            ui,
-                            lumen::Icon::ArrowLeft,
-                            prev,
-                            "Pagina precedente",
-                        )
-                        .clicked()
+                        if pager_button(ui, lumen::Icon::ArrowLeft, prev, "Pagina precedente")
+                            .clicked()
                         {
                             target = Some(page.saturating_sub(1));
                         }
@@ -4435,10 +2091,9 @@ impl App {
             });
         if let Some(page) = target {
             self.page = page;
-            self.spawn_search(false);
+            self.spawn_search();
         }
     }
-
     fn onboarding_page(&mut self, ui: &mut egui::Ui) {
         let mut verify = false;
         let mut skip = false;
@@ -4464,7 +2119,7 @@ impl App {
                             ui.label(
                                 lumen::body(
                                     13.0,
-                                    "CineMatch legge i film da TMDB. La chiave è gratuita e resta sul tuo PC, nel Windows Credential Manager. AI e SIMKL si collegano dopo: non servono per iniziare.",
+                                    "CineMatch legge i film da TMDB. Inserisci la credenziale per esplorare il catalogo con filtri e correnti. SIMKL è facoltativo.",
                                 )
                                 .color(lumen::MUTED),
                             );
@@ -4529,7 +2184,7 @@ impl App {
                             ui.label(
                                 lumen::body(
                                     10.5,
-                                    "La chiave viene usata solo per TMDB e non viene inviata a CineMatch. AI e SIMKL sono opzionali.",
+                                    "La credenziale viene salvata nel Windows Credential Manager e usata per accedere a TMDB.",
                                 )
                                 .color(lumen::FAINT),
                             );
@@ -4550,16 +2205,12 @@ impl App {
         if skip {
             self.first_run = false;
             self.show_settings = false;
-            self.mode = ViewMode::Chat;
+            self.mode = ViewMode::Griglia;
         }
     }
-
     fn settings_dirty(&self) -> bool {
         self.settings != SettingsDraft::from(&self.cfg)
     }
-
-    /// Chiude le Impostazioni solo se non ci sono modifiche da perdere.
-    /// `after` è la vista da aprire subito dopo, se richiesta dal rail.
     fn request_close_settings(&mut self, after: Option<ViewMode>) {
         if self.settings_dirty() {
             self.settings_close_confirm = true;
@@ -4571,19 +2222,13 @@ impl App {
             }
         }
     }
-
     fn settings_page(&mut self, ui: &mut egui::Ui) {
         let checked_key = self.settings.tmdb_key.clone();
-        let checked_ai = self.settings.ai_cfg();
         let mut close = false;
         let mut onboarding = false;
         let mut save = false;
         let mut check = false;
-        let mut detect = false;
-        let mut probe = false;
         let mut open_api_page = false;
-        let mut open_deepseek_page = false;
-        let mut open_openrouter_page = false;
         let mut update_check = false;
         let mut update_download = false;
         let mut update_install = false;
@@ -4637,7 +2282,7 @@ impl App {
                     ui.label(
                         lumen::body(
                             11.5,
-                            "Chiavi e preferenze restano su questo PC. SIMKL sincronizza visti, lista e voti solo quando lo chiedi.",
+                            "Credenziali e preferenze restano su questo PC. SIMKL gestisce visti, lista e voti dell’account collegato.",
                         )
                         .color(lumen::MUTED),
                     );
@@ -4818,7 +2463,7 @@ impl App {
                 ui.add_space(6.0);
                 ui.checkbox(
                     &mut self.settings.simkl_hide_watched,
-                    egui::RichText::new("Nascondi i film già visti nel catalogo e in chat")
+                    egui::RichText::new("Nascondi i film già visti nel catalogo")
                         .size(11.0)
                         .color(theme::DIM),
                 );
@@ -5012,212 +2657,6 @@ impl App {
                 ui.add_space(8.0);
                 lumen::hairline(ui);
                 ui.add_space(4.0);
-                ui.label(lumen::mono(10.0, "INTERPRETE").color(lumen::IVORY));
-                ui.add_space(2.0);
-                ui.label(
-                    lumen::body(
-                        11.0,
-                        "Le regole funzionano offline. Un modello è opzionale: i film arrivano sempre da TMDB.",
-                    )
-                    .color(lumen::MUTED),
-                );
-                ui.add_space(6.0);
-                let previous_provider = self.settings.provider.clone();
-                ui.horizontal_wrapped(|ui| {
-                    for (id, label) in [
-                        ("rules", "Regole offline"),
-                        ("deepseek", "DeepSeek"),
-                        ("openrouter", "OpenRouter"),
-                        ("ollama", "Ollama (locale)"),
-                    ] {
-                        ui.selectable_value(
-                            &mut self.settings.provider,
-                            id.to_string(),
-                            egui::RichText::new(label).size(11.5),
-                        );
-                    }
-                });
-                if self.settings.provider != previous_provider {
-                    self.models_gen = self.models_gen.wrapping_add(1);
-                    self.models.clear();
-                    self.models_status = None;
-                    self.ai_check = None;
-                    self.detecting = false;
-                    detect = self.settings.can_detect();
-                }
-
-                if self.settings.provider == "deepseek" {
-                    ui.label(
-                        egui::RichText::new("Chiave API DeepSeek (resta su questo PC)")
-                            .size(11.0)
-                            .color(theme::DIM),
-                    );
-                    let field = ui.add(
-                        egui::TextEdit::singleline(&mut self.settings.deepseek_key)
-                            .password(true)
-                            .hint_text("sk-…")
-                            .desired_width(f32::INFINITY),
-                    );
-                    field.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::Role::TextInput,
-                            true,
-                            "Chiave API DeepSeek",
-                        )
-                    });
-                    if ui
-                        .hyperlink_to(
-                            egui::RichText::new("Crea o copia la chiave su platform.deepseek.com")
-                                .size(10.5),
-                            "https://platform.deepseek.com/api_keys",
-                        )
-                        .clicked()
-                    {
-                        open_deepseek_page = true;
-                    }
-                    ui.add_space(4.0);
-                    ui.label(egui::RichText::new("Modello DeepSeek").size(11.0).color(theme::DIM));
-                    model_picker(
-                        ui,
-                        &mut self.settings.deepseek_model,
-                        &self.models,
-                        DEEPSEEK_MODEL,
-                    );
-                } else if self.settings.provider == "openrouter" {
-                    ui.label(
-                        egui::RichText::new("Chiave API OpenRouter (resta su questo PC)")
-                            .size(11.0)
-                            .color(theme::DIM),
-                    );
-                    let field = ui.add(
-                        egui::TextEdit::singleline(&mut self.settings.openrouter_key)
-                            .password(true)
-                            .hint_text("sk-or-…")
-                            .desired_width(f32::INFINITY),
-                    );
-                    field.widget_info(|| {
-                        egui::WidgetInfo::labeled(
-                            egui::Role::TextInput,
-                            true,
-                            "Chiave API OpenRouter",
-                        )
-                    });
-                    if ui
-                        .hyperlink_to(
-                            egui::RichText::new("Crea o copia la chiave su openrouter.ai")
-                                .size(10.5),
-                            "https://openrouter.ai/keys",
-                        )
-                        .clicked()
-                    {
-                        open_openrouter_page = true;
-                    }
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("Modello OpenRouter")
-                            .size(11.0)
-                            .color(theme::DIM),
-                    );
-                    model_picker(
-                        ui,
-                        &mut self.settings.openrouter_model,
-                        &self.models,
-                        OPENROUTER_MODEL,
-                    );
-                    ui.label(
-                        egui::RichText::new(
-                            "L'elenco mostra tutti i modelli pubblicati da OpenRouter: scegli quello che vuoi usare.",
-                        )
-                        .size(10.0)
-                        .color(theme::DIM),
-                    );
-                } else if self.settings.provider == "ollama" {
-                    ui.label(
-                        egui::RichText::new("Collegamento Ollama")
-                            .size(11.0)
-                            .color(theme::DIM),
-                    );
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.settings.ollama_url)
-                            .hint_text("http://localhost:11434")
-                            .desired_width(f32::INFINITY),
-                    );
-                    ui.add_space(4.0);
-                    ui.label(egui::RichText::new("Modello Ollama").size(11.0).color(theme::DIM));
-                    model_picker(
-                        ui,
-                        &mut self.settings.ollama_model,
-                        &self.models,
-                        "qwen2.5:3b",
-                    );
-                }
-
-                if self.settings.provider == "deepseek" {
-                    ui.add_space(6.0);
-                    effort_picker(ui, &mut self.settings.effort, None);
-                } else if self.settings.provider == "openrouter" {
-                    ui.add_space(6.0);
-                    let model = self
-                        .models
-                        .iter()
-                        .find(|m| m.id == self.settings.openrouter_model)
-                        .cloned();
-                    effort_picker(ui, &mut self.settings.effort, model.as_ref());
-                }
-
-                if self.settings.provider != "rules" {
-                    ui.add_space(6.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        let detect_btn = ui
-                            .add_enabled_ui(!self.detecting, |ui| {
-                                lumen::button_sized(ui, "Rileva modelli", false, 130.0)
-                            })
-                            .inner;
-                        if detect_btn.clicked() {
-                            detect = true;
-                        }
-                        let probe_btn = ui
-                            .add_enabled_ui(!self.ai_checking, |ui| {
-                                lumen::button_sized(ui, "Verifica risposta AI", false, 170.0)
-                            })
-                            .inner;
-                        if probe_btn.clicked() {
-                            probe = true;
-                        }
-                    });
-                    if let Some(status) = &self.models_status {
-                        let color = if status.starts_with('✔') {
-                            theme::OK
-                        } else if status.starts_with("Interrogo") {
-                            theme::DIM
-                        } else {
-                            theme::DANGER
-                        };
-                        ui.label(
-                            egui::RichText::new(theme::truncate(status, 160))
-                                .size(10.5)
-                                .color(color),
-                        );
-                    }
-                    if let Some(status) = &self.ai_check {
-                        let color = if status.starts_with('✔') {
-                            theme::OK
-                        } else if status.starts_with("Prova") {
-                            theme::DIM
-                        } else {
-                            theme::DANGER
-                        };
-                        ui.label(
-                            egui::RichText::new(theme::truncate(status, 160))
-                                .size(10.5)
-                                .color(color),
-                        );
-                    }
-                }
-
-                ui.add_space(8.0);
-                lumen::hairline(ui);
                 language_picker(ui, &mut self.settings.language);
 
                 // ---- dati locali: voti IMDb ----
@@ -5229,9 +2668,9 @@ impl App {
                 let ready = crate::infra::imdb::is_ready();
                 ui.horizontal(|ui| {
                     let label = if ready {
-                        "Aggiorna i voti IMDb (7 MB)"
+                        "Aggiorna i voti IMDb"
                     } else {
-                        "Scarica i voti IMDb (7 MB)"
+                        "Scarica i voti IMDb"
                     };
                     let imdb_btn = ui
                         .add_enabled_ui(!self.imdb_busy, |ui| {
@@ -5240,7 +2679,7 @@ impl App {
                         .inner;
                     if imdb_btn
                         .on_hover_text(
-                            "Dati pubblici IMDb (datasets.imdbws.com): nessuna chiave, nessun limite. Consente di mostrare il voto IMDb accanto a quello TMDB.",
+                            "Dataset IMDb per uso personale e non commerciale, salvato su questo PC. Mostra il voto IMDb accanto a quello TMDB.",
                         )
                         .clicked()
                     {
@@ -5315,18 +2754,11 @@ impl App {
         if checked_key != self.settings.tmdb_key {
             self.settings_check = None;
         }
-        if checked_ai != self.settings.ai_cfg() {
-            self.ai_check = None;
-        }
+
         if open_api_page {
             open_url("https://www.themoviedb.org/settings/api");
         }
-        if open_deepseek_page {
-            open_url("https://platform.deepseek.com/api_keys");
-        }
-        if open_openrouter_page {
-            open_url("https://openrouter.ai/keys");
-        }
+
         if update_check {
             self.start_update_check(true);
         }
@@ -5339,12 +2771,7 @@ impl App {
         if check {
             self.check_credentials();
         }
-        if detect {
-            self.detect_models();
-        }
-        if probe {
-            self.check_ai();
-        }
+
         if save {
             self.save_settings();
         }
@@ -5366,10 +2793,9 @@ impl App {
         if onboarding {
             self.first_run = true;
             self.show_settings = false;
-            self.mode = ViewMode::Chat;
+            self.mode = ViewMode::Griglia;
         }
     }
-
     fn settings_close_dialog(&mut self, ctx: &egui::Context) {
         if !self.settings_close_confirm {
             return;
@@ -5436,56 +2862,10 @@ impl App {
             }
         }
     }
-
-    fn new_chat_dialog(&mut self, ctx: &egui::Context) {
-        if !self.new_chat_confirm {
-            return;
-        }
-        let mut cancel = false;
-        let mut confirm = false;
-        let modal = egui::Modal::new(egui::Id::unique("new-chat-confirm"))
-            .backdrop_color(lumen::alpha(lumen::INK, 190))
-            .frame(
-                egui::Frame::NONE
-                    .fill(lumen::SURFACE)
-                    .stroke(egui::Stroke::new(1.0_f32, lumen::BORDER_HI))
-                    .corner_radius(lumen::radius(lumen::RADIUS))
-                    .inner_margin(egui::Margin::same(18)),
-            )
-            .show(ctx, |ui| {
-                ui.set_width(360.0);
-                ui.label(lumen::display(22.0, "Nuova chat?"));
-                ui.add_space(6.0);
-                ui.label(
-                    lumen::body(12.0, "La conversazione attuale verrà eliminata.")
-                        .color(lumen::MUTED),
-                );
-                ui.add_space(14.0);
-                ui.horizontal(|ui| {
-                    if lumen::button_sized(ui, "Annulla", false, 110.0).clicked() {
-                        cancel = true;
-                    }
-                    if lumen::button_sized(ui, "Nuova chat", true, 130.0).clicked() {
-                        confirm = true;
-                    }
-                });
-            });
-        if modal.should_close() {
-            cancel = true;
-        }
-        if cancel {
-            self.new_chat_confirm = false;
-        }
-        if confirm {
-            self.new_chat_confirm = false;
-            self.new_chat();
-            self.mode = ViewMode::Chat;
-            self.focus = Some(ViewMode::Chat);
-        }
-    }
-
     fn toast_overlay(&mut self, ctx: &egui::Context) {
-        let Some((msg, at)) = self.toast.clone() else { return };
+        let Some((msg, at)) = self.toast.clone() else {
+            return;
+        };
         let t = at.elapsed().as_secs_f32();
         let life = 5.0_f32;
         if t > life {
@@ -5496,16 +2876,7 @@ impl App {
         let enter = (t / 0.22).clamp(0.0, 1.0);
         let fade = ((life - t) / 0.45).clamp(0.0, 1.0);
         let a = (enter * fade).clamp(0.0, 1.0);
-        // In conversazione il composer occupa il fondo: il toast sale sopra.
-        let lift = if self.mode == ViewMode::Chat
-            && !self.chat.is_empty()
-            && !self.show_settings
-            && !self.guide_open
-        {
-            100.0
-        } else {
-            74.0
-        };
+        let lift = 74.0;
         let y = -lift + (1.0 - enter) * 20.0;
         egui::Area::new(egui::Id::unique("toast"))
             .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, y))
@@ -5538,15 +2909,6 @@ impl App {
         };
         ctx.request_repaint_after(wait);
     }
-}
-
-impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.update_ui(ui);
-    }
-}
-
-impl App {
     fn update_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.poll();
@@ -5572,13 +2934,10 @@ impl App {
         self.status_bar(ui);
         self.rail(ui);
         self.grid_toolbar(ui);
-        self.chat_composer(ui);
         self.left_panel(ui);
         self.right_panel(ui);
         self.grid_pager(ui);
         self.central(ui);
-        self.chat_detail_preview(&ctx);
-        self.new_chat_dialog(&ctx);
         self.settings_close_dialog(&ctx);
         if self.guide_open {
             let actions = facets::guide_window(&ctx, &self.tax, &mut self.guide_open);
@@ -5589,19 +2948,12 @@ impl App {
         self.toast_overlay(&ctx);
         if self.loading
             || self.detail_loading
-            || self.chat_busy
             || self.update.checking
             || self.update.progress.is_some()
         {
             ctx.request_repaint_after(Duration::from_millis(120));
         }
     }
-}
-
-impl App {
-    /// Scorciatoie globali: «/» e Ctrl+K portano il fuoco nel campo della vista
-    /// attiva, Ctrl+1/2 cambiano sala, Ctrl+N apre una chat nuova, Ctrl+B apre i
-    /// filtri solo nella griglia.
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let typing = ctx.memory(|m| m.focused().is_some());
         // «/» e' un tasto fisico su alcune tastiere e Shift+7 su quella
@@ -5617,8 +2969,7 @@ impl App {
             self.focus = Some(self.mode);
             ctx.input_mut(|i| {
                 i.consume_key(egui::Modifiers::NONE, egui::Key::Slash);
-                i.events
-                    .retain(|e| !matches!(e, egui::Event::Text(_)));
+                i.events.retain(|e| !matches!(e, egui::Event::Text(_)));
             });
         }
         if self.show_settings
@@ -5629,38 +2980,14 @@ impl App {
         {
             self.toast("Impostazioni salvate.");
         }
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Num1)) {
-            self.switch_mode(ViewMode::Chat);
-        }
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Num2)) {
-            self.switch_mode(ViewMode::Griglia);
-        }
-        // Ctrl+K riporta il fuoco al campo della vista attiva anche quando il
-        // mouse è altrove; Ctrl+N apre una chat nuova con la stessa conferma
-        // del pulsante in alto.
-        if !self.show_settings && !self.first_run && !self.guide_open && !self.new_chat_confirm
-            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
-        {
-            self.focus = Some(self.mode);
-        }
         if !self.show_settings
             && !self.first_run
             && !self.guide_open
-            && !self.new_chat_confirm
-            && self.detail.is_none()
-            && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::N))
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
         {
-            if self.mode != ViewMode::Chat {
-                self.switch_mode(ViewMode::Chat);
-            }
-            if self.chat.is_empty() && !self.chat_busy {
-                self.new_chat();
-            } else {
-                self.new_chat_confirm = true;
-            }
+            self.focus = Some(ViewMode::Griglia);
         }
         // Ctrl+B resta attivo anche con un widget a fuoco: e' il toggle
-        // della sidebar, non un comando di testo. In chat non esiste.
         if self.mode == ViewMode::Griglia
             && ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::B))
         {
@@ -5702,130 +3029,34 @@ impl App {
         }
     }
 }
-
-fn merge_themes(base: &mut Vec<Theme>, extra: &[Theme]) {
-    for theme in extra {
-        if let Some(existing) = base
-            .iter_mut()
-            .find(|t| t.label.eq_ignore_ascii_case(&theme.label))
-        {
-            for concept in &theme.concepts {
-                if !existing
-                    .concepts
-                    .iter()
-                    .any(|c| c.label.eq_ignore_ascii_case(&concept.label))
-                {
-                    existing.concepts.push(concept.clone());
-                }
-            }
-            for title in &theme.seed_titles {
-                if !existing.seed_titles.contains(title) {
-                    existing.seed_titles.push(title.clone());
-                }
-            }
-        } else {
-            base.push(theme.clone());
-        }
-    }
-    base.truncate(2);
-}
-
-fn merge_facets(base: &mut Facets, extra: &Facets, cleared: &Cleared) {
-    for v in &extra.decades {
-        if !base.decades.contains(v) {
-            base.decades.push(v.clone());
-        }
-    }
-    for v in &extra.movements {
-        if !base.movements.contains(v) {
-            base.movements.push(v.clone());
-        }
-    }
-    for v in &extra.genres {
-        if !base.genres.contains(v) {
-            base.genres.push(*v);
-        }
-    }
-    for v in &extra.without_genres {
-        if !base.without_genres.contains(v) {
-            base.without_genres.push(*v);
-        }
-    }
-    // I paesi si sostituiscono: «solo italiani» significa cambiare paese,
-    // non aggiungere l'Italia a un filtro precedente.
-    if !extra.countries.is_empty() {
-        base.countries = extra.countries.clone();
-    }
-    for v in &extra.moods {
-        if !base.moods.contains(v) {
-            base.moods.push(v.clone());
-        }
-    }
-    for v in &extra.keywords {
-        if !base.keywords.contains(v) {
-            base.keywords.push(v.clone());
-        }
-    }
-    if cleared.min_rating {
-        base.min_rating = None;
-    } else if extra.min_rating.is_some() {
-        base.min_rating = extra.min_rating;
-    }
-    if cleared.max_rating {
-        base.max_rating = None;
-    } else if extra.max_rating.is_some() {
-        base.max_rating = extra.max_rating;
-    }
-    if cleared.min_votes {
-        base.min_votes = None;
-    } else if extra.min_votes.is_some() {
-        base.min_votes = extra.min_votes;
-    }
-    if cleared.runtime {
-        base.runtime = None;
-    } else if extra.runtime.is_some() {
-        base.runtime = extra.runtime;
-    }
-    if extra.sort != Sort::default() {
-        base.sort = extra.sort;
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.update_ui(ui);
     }
 }
-
-/// Legge fino a `TITLE_PAGE_CAP` pagine di una ricerca per titolo quando i
-/// filtri sono locali: TMDB non li applica e la prima pagina puo' non
-/// contenerli.
-fn search_title_pages(tmdb: &Tmdb, query: &str) -> Result<(Vec<Movie>, u32), String> {
-    let mut raw = Vec::new();
-    let mut total = 0u32;
-    for page in 1..=TITLE_PAGE_CAP {
-        let found = if page == 1 {
-            tmdb.search(query, page)?
-        } else {
-            match tmdb.search(query, page) {
-                Ok(found) => found,
-                Err(_) => break,
-            }
-        };
-        total = found.total_results;
-        raw.extend(found.results.into_iter().map(Movie::from));
-        if page >= found.total_pages {
-            break;
-        }
-    }
-    Ok((dedupe(raw), total))
+enum CaptionIcon {
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
 }
 
-/// Il cartellone "In sala" usa solo film con poster, al massimo sei.
-fn in_sala_movies(movies: Vec<Movie>) -> Vec<Movie> {
-    movies
-        .into_iter()
-        .filter(|m| m.poster_path.is_some())
-        .take(6)
-        .collect()
+fn verified_status<T: PartialEq>(
+    tested: &T,
+    current: &T,
+    res: Result<String, String>,
+) -> Option<String> {
+    if tested != current {
+        return None;
+    }
+    Some(match res {
+        Ok(m) => format!("✔ {m}"),
+        Err(e) => format!("✕ {e}"),
+    })
 }
 
 fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
-    if f.is_empty() {
+    if f.is_empty() && f.sort == Sort::Popularity {
         return movies;
     }
     // Usa la stessa traduzione della query server: generi, anno e paesi non
@@ -5851,11 +3082,26 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
     movies
         .into_iter()
         .filter(|m| {
-            if !selected_decade(tax, f, m.year) { return false; }
+            if !selected_decade(tax, f, m.year) {
+                return false;
+            }
             if let Some((a, b)) = year {
                 match m.year {
                     Some(y) if y >= a && y <= b => {}
                     _ => return false,
+                }
+            }
+            if let Some(q) = &query {
+                let (from, to) =
+                    crate::tmdb::client::date_bounds(q, &crate::infra::winclock::today_iso());
+                if let Some(date) = m.release_date.as_deref() {
+                    if from.as_deref().is_some_and(|v| date < v)
+                        || to.as_deref().is_some_and(|v| date > v)
+                    {
+                        return false;
+                    }
+                } else if f.sort == Sort::Upcoming {
+                    return false;
                 }
             }
             if !genres.is_empty() {
@@ -5892,9 +3138,6 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
         .collect()
 }
 
-/// Un solo vincolo tolto per volta: è il compromesso più piccolo che sblocca
-/// altri film. Le varianti si ordinano per risultati, così vince la rinuncia
-/// più leggera; le tre migliori bastano a scegliere senza una tabella.
 fn unlock_options(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -5942,7 +3185,6 @@ fn unlock_options(
     out
 }
 
-/// Le rinunce possibili: ognuna tocca una sola categoria di filtri.
 fn unlock_candidates(tax: &Taxonomy, f: &Facets) -> Vec<(String, Facets)> {
     let mut out = Vec::new();
     if let Some(v) = f.min_rating {
@@ -6071,8 +3313,6 @@ fn runtime_label(a: u32, b: u32) -> String {
     }
 }
 
-/// li allento uno alla volta — voto, poi generi, poi parole chiave tematiche —
-/// Ricerca con filtri vincolanti: gli allargamenti richiedono una scelta esplicita.
 pub fn discover_strict(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -6083,8 +3323,26 @@ pub fn discover_strict(
 ) -> Result<(Vec<Movie>, u32, u32, String), String> {
     require_keywords(tax, facets, kw)?;
     let query = constraints::to_discover(tax, facets, kw, page)?;
+    if facets.min_votes.is_none() {
+        if let Some(min) = crate::tmdb::client::minimum_votes(&query) {
+            notes.push(format!(
+                "Per questo ordinamento o filtro sul voto: almeno {min} voti TMDB."
+            ));
+        }
+    }
+    if facets.sort == Sort::Newest && facets.runtime.is_none() {
+        notes.push("Più recenti: solo film usciti e durata di almeno 60 minuti.".into());
+    }
+    if !facets.movements.is_empty() {
+        notes.push("Le correnti applicano periodo, paesi, generi e parole chiave della guida: sono percorsi di esplorazione, non un censimento certificato delle opere.".into());
+    }
     let result = tmdb.discover(&query)?;
     let mut movies: Vec<Movie> = result.results.into_iter().map(Movie::from).collect();
+    if facets.runtime.is_some() || facets.sort == Sort::Newest {
+        let verified = verified_details(tmdb, tax, facets, kw, &movies)?;
+        movies.retain(|m| verified.contains_key(&m.id));
+        notes.push("Durata verificata sulla scheda TMDB: le edizioni possono differire. Il totale TMDB precede questo controllo; il catalogo conta le corrispondenze nella pagina.".into());
+    }
     if constraints::decade_gap(tax, facets) {
         movies.retain(|m| selected_decade(tax, facets, m.year));
         notes.push("Decenni separati: verificati sui singoli film; il totale TMDB puo includere gli anni intermedi.".into());
@@ -6131,8 +3389,6 @@ fn require_keywords(
     }
 }
 
-/// Risolve su TMDB le parole chiave di mood, temi liberi e correnti: quella
-/// che non si risolve viene annotata e ignorata, senza bloccare la ricerca.
 fn resolve_keywords(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -6154,7 +3410,7 @@ fn resolve_keywords(
                 pairs.push((name, v));
             }
             Ok(None) => notes.push(format!(
-                "Il tema «{name}» non ha una parola chiave su TMDB: l'ho lasciato fuori."
+                "Il tema «{name}» non ha una parola chiave su TMDB: rimuovilo o modificalo per continuare."
             )),
             Err(e) => notes.push(format!("Tema «{name}» non verificato: {e}")),
         }
@@ -6168,7 +3424,7 @@ fn resolve_keywords(
                 pairs.push((id, v));
             }
             Ok(None) => notes.push(format!(
-                "La corrente si riconosce dalla parola chiave TMDB «{word}», che non esiste: la cerco per periodo e paese."
+                "La corrente richiede la parola chiave TMDB «{word}», che non è disponibile: rimuovi o modifica il criterio per continuare."
             )),
             Err(e) => notes.push(format!(
                 "Parola chiave «{word}» della corrente non verificata: {e}"
@@ -6177,523 +3433,25 @@ fn resolve_keywords(
     }
 }
 
-/// Con zero risultati, prova a togliere un vincolo per volta e indica quello
-/// che ne sblocca di più. Il costo è limitato ai casi vuoti e a cinque query.
-fn empty_hint(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    eff: &Facets,
-    kw: &[(String, u64)],
-) -> Option<String> {
-    let candidates = unlock_candidates(tax, eff);
-    if candidates.is_empty() || candidates.len() > 5 {
-        return None;
-    }
-    let mut best: Option<(String, u32)> = None;
-    for (label, relaxed) in candidates {
-        let Ok(q) = constraints::to_discover(tax, &relaxed, kw, 1) else {
-            continue;
-        };
-        let Ok(page) = tmdb.discover(&q) else { continue };
-        if page.total_results > best.as_ref().map(|(_, n)| *n).unwrap_or(0) {
-            best = Some((label, page.total_results));
-        }
-    }
-    best.map(|(label, total)| {
-        format!(
-            "Il primo vincolo da provare a togliere è «{label}»: senza, TMDB ne trova {}.",
-            theme::thousands(total)
-        )
-    })
-}
-
-/// Costruisce il pool della chat. I temi liberi sono criteri semantici, non
-/// filtri di griglia: si cercano concetto per concetto e si tengono solo i
-/// film che ne coprono davvero una parte.
-#[allow(clippy::too_many_arguments)]
-pub fn chat_pool(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    eff: &Facets,
-    themes: &[Theme],
-    known: &[(String, u64)],
-    title: Option<&str>,
-    similar: Option<&str>,
-    notes: &mut Vec<String>,
-    exclude: &[u64],
-) -> Result<ChatPoolResult, String> {
-    let mut kw = known.to_vec();
-    let mut pairs = Vec::new();
-    resolve_keywords(tmdb, tax, eff, &mut kw, &mut pairs, notes);
-
-    require_keywords(tax, eff, &kw)?;
-    if !themes.is_empty() {
-        return chat_theme_pool(tmdb, tax, eff, themes, &kw, pairs, notes, exclude);
-    }
-
-    let (movies, total, _headline) =
-        chat_candidates(tmdb, tax, eff, &kw, title, similar, notes, exclude)?;
-    let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
-    let limit = if movies.is_empty() {
-        Some(
-            empty_hint(tmdb, tax, eff, &kw).unwrap_or_else(|| {
-                "Nessun film corrisponde ai criteri: prova a togliere un vincolo."
-                    .into()
-            }),
-        )
-    } else {
-        None
-    };
-    Ok(ChatPoolResult {
-        movies,
-        total,
-        facets: eff.clone(),
-        keyword_pairs: pairs,
-        limit,
-        // Titolo, «simile a» e criteri allargati non sono rappresentabili in
-        // griglia: il pulsante mostrerebbe risultati diversi dalla chat.
-        grid_ready: !eff.is_empty()
-            && title.is_none()
-            && similar.is_none(),
-        reasons: HashMap::new(),
-        relevance,
-    })
-}
-
-/// La griglia senza criteri e con l'ordinamento predefinito mostra le
-/// tendenze; qualunque altro ordinamento deve passare da discover, che
-/// accetta `sort_by`. `Sort` non fa parte di `Facets::is_empty`.
 fn wants_trending(f: &Facets) -> bool {
     f.is_empty() && f.sort == Sort::default()
 }
 
 fn sort_movies(movies: &mut [Movie], sort: Sort) {
-    movies.sort_by(|a, b| match sort {
-        Sort::Newest => b.year.unwrap_or(0).cmp(&a.year.unwrap_or(0)),
-        Sort::Oldest => a.year.unwrap_or(0).cmp(&b.year.unwrap_or(0)),
-        Sort::Rating => b
-            .rating
-            .partial_cmp(&a.rating)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        Sort::Votes => b.votes.cmp(&a.votes),
-        Sort::Popularity | Sort::Upcoming => {
-            let sa = a.rating * (1.0 + a.votes as f32).ln();
-            let sb = b.rating * (1.0 + b.votes as f32).ln();
-            sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
-        }
-    });
-}
-
-/// Cerca la filmografia di un regista o attore. `Ok(None)` significa che il
-/// nome non è stato riconosciuto: in quel caso il chiamante può ripiegare
-/// sulla ricerca normale.
-fn chat_person_pool(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    eff: &Facets,
-    query: &PersonQuery,
-    seen: Option<&str>,
-    _notes: &mut Vec<String>,
-    exclude: &[u64],
-) -> Result<Option<PersonPool>, String> {
-    let results = tmdb.search_person(&query.name)?;
-    let Some(person) = choose_person(&results, query) else {
-        return Ok(None);
-    };
-
-    let credits = tmdb.person_credits(person.id)?;
-    let directed: Vec<Movie> = credits
-        .crew
-        .iter()
-        .filter(|c| c.job.eq_ignore_ascii_case("Director"))
-        .map(|c| Movie::from(c.movie.clone()))
-        .collect();
-    let acted: Vec<Movie> = credits.cast.iter().cloned().map(Movie::from).collect();
-    let (chosen, verb) = match query.role {
-        PersonRole::Director => (directed, "diretto da"),
-        PersonRole::Actor => (acted, "interpretato da"),
-        PersonRole::Any => {
-            if person.known_for_department.eq_ignore_ascii_case("Directing")
-                || (person.known_for_department != "Acting" && !directed.is_empty())
-            {
-                (directed, "diretto da")
-            } else {
-                (acted, "interpretato da")
-            }
-        }
-    };
-    let mut movies = dedupe(chosen);
-    if let Some(seen) = seen {
-        let key = normalize_title(seen);
-        movies.retain(|m| {
-            let title = normalize_title(&m.title);
-            let original = normalize_title(&m.original_title);
-            !(title == key
-                || original == key
-                || (key.len() >= 4
-                    && (key.contains(&title) || title.contains(&key))))
-        });
-    }
-    let mut movies = filter_movies(movies, tax, eff);
-    sort_movies(&mut movies, eff.sort);
-    let total = movies.len() as u32;
-    let limit = if total == 0 {
-        Some(format!("Nessun film {verb} «{}» con questi criteri.", person.name))
-    } else {
-        None
-    };
-    movies.retain(|m| !exclude.contains(&m.id));
-    movies.truncate(20);
-    let reasons = movies
-        .iter()
-        .map(|m| (m.id, format!("{verb} {}", person.name)))
-        .collect::<HashMap<_, _>>();
-    let relevance = movies.iter().map(|m| (m.id, 1.0)).collect();
-    let label = match verb {
-        "diretto da" => format!("film diretti da «{}»", person.name),
-        _ => format!("film con «{}»", person.name),
-    };
-    Ok(Some(PersonPool {
-        result: ChatPoolResult {
-            movies,
-            total,
-            facets: eff.clone(),
-            keyword_pairs: Vec::new(),
-            limit,
-            grid_ready: false,
-            reasons,
-            relevance,
-        },
-        label,
-        person: person.name.clone(),
-    }))
-}
-
-struct ThemeCandidate {
-    movie: Movie,
-    matched: Vec<bool>,
-}
-
-impl ThemeCandidate {
-    fn complete(&self) -> bool {
-        !self.matched.is_empty() && self.matched.iter().all(|matched| *matched)
-    }
-}
-
-fn has_word(hay: &str, term: &str) -> bool {
-    if term.is_empty() {
-        return false;
-    }
-    hay.match_indices(term).any(|(at, _)| {
-        let before = hay[..at].chars().next_back();
-        let after = hay[at + term.len()..].chars().next();
-        !before.map(|c| c.is_alphanumeric()).unwrap_or(false)
-            && !after.map(|c| c.is_alphanumeric()).unwrap_or(false)
-    })
-}
-
-fn concept_matches(text: &str, concept: &ThemeConcept) -> bool {
-    let hay = text.to_lowercase();
-    concept
-        .terms
-        .iter()
-        .any(|term| has_word(&hay, term.trim().to_lowercase().as_str()))
-}
-
-fn add_theme_movie(
-    pool: &mut HashMap<u64, ThemeCandidate>,
-    concepts: &[ThemeConcept],
-    movie: Movie,
-    hint: Option<usize>,
-) {
-    let hay = format!(
-        "{} {} {}",
-        movie.title, movie.original_title, movie.overview
-    );
-    let matched = concepts
-        .iter()
-        .map(|c| concept_matches(&hay, c))
-        .collect::<Vec<_>>();
-    if hint.is_none() && !matched.iter().any(|m| *m) {
-        return;
-    }
-    let entry = pool.entry(movie.id).or_insert_with(|| ThemeCandidate {
-        movie,
-        matched: vec![false; concepts.len()],
-    });
-    if let Some(i) = hint {
-        if let Some(slot) = entry.matched.get_mut(i) {
-            *slot = true;
-        }
-    }
-    for (i, hit) in matched.into_iter().enumerate() {
-        if hit {
-            entry.matched[i] = true;
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn chat_theme_pool(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    eff: &Facets,
-    themes: &[Theme],
-    hard_kw: &[(String, u64)],
-    hard_pairs: Vec<(String, u64)>,
-    notes: &mut Vec<String>,
-    exclude: &[u64],
-) -> Result<ChatPoolResult, String> {
-    let concepts: Vec<ThemeConcept> = themes
-        .iter()
-        .flat_map(|t| t.concepts.iter().cloned())
-        .take(4)
-        .collect();
-    if concepts.is_empty() {
-        return Ok(ChatPoolResult {
-            movies: Vec::new(),
-            total: 0,
-            facets: eff.clone(),
-            keyword_pairs: hard_pairs,
-            limit: Some("Il tema non è stato tradotto in concetti verificabili.".into()),
-            grid_ready: false,
-            reasons: HashMap::new(),
-            relevance: HashMap::new(),
-        });
-    }
-
-    let mut queries: Vec<Vec<u64>> = Vec::with_capacity(concepts.len());
-    for concept in &concepts {
-        let mut ids: Vec<u64> = Vec::new();
-        for keyword in &concept.keywords {
-            match tmdb.keyword_id(keyword) {
-                Ok(Some(id)) => {
-                    if !ids.contains(&id) {
-                        ids.push(id);
-                    }
-                }
-                Ok(None) => notes.push(format!(
-                    "La keyword TMDB «{keyword}» per «{}» non esiste: uso solo la trama.",
-                    concept.label
-                )),
-                Err(e) => notes.push(format!(
-                    "Keyword «{keyword}» per «{}» non verificata: {e}",
-                    concept.label
-                )),
-            }
-        }
-        queries.push(ids);
-    }
-
-    let mut pool: HashMap<u64, ThemeCandidate> = HashMap::new();
-    for (index, ids) in queries.iter().enumerate() {
-        // Una keyword per query: TMDB non sa combinare «hard AND (a OR b)».
-        // Cosi le alternative del concetto restano davvero alternative.
-        for id in ids {
-            let mut q = constraints::to_discover(tax, eff, hard_kw, 1)?;
-            if !q.keywords.contains(id) {
-                q.keywords.push(*id);
-            }
-            q.keywords_or = false;
-            let (batch, _) = collect_chat_pages(tmdb, tax, eff, hard_kw, exclude, |page| { let mut q = q.clone(); q.page = page; tmdb.discover(&q) })?;
-            for movie in batch {
-                add_theme_movie(&mut pool, &concepts, movie, Some(index));
-            }
-        }
-    }
-
-    // Titoli proposti dall'AI e ricerca del tema: si accettano solo se la
-    // trama conferma almeno un concetto.
-    for theme in themes {
-        if !theme.label.trim().is_empty() {
-            if let Ok(page) = tmdb.search(&theme.label, 1) {
-                for movie in page.results.into_iter().take(5).map(Movie::from) {
-                    if eff.is_empty() || !filter_movies(vec![movie.clone()], tax, eff).is_empty() {
-                        add_theme_movie(&mut pool, &concepts, movie, None);
-                    }
-                }
-            }
-        }
-        for seed in &theme.seed_titles {
-            let Ok(page) = tmdb.search(seed, 1) else { continue };
-            let Some(first) = page.results.into_iter().next() else { continue };
-            let movie = Movie::from(first);
-            if !eff.is_empty() && filter_movies(vec![movie.clone()], tax, eff).is_empty() {
-                continue;
-            }
-            add_theme_movie(&mut pool, &concepts, movie, None);
-        }
-    }
-
-    let n = concepts.len();
-    let mut ranked: Vec<ThemeCandidate> = pool.into_values().collect();
-    // I match completi restano in cima; se sono meno di cinque, i parziali
-    // dichiarati completano la scelta senza spacciarsi per corrispondenze piene.
-    ranked.retain(|c| !exclude.contains(&c.movie.id) && c.complete());
-    ranked.sort_by(|a, b| {
-        let ca = a.matched.iter().filter(|m| **m).count();
-        let cb = b.matched.iter().filter(|m| **m).count();
-        cb.cmp(&ca).then_with(|| match eff.sort {
-            Sort::Newest => b.movie.year.cmp(&a.movie.year),
-            Sort::Oldest => a.movie.year.cmp(&b.movie.year),
+    movies.sort_by(|a, b| {
+        let order = match sort {
             Sort::Rating => b
-                .movie
                 .rating
-                .partial_cmp(&a.movie.rating)
-                .unwrap_or(std::cmp::Ordering::Equal),
-            Sort::Votes => b.movie.votes.cmp(&a.movie.votes),
-            Sort::Popularity | Sort::Upcoming => {
-                let sa = a.movie.rating as f64 * (1.0 + a.movie.votes as f64).ln();
-                let sb = b.movie.rating as f64 * (1.0 + b.movie.votes as f64).ln();
-                sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal)
-            }
-        })
-    });
-
-    let mut reasons = HashMap::new();
-    let mut relevance = HashMap::new();
-    for c in &ranked {
-        let covered = concepts
-            .iter()
-            .zip(c.matched.iter())
-            .filter(|(_, hit)| **hit)
-            .map(|(c, _)| c.label.as_str())
-            .collect::<Vec<_>>();
-        let missing = concepts
-            .iter()
-            .zip(c.matched.iter())
-            .filter(|(_, hit)| !**hit)
-            .map(|(c, _)| c.label.as_str())
-            .collect::<Vec<_>>();
-        let reason = if missing.is_empty() {
-            format!("Copre tutti i concetti: {}.", covered.join(", "))
-        } else if covered.is_empty() {
-            format!("Non copre i concetti: {}.", missing.join(", "))
-        } else {
-            format!(
-                "Copre {}; manca {}.",
-                covered.join(", "),
-                missing.join(", ")
-            )
+                .total_cmp(&a.rating)
+                .then_with(|| b.votes.cmp(&a.votes)),
+            Sort::Votes => b.votes.cmp(&a.votes),
+            Sort::Newest => b.year.unwrap_or_default().cmp(&a.year.unwrap_or_default()),
+            Sort::Oldest => a.year.unwrap_or(u16::MAX).cmp(&b.year.unwrap_or(u16::MAX)),
+            Sort::Popularity | Sort::Upcoming => b.popularity.total_cmp(&a.popularity),
         };
-        reasons.insert(c.movie.id, reason);
-        relevance.insert(c.movie.id, covered.len() as f32 / n as f32);
-    }
-
-    let count = ranked.len();
-    let movies = ranked.into_iter().map(|c| c.movie).take(20).collect::<Vec<_>>();
-    let limit = if movies.is_empty() {
-        Some(format!("Nessun film copre tutti i {n} concetti richiesti. Puoi rimuovere o modificare un tema."))
-    } else if count < 5 {
-        Some(format!("Solo {count} film coprono tutti i concetti: non aggiungo titoli estranei."))
-    } else { None };
-    let total = count as u32;
-    Ok(ChatPoolResult {
-        movies,
-        total,
-        facets: eff.clone(),
-        keyword_pairs: hard_pairs,
-        limit,
-        grid_ready: false,
-        reasons,
-        relevance,
-    })
+        order.then_with(|| a.id.cmp(&b.id))
+    });
 }
-
-/// Candidati nuovi per titolo, simili, tendenze o filtri vincolanti.
-#[allow(clippy::too_many_arguments)]
-fn chat_candidates(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    eff: &Facets,
-    kw: &[(String, u64)],
-    title: Option<&str>,
-    similar: Option<&str>,
-    notes: &mut Vec<String>,
-    exclude: &[u64],
-) -> Result<(Vec<Movie>, u32, String), String> {
-    let (movies, total, headline) = if let Some(name) = similar {
-        let page = tmdb.search(name, 1)?;
-        let first = page
-            .results
-            .first()
-            .ok_or_else(|| format!("Nessun film trovato per «{name}»."))?;
-        let (movies, total) = collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| {
-            tmdb.similar(first.id, page)
-        })?;
-        (movies, total, format!("Simili a «{}»", first.title))
-    } else if let Some(title) = title {
-        let (movies, total) =
-            collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| tmdb.search(title, page))?;
-        (movies, total, format!("Risultati per «{title}»"))
-    } else if wants_trending(eff) {
-        let (movies, total) =
-            collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| tmdb.trending(page))?;
-        (movies, total, "Tendenze della settimana".into())
-    } else {
-        require_keywords(tax, eff, kw)?;
-        let query = constraints::to_discover(tax, eff, kw, 1)?;
-        let headline = describe(tax, eff, query.year);
-        let (movies, total) = collect_chat_pages(tmdb, tax, eff, kw, exclude, |page| {
-            let mut q = query.clone();
-            q.page = page;
-            tmdb.discover(&q)
-        })?;
-        (movies, total, headline)
-    };
-    if movies.is_empty() && !exclude.is_empty() {
-        notes.push("Nessun nuovo candidato verificabile nelle pagine esplorate. I film gia proposti restano esclusi.".into());
-    }
-    Ok((movies, total, headline))
-}
-
-fn collect_chat_pages(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    facets: &Facets,
-    known: &[(String, u64)],
-    exclude: &[u64],
-    mut fetch: impl FnMut(u32) -> Result<PagedMovies, String>,
-) -> Result<(Vec<Movie>, u32), String> {
-    let mut movies = Vec::new();
-    let mut seen: HashSet<u64> = exclude.iter().copied().collect();
-    let mut total = 0;
-    let mut local = facets.clone();
-    // Il paese si verifica sui dati della scheda, non stimandolo dalla lingua.
-    local.countries.clear();
-    // shortcut: al massimo 20 pagine per fonte; evita ricerche senza limite in una sessione desktop.
-    for page in 1..=20 {
-        let result = fetch(page)?;
-        total = result.total_results;
-        let last = result.total_pages.min(500);
-        let batch = filter_movies(
-            result.results.into_iter().map(Movie::from).collect(),
-            tax,
-            &local,
-        );
-        movies.extend(batch.into_iter().filter(|m| {
-            if !seen.insert(m.id) {
-                return false;
-            }
-            tmdb.cached_details(m.id).is_none_or(|d| {
-                d.movie.year.is_some()
-                    && !d.movie.overview.trim().is_empty()
-                    && verified_match(&d, tax, facets, known)
-            })
-        }));
-        if movies.len() >= 20 || page >= last {
-            break;
-        }
-    }
-    movies.truncate(20);
-    Ok((movies, total))
-}
-
-fn dedupe(movies: Vec<Movie>) -> Vec<Movie> {
-    let mut seen: HashSet<u64> = HashSet::new();
-    movies.into_iter().filter(|m| seen.insert(m.id)).collect()
-}
-
 
 fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String, u64)]) -> bool {
     if require_keywords(tax, facets, known).is_err() {
@@ -6710,6 +3468,13 @@ fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String
     let Ok(query) = constraints::to_discover(tax, facets, known, 1) else {
         return false;
     };
+    if crate::tmdb::client::minimum_votes(&query).is_some_and(|min| d.movie.votes < min) {
+        return false;
+    }
+    if facets.sort == Sort::Newest && query.runtime.is_none() && !d.runtime.is_some_and(|r| r >= 60)
+    {
+        return false;
+    }
     if let Some((min, max)) = query.runtime {
         if !d
             .runtime
@@ -6722,7 +3487,7 @@ fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String
         && !query
             .countries
             .iter()
-            .any(|code| d.country_codes.contains(code))
+            .any(|code| d.origin_country_codes.contains(code))
     {
         return false;
     }
@@ -6739,7 +3504,6 @@ fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String
     true
 }
 
-/// Legge le schede prima della selezione e verifica anche filtri non disponibili nella ricerca per titolo.
 pub fn verified_details(
     tmdb: &Tmdb,
     tax: &Taxonomy,
@@ -6784,32 +3548,6 @@ pub fn verified_details(
         }
     }
     Ok(found)
-}
-
-/// Il film come lo vede il curatore: pochi campi, trama troncata.
-fn candidate_of(
-    tax: &Taxonomy,
-    m: &Movie,
-    reason: Option<String>,
-    relevance: f32,
-) -> curator::Candidate {
-    curator::Candidate {
-        id: m.id,
-        title: m.title.clone(),
-        year: m.year,
-        rating: m.rating,
-        votes: m.votes,
-        genres: m
-            .genre_ids
-            .iter()
-            .filter_map(|g| tax.genre_name(*g))
-            .collect::<Vec<_>>()
-            .join(", "),
-        overview: theme::truncate(&m.overview, 720),
-        reason,
-        relevance,
-        ..Default::default()
-    }
 }
 
 fn describe(tax: &Taxonomy, f: &Facets, year: Option<(u16, u16)>) -> String {
@@ -6891,30 +3629,7 @@ fn describe(tax: &Taxonomy, f: &Facets, year: Option<(u16, u16)>) -> String {
     }
 }
 
-fn describe_chat(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
-    let base = describe(tax, f, None);
-    if themes.is_empty() {
-        return base;
-    }
-    let labels = themes
-        .iter()
-        .map(|t| t.label.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    if base == "Ricerca libera" {
-        format!("temi: {labels}")
-    } else {
-        format!("{base} · temi: {labels}")
-    }
-}
-
-/// Frecce del pager: quadrato piatto, spento quando la pagina non esiste.
-fn pager_button(
-    ui: &mut egui::Ui,
-    kind: lumen::Icon,
-    enabled: bool,
-    tip: &str,
-) -> egui::Response {
+fn pager_button(ui: &mut egui::Ui, kind: lumen::Icon, enabled: bool, tip: &str) -> egui::Response {
     let sense = if enabled {
         egui::Sense::click()
     } else {
@@ -6922,7 +3637,8 @@ fn pager_button(
     };
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), sense);
     let hover = if enabled {
-        ui.ctx().animate_bool_with_time(resp.id, resp.hovered(), 0.12)
+        ui.ctx()
+            .animate_bool_with_time(resp.id, resp.hovered(), 0.12)
     } else {
         0.0
     };
@@ -6945,7 +3661,9 @@ fn pager_button(
             } else {
                 lumen::BORDER
             },
-        ), egui::StrokeKind::Inside);
+        ),
+        egui::StrokeKind::Inside,
+    );
     lumen::icon(
         ui.painter(),
         egui::Rect::from_center_size(rect.center(), egui::vec2(14.0, 14.0)),
@@ -6965,18 +3683,6 @@ fn pager_button(
     }
 }
 
-fn detail_preview_rect(screen: egui::Rect) -> (egui::Rect, egui::Rect) {
-    let area = egui::Rect::from_min_max(
-        egui::pos2(screen.left() + lumen::RAIL_WIDTH, screen.top() + 48.0),
-        egui::pos2(screen.right(), screen.bottom() - 28.0),
-    );
-    let size = egui::vec2(
-        (area.width() - 48.0).clamp(0.0, 520.0),
-        (area.height() - 32.0).clamp(0.0, 760.0),
-    );
-    (area, egui::Rect::from_center_size(area.center(), size))
-}
-
 fn language_picker(ui: &mut egui::Ui, language: &mut String) {
     ui.allocate_ui_with_layout(
         egui::vec2(ui.available_width(), 36.0),
@@ -6985,27 +3691,23 @@ fn language_picker(ui: &mut egui::Ui, language: &mut String) {
             ui.spacing_mut().item_spacing.x = 12.0;
             ui.label(lumen::label("Lingua"));
             for (id, label) in [("it-IT", "Italiano"), ("en-US", "Inglese")] {
-                ui.selectable_value(language, id.to_string(), egui::RichText::new(label).size(12.0));
+                ui.selectable_value(
+                    language,
+                    id.to_string(),
+                    egui::RichText::new(label).size(12.0),
+                );
             }
         },
     );
 }
 
-/// Larghezza massima dei pannelli laterali. Si apre un pannello per volta,
-/// quindi a 800 px la griglia conserva almeno tre card anche con i filtri.
 fn side_panel_widths(screen_w: f32) -> (f32, f32) {
     let left = (screen_w * 0.30).clamp(260.0, 380.0);
     let right = (screen_w * 0.30).clamp(288.0, 420.0);
     (left, right)
 }
 
-/// Bordo entro cui il puntatore prende il ridimensionamento della finestra.
-const RESIZE_EDGE: f32 = 6.0;
-
-fn resize_edge(
-    rect: egui::Rect,
-    pos: egui::Pos2,
-) -> Option<egui::viewport::ResizeDirection> {
+fn resize_edge(rect: egui::Rect, pos: egui::Pos2) -> Option<egui::viewport::ResizeDirection> {
     use egui::viewport::ResizeDirection as Dir;
     let left = pos.x <= rect.left() + RESIZE_EDGE;
     let right = pos.x >= rect.right() - RESIZE_EDGE;
@@ -7024,7 +3726,6 @@ fn resize_edge(
     }
 }
 
-/// Senza decorazioni Windows non disegna piu' i bordi: li gestiamo noi.
 fn window_resize_edges(ctx: &egui::Context) {
     if ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
         return;
@@ -7047,23 +3748,7 @@ fn window_resize_edges(ctx: &egui::Context) {
     }
 }
 
-#[derive(Clone, Copy)]
-enum CaptionIcon {
-    Minimize,
-    Maximize,
-    Restore,
-    Close,
-}
-
-/// Controllo finestra della titlebar custom. Le icone sono disegnate a linee:
-/// niente glifi di sistema mancanti e spessore coerente a ogni DPI. Il Button
-/// (vuoto) conserva fuoco e attivazione da tastiera.
-fn window_caption(
-    ui: &mut egui::Ui,
-    icon: CaptionIcon,
-    tip: &str,
-    cap: f32,
-) -> egui::Response {
+fn window_caption(ui: &mut egui::Ui, icon: CaptionIcon, tip: &str, cap: f32) -> egui::Response {
     let resp = ui.add(
         egui::Button::new("")
             .frame(false)
@@ -7100,17 +3785,15 @@ fn window_caption(
             p.rect_stroke(
                 egui::Rect::from_center_size(c, egui::vec2(8.5, 8.5)),
                 lumen::radius(0.5),
-                stroke, egui::StrokeKind::Inside);
+                stroke,
+                egui::StrokeKind::Inside,
+            );
         }
         CaptionIcon::Restore => {
-            let back = egui::Rect::from_center_size(
-                c + egui::vec2(1.5, -1.5),
-                egui::vec2(7.0, 7.0),
-            );
-            let front = egui::Rect::from_center_size(
-                c + egui::vec2(-1.5, 1.5),
-                egui::vec2(7.0, 7.0),
-            );
+            let back =
+                egui::Rect::from_center_size(c + egui::vec2(1.5, -1.5), egui::vec2(7.0, 7.0));
+            let front =
+                egui::Rect::from_center_size(c + egui::vec2(-1.5, 1.5), egui::vec2(7.0, 7.0));
             // Del riquadro dietro restano visibili solo alto e lato destro.
             p.line_segment([back.left_top(), back.right_top()], stroke);
             p.line_segment([back.right_top(), back.right_bottom()], stroke);
@@ -7118,14 +3801,8 @@ fn window_caption(
         }
         CaptionIcon::Close => {
             let d = 4.2;
-            p.line_segment(
-                [c + egui::vec2(-d, -d), c + egui::vec2(d, d)],
-                stroke,
-            );
-            p.line_segment(
-                [c + egui::vec2(d, -d), c + egui::vec2(-d, d)],
-                stroke,
-            );
+            p.line_segment([c + egui::vec2(-d, -d), c + egui::vec2(d, d)], stroke);
+            p.line_segment([c + egui::vec2(d, -d), c + egui::vec2(-d, d)], stroke);
         }
     }
     theme::focus_ring(ui, &resp, 4.0);
@@ -7144,7 +3821,8 @@ fn track_state(store: &simkl::Store, id: u64) -> TrackState {
     }
 }
 
-fn ago_label(ts: i64) -> String {    if ts <= 0 {
+fn ago_label(ts: i64) -> String {
+    if ts <= 0 {
         return "mai".into();
     }
     let mins = (simkl::now_secs() - ts).max(0) / 60;
@@ -7157,7 +3835,8 @@ fn ago_label(ts: i64) -> String {    if ts <= 0 {
     }
 }
 
-fn allowed_url(url: &str) -> bool {    let trimmed = url.trim();
+fn allowed_url(url: &str) -> bool {
+    let trimmed = url.trim();
     if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
         return false;
     }
@@ -7179,7 +3858,9 @@ fn open_url(url: &str) {
     {
         // explorer apre l'URL nel browser predefinito senza passare da cmd.exe,
         // che interpreterebbe i metacaratteri di un link TMDB non fidato.
-        let _ = std::process::Command::new("explorer").arg(url.trim()).spawn();
+        let _ = std::process::Command::new("explorer")
+            .arg(url.trim())
+            .spawn();
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -7189,117 +3870,192 @@ fn open_url(url: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        allowed_url, describe, filter_movies, has_word, in_sala_movies,
-        merge_facets, resize_edge, side_panel_widths, sort_movies, unlock_candidates,
-        wants_trending, Cleared, Facets, Movie, Sort,
-    };
-    use crate::domain::taxonomy::Taxonomy;
-    use egui::viewport::ResizeDirection as Dir;
+    use super::*;
 
     #[test]
-    fn altri_legge_pagine_successive_ed_esclude_tutti_i_titoli_gia_proposti() {
-        let tax = Taxonomy::load();
-        let tmdb = crate::tmdb::Tmdb::new("test".into(), "it-IT".into());
-        let mut requested = Vec::new();
-        let excluded: Vec<u64> = (1..=20).collect();
-        let (movies, total) =
-            super::collect_chat_pages(&tmdb, &tax, &Facets::default(), &[], &excluded, |page| {
-                requested.push(page);
-                Ok(crate::tmdb::models::PagedMovies {
-                    page,
-                    total_pages: 3,
-                    total_results: 60,
-                    results: (1..=20)
-                        .map(|n| crate::tmdb::models::ApiMovie {
-                            id: (page as u64 - 1) * 20 + n,
-                            ..Default::default()
-                        })
-                        .collect(),
-                })
-            })
-            .unwrap();
-        assert_eq!(requested, vec![1, 2]);
-        assert_eq!(total, 60);
-        assert_eq!(movies.len(), 20);
-        assert!(movies.iter().all(|m| m.id > 20));
-    }
-
-    #[test]
-    fn la_paginazione_non_si_ferma_su_una_pagina_senza_match() {
-        let tax = Taxonomy::load();
-        let tmdb = crate::tmdb::Tmdb::new("test".into(), "it-IT".into());
-        let facets = Facets {
-            genres: vec![53],
-            ..Default::default()
-        };
-        let (movies, _) = super::collect_chat_pages(&tmdb, &tax, &facets, &[], &[], |page| {
-            Ok(crate::tmdb::models::PagedMovies {
-                page,
-                total_pages: 2,
-                total_results: 2,
-                results: vec![crate::tmdb::models::ApiMovie {
-                    id: page as u64,
-                    genre_ids: if page == 2 { vec![53] } else { vec![35] },
-                    ..Default::default()
-                }],
-            })
-        })
-        .unwrap();
-        assert_eq!(movies.iter().map(|m| m.id).collect::<Vec<_>>(), vec![2]);
-    }
-
-    #[test]
-    fn durata_paese_e_temi_sono_verificati_sulla_scheda() {
-        let tax = Taxonomy::load();
-        let mut details = crate::domain::model::Details {
-            movie: Movie {
-                id: 1,
-                year: Some(1985),
-                genre_ids: vec![53],
-                lang: "en".into(),
-                overview: "Trama verificabile".into(),
-                rating: 7.5,
-                votes: 50,
+    fn una_risposta_obsoleta_non_ripristina_i_filtri_precedenti_durante_il_debounce() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_local_data(
+            &ctx,
+            Config {
+                tmdb_api_key: "fixture".into(),
                 ..Default::default()
             },
-            runtime: Some(95),
-            country_codes: vec!["IT".into()],
-            keywords: vec![123],
-            ..Default::default()
-        };
-        let facets = Facets {
-            runtime: Some((0, 100)),
-            countries: vec!["IT".into()],
-            genres: vec![53],
-            keywords: vec!["friendship".into()],
-            ..Default::default()
-        };
-        let known = vec![("friendship".into(), 123)];
-        assert!(
-            super::verified_match(&details, &tax, &facets, &known),
-            "La lingua inglese non esclude una produzione italiana"
+            None,
+            simkl::Store::default(),
         );
-        details.runtime = Some(120);
-        assert!(!super::verified_match(&details, &tax, &facets, &known));
-        details.runtime = None;
-        assert!(
-            !super::verified_match(&details, &tax, &facets, &known),
-            "Durata sconosciuta non significa zero minuti"
-        );
-        details.runtime = Some(95);
-        details.country_codes = vec!["US".into()];
-        details.movie.lang = "it".into();
-        assert!(
-            !super::verified_match(&details, &tax, &facets, &known),
-            "La lingua italiana non basta per il paese"
-        );
-        details.country_codes = vec!["IT".into()];
-        details.keywords.clear();
-        assert!(!super::verified_match(&details, &tax, &facets, &known));
-        assert!(!super::verified_match(&details, &tax, &facets, &[]));
+        app.gen = 4;
+        app.tx
+            .send(Msg::Results {
+                gen: 4,
+                payload: Box::new(Results {
+                    total_is_exact: true,
+                    facets: Facets::default(),
+                    removed: vec![],
+                    info: vec![],
+                    notes: vec![],
+                    movies: vec![],
+                    total: 0,
+                    total_pages: 0,
+                    headline: String::new(),
+                    error: None,
+                    keyword_pairs: vec![],
+                }),
+            })
+            .unwrap();
+        app.apply_actions(vec![FacetAction::Genre(35)]);
+        app.poll();
+        assert_eq!(app.facets.genres, vec![35]);
+        assert!(app.dirty.is_some());
+        assert!(app.gen > 4);
+    }
+    use egui::ResizeDirection as Dir;
+
+    #[test]
+    fn catalogo_impostazioni_e_primo_avvio_si_adattano_alle_dimensioni_supportate() {
+        for size in [[800.0, 600.0], [1024.0, 768.0], [1440.0, 900.0]] {
+            for state in [
+                "catalogo",
+                "caricamento",
+                "errore",
+                "impostazioni",
+                "primo_avvio",
+            ] {
+                let ctx = egui::Context::default();
+                crate::ui::fonts::install_lumen(&ctx);
+                let mut app = App::with_local_data(
+                    &ctx,
+                    Config {
+                        tmdb_api_key: "fixture".into(),
+                        ..Default::default()
+                    },
+                    None,
+                    simkl::Store::default(),
+                );
+                app.boot_done = true;
+                app.update.last_check = Some(Instant::now());
+                app.show_settings = state == "impostazioni";
+                app.first_run = state == "primo_avvio";
+                app.loading = state == "caricamento";
+                if state == "errore" {
+                    app.results_error = Some("Errore di prova".into());
+                }
+                if state == "catalogo" {
+                    app.movies = (1..=12)
+                        .map(|id| Movie {
+                            id,
+                            title: format!("Film di prova {id}"),
+                            year: Some(1951),
+                            ..Default::default()
+                        })
+                        .collect();
+                }
+                let out = crate::ui::layout_test_support::frame(
+                    &ctx,
+                    egui::vec2(size[0], size[1]),
+                    |ui| app.update_ui(ui),
+                );
+                assert!(!out.shapes.is_empty(), "{state} {size:?}");
+                let text = out
+                    .shapes
+                    .iter()
+                    .filter_map(|s| {
+                        if let egui::epaint::Shape::Text(t) = &s.shape {
+                            Some(t.galley.text())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                assert!(!text.contains("Sala 01") && !text.contains("INTERPRETE"));
+                match state {
+                    "catalogo" => assert!(
+                        text.contains("Film di prova"),
+                        "Catalogo mancante a {size:?}"
+                    ),
+                    "caricamento" => assert!(text.contains("Aggiorno il catalogo")),
+                    "errore" => assert!(text.contains("Ricerca non completata")),
+                    "impostazioni" => assert!(text.contains("Impostazioni")),
+                    "primo_avvio" => assert!(text.contains("CHIAVE API TMDB")),
+                    _ => unreachable!(),
+                }
+                assert!(!app.loading || state == "caricamento");
+            }
+        }
     }
 
+    #[test]
+    fn prossimamente_per_titolo_esclude_film_gia_usciti() {
+        let tax = Taxonomy::load();
+        let f = Facets {
+            sort: Sort::Upcoming,
+            ..Default::default()
+        };
+        let movies = vec![
+            Movie {
+                id: 1,
+                release_date: Some("1900-01-01".into()),
+                ..Default::default()
+            },
+            Movie {
+                id: 2,
+                release_date: Some("2999-01-01".into()),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            filter_movies(movies, &tax, &f)
+                .iter()
+                .map(|m| m.id)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+    }
+
+    #[test]
+    fn i_voti_mancanti_non_soddisfano_un_massimo() {
+        let d = Details {
+            movie: Movie {
+                id: 1,
+                rating: 0.0,
+                votes: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(!verified_match(
+            &d,
+            &Taxonomy::load(),
+            &Facets {
+                max_rating: Some(5.0),
+                ..Default::default()
+            },
+            &[]
+        ));
+    }
+
+    #[test]
+    fn il_paese_di_origine_non_viene_sostituito_con_quello_di_produzione() {
+        let tax = Taxonomy::load();
+        let f = Facets {
+            countries: vec!["IT".into()],
+            ..Default::default()
+        };
+        let mut d = Details {
+            movie: Movie {
+                id: 1,
+                ..Default::default()
+            },
+            origin_country_codes: vec!["IT".into()],
+            country_codes: vec!["FR".into()],
+            ..Default::default()
+        };
+        assert!(verified_match(&d, &tax, &f, &[]));
+        d.origin_country_codes.clear();
+        d.country_codes = vec!["IT".into()];
+        assert!(!verified_match(&d, &tax, &f, &[]));
+    }
     #[test]
     fn periodi_separati_non_includono_il_decennio_intermedio() {
         let tax = Taxonomy::load();
@@ -7320,213 +4076,6 @@ mod tests {
             vec![1975, 1995]
         );
     }
-
-    #[test]
-    fn la_memoria_non_trasforma_le_proposte_in_preferenze() {
-        let ctx = egui::Context::default();
-        let mut app = super::App::with_local_data(&ctx, Default::default(), None, Default::default());
-        app.chat.push(crate::ui::chat::Entry {
-            user: "Un thriller italiano".into(),
-            answer: crate::ui::chat::Answer {
-                intro: "Ti piace il cinema erotico".into(),
-                understood: "Erotico".into(),
-                ..Default::default()
-            },
-        });
-        assert_eq!(
-            app.chat_history(1),
-            vec![("utente".into(), "Un thriller italiano".into())]
-        );
-    }
-
-    #[test]
-    fn un_tema_richiede_tutti_i_concetti_anche_quando_sono_due() {
-        for (matched, expected) in [
-            (vec![true, true], true),
-            (vec![true, false], false),
-            (vec![false, true], false),
-            (vec![true, true, false], false),
-            (vec![true, true, true], true),
-            (vec![], false),
-        ] {
-            let candidate = super::ThemeCandidate { movie: Movie::default(), matched };
-            assert_eq!(candidate.complete(), expected);
-        }
-    }
-
-    #[test]
-    fn schermate_e_stati_si_disegnano_alle_dimensioni_supportate() {
-        use super::{App, Config, Details, ViewMode, IN_SALA_REFRESH};
-        use crate::ui::{chat, lumen};
-        for size in [[800.0, 600.0], [1220.0, 660.0], [1920.0, 1080.0]] {
-            for state in 0..21 {
-                let ctx = egui::Context::default();
-                lumen::install(&ctx);
-                let mut app = App::with_local_data(&ctx, Config::default(), None, Default::default());
-                app.boot_done = true;
-                app.first_run = state == 0;
-                if state != 0 && state != 14 {
-                    app.tmdb = Some(std::sync::Arc::new(crate::tmdb::Tmdb::new(
-                        "test".into(),
-                        "it-IT".into(),
-                    )));
-                }
-                app.home_now_playing_next = Some(std::time::Instant::now() + IN_SALA_REFRESH);
-                let movie = Movie {
-                    id: 1,
-                    title: "Un titolo molto lungo che deve andare a capo senza uscire dalla card"
-                        .repeat(2),
-                    overview: "Una sinossi lunga. ".repeat(60),
-                    year: Some(1980),
-                    ..Default::default()
-                };
-                match state {
-                    1 => app.home_now_playing_busy = true,
-                    2 => app.home_now_playing_error = Some("Errore di rete: riprova".into()),
-                    3 => app.home_now_playing = vec![movie.clone(); 6],
-                    4..=6 => {
-                        app.chat = vec![chat::Entry {
-                            user: "Un film intenso".into(),
-                            answer: chat::Answer {
-                                intro: "Ecco alcuni film".into(),
-                                cards: if state == 4 {
-                                    vec![
-                                        chat::Card {
-                                            movie: movie.clone(),
-                                            perche: "Il motivo. ".repeat(35),
-                                            consiglio: "Un consiglio. ".repeat(20),
-                                            meta: Some(chat::CardMeta::default())
-                                        };
-                                        5
-                                    ]
-                                } else {
-                                    vec![]
-                                },
-                                state: if state == 5 {
-                                    chat::State::Busy
-                                } else {
-                                    chat::State::Done
-                                },
-                                error: (state == 6).then(|| "Errore di rete".into()),
-                                ..Default::default()
-                            },
-                        }];
-                        app.chat_busy = state == 5;
-                    }
-                    7..=10 => {
-                        app.mode = ViewMode::Griglia;
-                        app.filters_open = state == 7;
-                        app.movies = if state == 8 {
-                            vec![movie.clone(); 20]
-                        } else {
-                            vec![]
-                        };
-                        app.loading = state == 9;
-                        app.results_error = (state == 10).then(|| "Errore di rete".into());
-                    }
-                    11 => app.show_settings = true,
-                    12 => {
-                        app.detail = Some(Details {
-                            movie,
-                            ..Default::default()
-                        })
-                    }
-                    13 => app.new_chat_confirm = true,
-                    15 => {
-                        app.show_settings = true;
-                        app.settings_close_confirm = true;
-                    }
-                    16 => {
-                        app.mode = ViewMode::Griglia;
-                        app.filters_open = false;
-                        app.detail_loading = true;
-                    }
-                    17 => app.guide_open = true,
-                    18..=20 => {
-                        app.show_settings = true;
-                        app.settings.provider = ["deepseek", "openrouter", "ollama"][state - 18].into();
-                    }
-                    _ => {}
-                }
-                let _ = crate::ui::layout_test_support::frame(&ctx, size.into(), |ui| app.update_ui(ui));
-                let output = crate::ui::layout_test_support::frame(&ctx, size.into(), |ui| app.update_ui(ui));
-                assert!(!output.shapes.is_empty(), "schermata {state}, {size:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn verifiche_obsolete_non_confermano_chiavi_o_provider_nuovi() {
-        let ctx = egui::Context::default();
-        let mut app = super::App::with_local_data(&ctx, Default::default(), None, Default::default());
-        let tested_ai = app.settings.ai_cfg();
-        app.settings.tmdb_key = "seconda".into();
-        app.settings.provider = "openrouter".into();
-        app.ai_checking = true;
-        app.tx
-            .send(super::Msg::Check {
-                key: "prima".into(),
-                res: Ok("valida".into()),
-            })
-            .unwrap();
-        app.tx
-            .send(super::Msg::AiCheck {
-                config: tested_ai,
-                res: Ok("valida".into()),
-            })
-            .unwrap();
-        app.poll();
-        assert!(app.settings_check.is_none());
-        assert!(app.ai_check.is_none());
-        assert!(app.net.is_none());
-        assert!(!app.ai_checking);
-        app.tx
-            .send(super::Msg::Check {
-                key: "seconda".into(),
-                res: Ok("valida".into()),
-            })
-            .unwrap();
-        app.tx
-            .send(super::Msg::AiCheck {
-                config: app.settings.ai_cfg(),
-                res: Err("rifiutata".into()),
-            })
-            .unwrap();
-        app.poll();
-        assert_eq!(app.settings_check.as_deref(), Some("✔ valida"));
-        assert_eq!(app.ai_check.as_deref(), Some("✕ rifiutata"));
-    }
-
-    #[test]
-    fn lingua_allineata_e_modale_contenuta_a_ogni_dimensione() {
-        use crate::ui::{layout_test_support::*, lumen};
-        for scale in [1.0, 1.5, 2.0] {
-            let ctx = egui::Context::default();
-            lumen::install(&ctx);
-            ctx.set_pixels_per_point(scale);
-            for width in [270.0, 500.0, 760.0] {
-                let mut language = "it-IT".to_string();
-                let mut render = || frame(&ctx, egui::vec2(width, 120.0), |ui| super::language_picker(ui, &mut language));
-                let _ = render();
-                let output = render();
-                let label = text_rect(&output, "LINGUA");
-                let italian = text_rect(&output, "Italiano");
-                let english = text_rect(&output, "Inglese");
-                assert!(italian.left() - label.right() >= 8.0);
-                assert!(english.left() - italian.right() >= 8.0);
-                assert!((label.center().y - italian.center().y).abs() <= 1.0);
-                assert!((english.center().y - italian.center().y).abs() <= 1.0);
-                assert!(english.right() < width);
-            }
-        }
-        for (width, height) in [(800.0, 600.0), (1000.0, 660.0), (1220.0, 660.0), (1600.0, 900.0)] {
-            let (area, modal) = super::detail_preview_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height)));
-            assert!(area.shrink(15.0).contains_rect(modal));
-            assert!(modal.width() <= 520.0 && modal.height() <= 760.0);
-            assert!(modal.height() > height * 0.7);
-        }
-    }
-
     #[test]
     fn un_ordinamento_non_predefinito_non_usa_le_tendenze() {
         let mut f = Facets::default();
@@ -7534,7 +4083,6 @@ mod tests {
         f.sort = Sort::Rating;
         assert!(!wants_trending(&f));
     }
-
     #[test]
     fn ogni_sblocco_toglie_un_solo_vincolo() {
         let tax = Taxonomy::load();
@@ -7563,7 +4111,6 @@ mod tests {
         assert_eq!(durata.1.min_votes, f.min_votes);
         assert_eq!(durata.1.genres, f.genres);
     }
-
     #[test]
     fn prossimamente_ordina_per_popolarita_non_per_data() {
         let noto = Movie {
@@ -7584,7 +4131,6 @@ mod tests {
         sort_movies(&mut v, Sort::Upcoming);
         assert_eq!(v[0].id, 1);
     }
-
     #[test]
     fn il_filtro_locale_usa_i_generi_in_and() {
         let tax = Taxonomy::load();
@@ -7606,7 +4152,6 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, 2);
     }
-
     #[test]
     fn il_filtro_locale_rispetta_senza_genere() {
         let tax = Taxonomy::load();
@@ -7628,7 +4173,6 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].id, 2);
     }
-
     #[test]
     fn la_durata_compare_nei_criteri() {
         let f = Facets {
@@ -7637,72 +4181,16 @@ mod tests {
         };
         assert!(describe(&Taxonomy::load(), &f, None).contains("100 min"));
     }
-
-    #[test]
-    fn un_nuovo_paese_sostituisce_quello_precedente() {
-        let mut base = Facets {
-            countries: vec!["FR".into()],
-            ..Default::default()
-        };
-        let extra = Facets {
-            countries: vec!["IT".into()],
-            ..Default::default()
-        };
-        merge_facets(&mut base, &extra, &Cleared::default());
-        assert_eq!(base.countries, ["IT"]);
-    }
-
-    #[test]
-    fn togliere_un_filtro_lo_rimuove_dal_contesto() {
-        let mut base = Facets {
-            min_rating: Some(8.0),
-            min_votes: Some(500),
-            ..Default::default()
-        };
-        let extra = Facets::default();
-        let cleared = Cleared {
-            min_rating: true,
-            ..Default::default()
-        };
-        merge_facets(&mut base, &extra, &cleared);
-        assert!(base.min_rating.is_none());
-        assert_eq!(base.min_votes, Some(500), "gli altri filtri restano");
-    }
-
-    #[test]
-    fn in_sala_tiene_solo_i_film_con_poster_e_al_massimo_sei() {
-        let with_poster = |id: u64| Movie {
-            id,
-            poster_path: Some(format!("/{id}.jpg")),
-            ..Default::default()
-        };
-        let mut movies = vec![Movie {
-            id: 0,
-            ..Default::default()
-        }];
-        for id in 1..=8 {
-            movies.push(with_poster(id));
-        }
-        let out = in_sala_movies(movies);
-        assert_eq!(out.len(), 6);
-        assert!(out.iter().all(|m| m.poster_path.is_some()));
-        assert_eq!(out[0].id, 1, "i film senza poster non occupano un buco");
-    }
-
-    #[test]
-    fn il_tema_cerca_parole_intere() {
-        assert!(has_word("un film sul mare", "mare"));
-        assert!(!has_word("vorrei amare il cinema", "mare"));
-        assert!(has_word("space travel verso l'ignoto", "space travel"));
-    }
-
     #[test]
     fn i_bordi_ridimensionano_la_finestra() {
         let r = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
         assert_eq!(resize_edge(r, egui::pos2(2.0, 2.0)), Some(Dir::NorthWest));
         assert_eq!(resize_edge(r, egui::pos2(798.0, 2.0)), Some(Dir::NorthEast));
         assert_eq!(resize_edge(r, egui::pos2(2.0, 598.0)), Some(Dir::SouthWest));
-        assert_eq!(resize_edge(r, egui::pos2(798.0, 598.0)), Some(Dir::SouthEast));
+        assert_eq!(
+            resize_edge(r, egui::pos2(798.0, 598.0)),
+            Some(Dir::SouthEast)
+        );
         assert_eq!(resize_edge(r, egui::pos2(400.0, 2.0)), Some(Dir::North));
         assert_eq!(resize_edge(r, egui::pos2(400.0, 598.0)), Some(Dir::South));
         assert_eq!(resize_edge(r, egui::pos2(2.0, 300.0)), Some(Dir::West));
@@ -7710,7 +4198,6 @@ mod tests {
         assert_eq!(resize_edge(r, egui::pos2(400.0, 300.0)), None);
         assert_eq!(resize_edge(r, egui::pos2(7.0, 300.0)), None);
     }
-
     #[test]
     fn i_pannelli_lasciano_spazio_alla_griglia() {
         // Con un solo pannello aperto, a 800 px restano tre colonne.
@@ -7726,7 +4213,6 @@ mod tests {
         assert!(1220.0 - right >= 808.0);
         assert_eq!(side_panel_widths(1920.0), (380.0, 420.0));
     }
-
     #[test]
     fn si_aprono_solo_link_web() {
         assert!(allowed_url("https://www.themoviedb.org/movie/1"));
@@ -7735,163 +4221,5 @@ mod tests {
         assert!(!allowed_url("file:///C:/Windows/System32/calc.exe"));
         assert!(!allowed_url("https://example.com/\ncalc"));
         assert!(!allowed_url("https://"));
-    }
-}
-
-#[cfg(test)]
-mod phase1_tests {
-    use super::*;
-    use crate::domain::model::Movie;
-
-    fn card(id: u64, title: &str, year: u16, rating: f32, runtime: u32) -> chat::Card {
-        chat::Card {
-            movie: Movie {
-                id,
-                title: title.into(),
-                original_title: title.into(),
-                year: Some(year),
-                rating,
-                votes: 10_000,
-                genre_ids: vec![18],
-                ..Default::default()
-            },
-            perche: format!("«{title}» rientra nei criteri della ricerca."),
-            consiglio: "Apri la scheda per i dettagli.".into(),
-            meta: Some(chat::CardMeta {
-                director: Some("Regista".into()),
-                runtime: Some(runtime),
-                ..Default::default()
-            }),
-        }
-    }
-
-    #[test]
-    fn gli_omonimi_si_scelgono_dal_ruolo() {
-        let people = vec![
-            Person {
-                id: 1,
-                name: "Vittorio De Sica".into(),
-                known_for_department: "Directing".into(),
-                popularity: 1.4,
-            },
-            Person {
-                id: 2,
-                name: "Vittorio De Sica".into(),
-                known_for_department: "Acting".into(),
-                popularity: 0.3,
-            },
-        ];
-        let any = PersonQuery {
-            name: "Vittorio De Sica".into(),
-            role: PersonRole::Any,
-        };
-        let actor = PersonQuery {
-            role: PersonRole::Actor,
-            ..any.clone()
-        };
-        assert_eq!(choose_person(&people, &any).map(|p| p.id), Some(1));
-        // Il De Sica famoso è anche attore: il ruolo non deve far scegliere
-        // l'omonimo attore minore.
-        assert_eq!(choose_person(&people, &actor).map(|p| p.id), Some(1));
-
-        let comparable = vec![
-            Person {
-                id: 3,
-                name: "Mario Rossi".into(),
-                known_for_department: "Directing".into(),
-                popularity: 1.0,
-            },
-            Person {
-                id: 4,
-                name: "Mario Rossi".into(),
-                known_for_department: "Acting".into(),
-                popularity: 0.9,
-            },
-        ];
-        let mario = PersonQuery {
-            name: "Mario Rossi".into(),
-            role: PersonRole::Actor,
-        };
-        assert_eq!(choose_person(&comparable, &mario).map(|p| p.id), Some(4));
-
-        // Omonimi con lo stesso ruolo: vince il più popolare; nessun
-        // risultato resta un caso gestito.
-        let two_directors = vec![
-            Person {
-                id: 5,
-                name: "Mario Rossi".into(),
-                known_for_department: "Directing".into(),
-                popularity: 1.0,
-            },
-            Person {
-                id: 6,
-                name: "Mario Rossi".into(),
-                known_for_department: "Directing".into(),
-                popularity: 2.0,
-            },
-        ];
-        let director = PersonQuery {
-            name: "Mario Rossi".into(),
-            role: PersonRole::Director,
-        };
-        assert_eq!(
-            choose_person(&two_directors, &director).map(|p| p.id),
-            Some(6)
-        );
-        assert!(choose_person(&[], &director).is_none());
-    }
-
-    #[test]
-    fn riconosce_registi_attori_e_il_film_appena_visto() {
-        let q = person_query("ho visto ladri di biciclette, altri film di vittorio de sica?")
-            .expect("persona");
-        assert_eq!(q.name.to_lowercase(), "vittorio de sica");
-        assert_eq!(q.role, PersonRole::Any);
-        assert_eq!(
-            seen_title_in_query("ho visto ladri di biciclette, altri film di vittorio de sica?")
-                .as_deref(),
-            Some("ladri di biciclette")
-        );
-
-        assert_eq!(
-            person_query("film con Vittorio De Sica").map(|q| q.role),
-            Some(PersonRole::Actor)
-        );
-        assert_eq!(
-            person_query("regia di Vittorio De Sica").map(|q| q.role),
-            Some(PersonRole::Director)
-        );
-        assert!(person_query("film di guerra").is_none());
-    }
-
-    #[test]
-    fn spiegazione_e_confronto_restano_sui_dati() {
-        let tax = Taxonomy::load();
-        let a = card(1, "Il Padrino", 1972, 8.7, 175);
-        let b = card(2, "Il Padrino - Parte II", 1974, 8.6, 202);
-
-        let exp = explanation_text(&tax, &a);
-        assert!(exp.contains("Il Padrino"));
-        assert!(exp.contains("Consiglio") || exp.contains("Consiglio:"));
-
-        let cmp = comparison_text(&tax, &a, &b);
-        assert!(cmp.contains("Il Padrino"));
-        assert!(cmp.contains("Parte II"));
-        assert!(cmp.contains("più corto"));
-    }
-
-    #[test]
-    fn i_titoli_menzionati_si_trovano_nella_chat() {
-        let a = card(1, "Il Padrino", 1972, 8.7, 175);
-        let b = card(2, "Quei bravi ragazzi", 1990, 8.5, 145);
-        let entries = vec![chat::Entry {
-            user: "consigli".into(),
-            answer: chat::Answer {
-                cards: vec![a, b],
-                ..Default::default()
-            },
-        }];
-        let mentioned = cards_mentioned(&entries, "confronta Il Padrino e Quei bravi ragazzi");
-        assert_eq!(mentioned.len(), 2);
     }
 }

@@ -4,122 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::infra::secrets;
 
-fn default_provider() -> String {
-    "rules".to_string()
-}
-
 fn default_language() -> String {
     "it-IT".to_string()
-}
-
-fn default_effort() -> String {
-    "max".to_string()
-}
-
-fn looks_like_openrouter(key: &str) -> bool {
-    key.trim().starts_with("sk-or-")
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AiCfg {
-    /// "rules" | "deepseek" | "openrouter" | "ollama"
-    #[serde(default = "default_provider")]
-    pub provider: String,
-    /// Collegamento Ollama (le API cloud hanno un indirizzo fisso).
-    #[serde(default)]
-    pub base_url: String,
-    /// Modello DeepSeek; per gli altri provider si usano i campi dedicati.
-    #[serde(default)]
-    pub model: String,
-    /// Chiave DeepSeek.
-    #[serde(default)]
-    pub api_key: String,
-    #[serde(default = "default_effort")]
-    pub effort: String,
-    #[serde(default)]
-    pub openrouter_api_key: String,
-    #[serde(default)]
-    pub openrouter_model: String,
-    #[serde(default)]
-    pub ollama_model: String,
-}
-
-impl Default for AiCfg {
-    fn default() -> Self {
-        Self {
-            provider: default_provider(),
-            base_url: String::new(),
-            model: "deepseek-flash".to_string(),
-            api_key: String::new(),
-            effort: default_effort(),
-            openrouter_api_key: String::new(),
-            openrouter_model: String::new(),
-            ollama_model: String::new(),
-        }
-    }
-}
-
-impl AiCfg {
-    /// Converte le vecchie configurazioni "openai" e "ollama" nei nuovi campi.
-    /// Ritorna true se il file va riscritto.
-    pub fn migrate(&mut self) -> bool {
-        let mut changed = false;
-        if self.effort.trim().is_empty() {
-            self.effort = default_effort();
-            changed = true;
-        }
-        match self.provider.as_str() {
-            "openai" => {
-                let base = self.base_url.to_lowercase();
-                let model = self.model.to_lowercase();
-                let openrouter = base.contains("openrouter") || model.starts_with("deepseek/");
-                let deepseek = !openrouter
-                    && (model.contains("deepseek") || base.contains("deepseek"));
-                if deepseek {
-                    self.provider = "deepseek".into();
-                    self.model = "deepseek-flash".into();
-                } else {
-                    self.provider = "openrouter".into();
-                    if looks_like_openrouter(&self.api_key) {
-                        self.openrouter_api_key = self.api_key.clone();
-                    }
-                    self.openrouter_model = self.model.clone();
-                    self.api_key.clear();
-                    self.model = "deepseek-flash".into();
-                }
-                self.base_url.clear();
-                changed = true;
-            }
-            "ollama" => {
-                if self.ollama_model.is_empty() && !self.model.is_empty() {
-                    self.ollama_model = self.model.clone();
-                }
-                if self.base_url.trim().is_empty() {
-                    self.base_url = "http://localhost:11434".into();
-                    changed = true;
-                }
-                if self.model != "deepseek-flash" {
-                    self.model = "deepseek-flash".into();
-                    changed = true;
-                }
-            }
-            "deepseek" => {
-                if self.model.trim().is_empty() || self.model == "deepseek-v4.1-flash" {
-                    self.model = "deepseek-flash".into();
-                    changed = true;
-                }
-            }
-            "openrouter"
-                if self.openrouter_api_key.trim().is_empty()
-                    && looks_like_openrouter(&self.api_key) =>
-            {
-                self.openrouter_api_key = self.api_key.clone();
-                changed = true;
-            }
-            _ => {}
-        }
-        changed
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -127,7 +13,7 @@ pub struct SimklCfg {
     /// Client ID pubblico dell'app registrata su Simkl.
     #[serde(default)]
     pub client_id: String,
-    /// Nasconde i film già visti in griglia e chat.
+    /// Nasconde i film già visti nel catalogo.
     #[serde(default)]
     pub hide_watched: bool,
 }
@@ -139,8 +25,6 @@ pub struct Config {
     #[serde(default = "default_language")]
     pub language: String,
     #[serde(default)]
-    pub ai: AiCfg,
-    #[serde(default)]
     pub simkl: SimklCfg,
 }
 
@@ -149,7 +33,6 @@ impl Default for Config {
         Self {
             tmdb_api_key: String::new(),
             language: default_language(),
-            ai: AiCfg::default(),
             simkl: SimklCfg::default(),
         }
     }
@@ -191,7 +74,10 @@ impl Config {
                         }
                     },
                 };
-                let mut rewritten = recovered | cfg.ai.migrate();
+                let mut rewritten = recovered
+                    || serde_json::from_str::<serde_json::Value>(raw)
+                        .ok()
+                        .is_some_and(|v| v.get("ai").is_some());
                 if use_keyring && secrets::available() {
                     let secrets_migrated = cfg.absorb_secrets();
                     rewritten |= secrets_migrated;
@@ -225,9 +111,7 @@ impl Config {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 let mut cfg = std::fs::read_to_string(path)
                     .ok()
-                    .and_then(|raw| {
-                        serde_json::from_str(raw.trim_start_matches('\u{feff}')).ok()
-                    })
+                    .and_then(|raw| serde_json::from_str(raw.trim_start_matches('\u{feff}')).ok())
                     .or_else(|| Self::recover(path))
                     .unwrap_or_default();
                 if use_keyring && secrets::available() {
@@ -259,8 +143,6 @@ impl Config {
             }
         };
         move_key(secrets::TMDB, &mut self.tmdb_api_key);
-        move_key(secrets::DEEPSEEK, &mut self.ai.api_key);
-        move_key(secrets::OPENROUTER, &mut self.ai.openrouter_api_key);
         migrated
     }
 
@@ -274,11 +156,7 @@ impl Config {
         let mut disk = self.clone();
         if use_keyring && secrets::available() {
             secrets::save(secrets::TMDB, &self.tmdb_api_key)?;
-            secrets::save(secrets::DEEPSEEK, &self.ai.api_key)?;
-            secrets::save(secrets::OPENROUTER, &self.ai.openrouter_api_key)?;
             disk.tmdb_api_key.clear();
-            disk.ai.api_key.clear();
-            disk.ai.openrouter_api_key.clear();
         }
         let raw = serde_json::to_string_pretty(&disk).map_err(|e| e.to_string())?;
         let tmp = tmp_path(path);
@@ -311,67 +189,23 @@ fn backup_path(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::AiCfg;
-
     #[test]
-    fn la_vecchia_configurazione_deepseek_passa_alla_api_diretta() {
-        let mut ai = AiCfg {
-            provider: "openai".into(),
-            base_url: "https://proxy.example/v1".into(),
-            model: "deepseek-v4.1-flash".into(),
-            api_key: "k".into(),
-            ..Default::default()
-        };
-        assert!(ai.migrate());
-        assert_eq!(ai.provider, "deepseek");
-        assert_eq!(ai.model, "deepseek-flash");
-        assert_eq!(ai.api_key, "k");
-    }
-
-    #[test]
-    fn la_vecchia_configurazione_openai_non_deepseek_passa_a_openrouter() {
-        let mut ai = AiCfg {
-            provider: "openai".into(),
-            base_url: "https://api.openai.com/v1".into(),
-            model: "gpt-test".into(),
-            api_key: "sk-or-test".into(),
-            ..Default::default()
-        };
-        assert!(ai.migrate());
-        assert_eq!(ai.provider, "openrouter");
-        assert_eq!(ai.openrouter_model, "gpt-test");
-        assert_eq!(ai.openrouter_api_key, "sk-or-test");
-    }
-
-    #[test]
-    fn un_modello_con_slash_resta_su_openrouter() {
-        let mut ai = AiCfg {
-            provider: "openai".into(),
-            model: "deepseek/deepseek-v4.1-flash-1017".into(),
-            api_key: "sk-or-test".into(),
-            ..Default::default()
-        };
-        assert!(ai.migrate());
-        assert_eq!(ai.provider, "openrouter");
-        assert_eq!(ai.openrouter_model, "deepseek/deepseek-v4.1-flash-1017");
-    }
-
-    #[test]
-    fn una_chiave_deepseek_non_finisce_su_openrouter() {
-        let mut ai = AiCfg {
-            provider: "openrouter".into(),
-            api_key: "sk-deepseek".into(),
-            ..Default::default()
-        };
-        ai.migrate();
-        assert!(ai.openrouter_api_key.is_empty());
+    fn la_configurazione_precedente_perde_i_provider_e_conserva_catalogo_e_simkl() {
+        let path = temp_file("catalog_migration");
+        std::fs::write(&path,r#"{"tmdb_api_key":"fixture-tmdb","language":"en-US","ai":{"provider":"retired","api_key":"fixture-obsolete"},"simkl":{"client_id":"fixture-simkl","hide_watched":true}}"#).unwrap();
+        let cfg = super::Config::load_at(&path, false);
+        assert_eq!(cfg.tmdb_api_key, "fixture-tmdb");
+        assert_eq!(cfg.language, "en-US");
+        assert!(cfg.simkl.hide_watched);
+        assert_eq!(cfg.simkl.client_id, "fixture-simkl");
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(saved.get("ai").is_none());
+        assert!(!saved.to_string().contains("fixture-obsolete"));
     }
 
     fn temp_file(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "cinematch_cfg_{}_{name}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cinematch_cfg_{}_{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("cartella di prova");
         dir.join("config.json")

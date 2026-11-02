@@ -1,3 +1,5 @@
+> Documento storico, superato dalla scelta del catalogo con filtri nella versione 0.11.0. Non è il piano attuale del prodotto.
+
 # CineMatch: ricerca cinematografica su archivio, senza modelli AI
 
 Piano proposto il 2 novembre 2026. Non è un'implementazione né un risultato di collaudo. Sostituisce la direzione basata su servizi generativi per la nuova modalità di ricerca; non autorizza chiamate a pagamento o download massivi durante la preparazione del piano.

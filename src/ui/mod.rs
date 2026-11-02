@@ -1,4 +1,3 @@
-pub mod chat;
 pub mod detail;
 pub mod facets;
 pub mod fonts;
