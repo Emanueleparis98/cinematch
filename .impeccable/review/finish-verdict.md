@@ -1,23 +1,19 @@
-# CineMatch browser 2.0 — independent finish verdict
+# CineMatch browser 2.1 — independent finish verdict
 
 disposition: ship
 
-Scope: verdict pass over the two material fixes identified by the fresh full
-review of the redesigned extension. Authenticated provider accounts are outside
-the evidence scope; provider layouts were controlled fixtures with live TMDB.
+Scope: full finish review of the accepted-layout refinement: dark-only owned
+surfaces, modern selection controls and title-first image placement. Provider
+accounts are outside the evidence scope; layouts are fixtures with live TMDB.
 
-1. Resolved — persistence: DESIGN.md and the schemaVersion 2 sidecar document
-   the implemented browser identity and automatic media behavior. Native LUMEN
-   is explicitly legacy and outside the redesigned boundary.
-2. Resolved — credit names: caption columns104px desktop/94px narrow are separate
-   from portrait widths76px/58px. Complete surname words are readable at320/1087.
-   A Range-based browser assertion verifies words never fragment across lines.
+Persistence passes: PRODUCT.md, DESIGN.md and schemaVersion 2 sidecar describe
+the dark palette, custom checkbox/combobox/listbox states and title-first media.
+The original grounded direction remains valid; no new comp was needed.
 
-Independent read-only pixel comparison confirmed all11 portrait interiors are
-identical across accepted dark/light captures (5332/5332 pixels per rectangle).
-The apparent truncation was an image-presentation artifact, not the saved evidence.
+All eight required captures are valid. The reviewer sampled controls.js and
+enrich.js, confirming keyboard/ARIA support and preservation of original prose.
+Title-first live capture resolves the reading-order defect in the user's screenshot.
 
-No remaining material item in the scored fix list. The full review had already
-matched typography, ground, native photographic material, first viewport, prompt
-dock and automatic/quiet enrichment. Source images are runtime TMDB content;
-shipping icon provenance is embedded and font license/source included.
+Typography, photographic material, dark ground, custom selections and responsive
+panel/connection/dock match the requested refinement. No material fixes identified
+in this review scope. Preserve Manrope, accepted layout and unboxed automatic media.

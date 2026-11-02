@@ -16,6 +16,7 @@ let passed=0,requests=0,failOnceQuery='';const searches=[],errors=[];
 const check=async(name,fn)=>{await fn();console.log(`PASS ${name}`);passed++;};
 const movie={id:5156,title:'Ladri di biciclette',original_title:'Ladri di biciclette',release_date:'1948-11-24',poster_path:'/poster.jpg',credits:{crew:[{id:1,name:'Vittorio De Sica',job:'Director',profile_path:'/director.jpg'}],cast:[{id:2,name:'Lamberto Maggiorani',character:'Antonio',profile_path:'/cast.jpg'},{id:3,name:'Enzo Staiola',character:'Bruno',profile_path:null}]}};
 const films=[movie,{...movie,id:10,title:'La terrazza',original_title:'La terrazza',release_date:'1980-02-08',credits:{...movie.credits,crew:[{id:4,name:'Ettore Scola',job:'Director',profile_path:'/scola.jpg'}]}},{...movie,id:823219,title:'Flow - Un mondo da salvare',original_title:'Straume',release_date:'2024-01-01',credits:{cast:[],crew:[{id:5,name:'Gints Zilbalodis',job:'Director',profile_path:'/gints.jpg'}]}},{...movie,id:19,title:'Metropolis',original_title:'Metropolis',release_date:'1927-01-01'},{...movie,id:20,title:'Amarcord',original_title:'Amarcord',release_date:'1973-01-01'},{...movie,id:99,title:'Temporaneo',original_title:'Temporaneo'}];
+films.push({...movie,id:34,title:'Non aprite quella porta',original_title:'The Texas Chain Saw Massacre',release_date:'1974-01-01',credits:{...movie.credits,crew:[{id:6,name:'Tobe Hooper',job:'Director',profile_path:'/hooper.jpg'}]}});
 const answer='<h3>1. Ladri di biciclette (1948) — Regia: Vittorio De Sica</h3><p>Un classico del neorealismo da scoprire.</p><h3>🌊 2. Flow - Un mondo da salvare (2024)</h3><p>Un viaggio animato attraverso un mondo sommerso.</p><h3>8. La terrazza (1980) — Regia: Ettore Scola</h3><ul><li><strong>Titolo originale:</strong> La terrazza</li><li><strong>Attinenza:</strong> Una chiusura discussa del ciclo.</li></ul>';
 const fixture=body=>`<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI answer fixture</title><body><main>${body}</main></body></html>`;
 const providers=[['chatgpt.com',`<div data-message-author-role="user">PRIVATE_USER_CONVERSATION (1999)</div><div data-message-author-role="assistant">${answer}</div>`],['chat.deepseek.com',`<div data-role="user"><div class="ds-markdown">PRIVATE_USER_CONVERSATION (1999)</div></div><div class="ds-markdown">${answer}</div>`],['claude.ai',`<div data-testid="assistant-message">${answer}</div>`],['gemini.google.com',`<model-response><message-content>${answer}</message-content></model-response>`]];
@@ -26,7 +27,7 @@ if(!live){
     let data={images:{}},status=200;
     if(url.pathname.includes('/search/')){
       const query=url.searchParams.get('query');searches.push(query);
-      data={results:query==='Ambiguous'?[{...movie,id:30,title:'Ambiguous'},{...movie,id:31,title:'Ambiguous'}]:films.filter(m=>m.title===query)};
+      data={results:query==='Ambiguous'?[{...movie,id:30,title:'Ambiguous'},{...movie,id:31,title:'Ambiguous'}]:films.filter(m=>m.title===query||m.original_title===query)};
       if(query===failOnceQuery){failOnceQuery='';status=500;}
     }else if(url.pathname.includes('/movie/'))data=films.find(m=>m.id===Number(url.pathname.split('/').at(-1)))??movie;
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
@@ -69,6 +70,26 @@ try{
     await theme(first,'light');assert.equal(await noControls(first),true);
     const style=await media(first).first().evaluate(node=>({background:getComputedStyle(node).backgroundColor,border:getComputedStyle(node).borderWidth,color:getComputedStyle(node).color}));assert.equal(style.background,'rgba(0, 0, 0, 0)');assert.equal(style.border,'0px');assert.equal(style.color,'rgb(34, 37, 43)');
     const light=await context.newPage();await light.goto('https://chatgpt.com/light');await theme(light,'light');await light.setViewportSize({width:1087,height:1300});await media(light).nth(2).waitFor({timeout:25000});await settle(light);await light.screenshot({path:`test-results/seamless-${live?'live-':''}1087-light.png`,fullPage:true});await light.close();
+  });
+  await check('inline bold title and description in one paragraph keep images before prose',async()=>{
+    await first.setViewportSize({width:1140,height:2400});await theme(first,'dark');
+    await first.evaluate(()=>{const root=document.createElement('div');root.dataset.messageAuthorRole='assistant';root.id='inline-answer';root.innerHTML='<p id="inline-paragraph"><strong>3. The Texas Chain Saw Massacre (1974) — Regia: Tobe Hooper</strong><br><em>Non aprite quella porta.</em> Film-cardine e caso di confine: questa descrizione deve restare dopo le immagini.</p>';document.querySelector('main').append(root);});
+    const paragraph=first.locator('#inline-paragraph');await paragraph.locator('.media').waitFor({timeout:25000});
+    assert.equal(await paragraph.evaluate(p=>{const host=p.querySelector('[data-cinematch-ui]');return host.tagName==='SPAN'&&host.previousElementSibling.tagName==='BR'&&host.nextElementSibling.tagName==='EM';}),true);
+    const image=await paragraph.locator('[data-cinematch-ui]').boundingBox(),description=await paragraph.locator('em').boundingBox();assert.ok(image.y+image.height<=description.y+1);
+    await settle(first);await paragraph.screenshot({path:`test-results/title-first-${live?'live-':''}1140.png`});
+  });
+  await check('year and director outside bold text stay above the illustrations',async()=>{
+    await first.evaluate(()=>{const p=document.createElement('p');p.id='mixed-title';p.innerHTML='<strong>4. The Texas Chain Saw Massacre</strong> (1974) — Regia: Tobe Hooper<br><em>Descrizione successiva.</em>';const root=document.createElement('div');root.dataset.messageAuthorRole='assistant';root.id='mixed-answer';root.append(p);document.querySelector('main').append(root);});
+    const p=first.locator('#mixed-title');await p.locator('.media').waitFor({timeout:15000});assert.equal(await p.evaluate(el=>el.querySelector('[data-cinematch-ui]').previousElementSibling.tagName),'BR');assert.ok((await p.innerText()).includes('(1974) — Regia: Tobe Hooper'));
+  });
+  await check('bold title without a line break still precedes inline description',async()=>{
+    await first.evaluate(()=>{const p=document.createElement('p');p.id='bold-title';p.innerHTML='<strong>5. The Texas Chain Saw Massacre (1974) — Regia: Tobe Hooper</strong> <em>La descrizione prosegue qui.</em>';const root=document.createElement('div');root.dataset.messageAuthorRole='assistant';root.append(p);document.querySelector('main').append(root);});
+    const p=first.locator('#bold-title');await p.locator('.media').waitFor({timeout:15000});assert.equal(await p.evaluate(el=>el.querySelector('[data-cinematch-ui]').previousElementSibling.tagName),'STRONG');
+  });
+  await check('a repeated title in descriptive prose never overrides the actual heading',async()=>{
+    await first.evaluate(()=>{const root=document.createElement('div');root.dataset.messageAuthorRole='assistant';root.id='repeated-title';root.innerHTML='<h3>6. The Texas Chain Saw Massacre (1974) — Regia: Tobe Hooper</h3><p>The Texas Chain Saw Massacre (1974) — testo descrittivo ripetuto.</p>';document.querySelector('main').append(root);});
+    const root=first.locator('#repeated-title');await root.locator('.media').waitFor({timeout:15000});assert.equal(await root.locator('[data-cinematch-ui]').evaluate(el=>el.previousElementSibling.tagName),'H3');await first.locator('#inline-answer').evaluate(el=>el.remove());await first.locator('#mixed-answer').evaluate(el=>el.remove());await first.locator('#bold-title').evaluate(el=>el.parentElement.remove());await root.evaluate(el=>el.remove());
   });
   if(!live){
     await check('decoration and private user content never enter TMDB queries',async()=>{assert.ok(searches.includes('Flow - Un mondo da salvare'));assert.ok(!searches.some(s=>s.startsWith('8.')||s.includes('🌊')||s.includes('PRIVATE_USER_CONVERSATION')));});

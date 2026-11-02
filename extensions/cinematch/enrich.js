@@ -27,7 +27,7 @@
   }
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(`
-    :host{display:block;container-type:inline-size;margin:18px 0 24px;color:inherit;font-family:inherit;line-height:1.4;clear:both}
+    :host{display:block;container-type:inline-size;margin:12px 0 22px;color:inherit;font-family:inherit;line-height:1.4;clear:both}
     :host([hidden]){display:none}*{box-sizing:border-box}.media{display:grid;grid-template-columns:108px minmax(0,1fr);gap:24px;align-items:start;margin:0;animation:arrive 180ms cubic-bezier(.22,1,.36,1)}
     .media.no-poster{grid-template-columns:1fr}.poster{display:block;width:108px;aspect-ratio:2/3;object-fit:cover;border-radius:11px;background:rgba(127,127,127,.12)}
     a{color:inherit;text-decoration:none;min-width:0}a:focus-visible{outline:2px solid #3878ed;outline-offset:5px;border-radius:8px}a:hover .name{text-decoration:underline;text-underline-offset:3px}
@@ -114,14 +114,23 @@
   const referenceKey = ref => `${ref.type}:${normalize(ref.title)}:${ref.year ?? ''}`;
   function referencesFor(root) {
     const refs = extract(responseText(root)), locations = new Map();
-    for (const node of root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,tr')) {
+    const sameReference = (text, ref) => extract(text).some(other => referenceKey(other) === referenceKey(ref));
+    for (const node of root.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"],p,li,tr,strong,b')) {
       if (node.closest('[data-cinematch-ui],[aria-hidden="true"]')) continue;
       for (const ref of extract(responseText(node))) {
         const key = referenceKey(ref), previous = locations.get(key);
-        if (!previous || previous.contains(node)) locations.set(key, node);
+        const heading = node.closest('h1,h2,h3,h4,h5,h6,[role="heading"]');
+        let anchor = heading ?? node, priority = heading ? 4 : /^(STRONG|B)$/.test(node.tagName) ? 2 : 1;
+        // Some chats put title and description in the SAME paragraph. Anchor at
+        // its first title-line break, not after the entire description paragraph.
+        if (!heading) for (const br of node.querySelectorAll('br')) {
+          const range = document.createRange(); range.setStart(node, 0); range.setEndBefore(br);
+          if (sameReference(range.cloneContents().textContent, ref)) {anchor = br; priority = 3; break;}
+        }
+        if (!previous || priority > previous.priority || (priority === previous.priority && previous.node.contains(node))) locations.set(key, {node, anchor, priority});
       }
     }
-    return refs.map(ref => {const node = locations.get(referenceKey(ref)); return {ref, anchor: node?.closest('table') ?? node ?? root};});
+    return refs.map(ref => {const anchor = locations.get(referenceKey(ref))?.anchor; return {ref, anchor: anchor?.closest('table') ?? anchor ?? root};});
   }
   const observer = new IntersectionObserver(entries => {
     for (const item of entries) for (const entry of anchors.get(item.target) ?? []) {
@@ -168,7 +177,9 @@
       const key = referenceKey(ref); keep.add(key);
       let entry = state.entries.get(key);
       if (!entry) {
-        const host = element('div'); host.setAttribute('data-cinematch-ui', 'film'); host.hidden = true;
+        // A span remains valid inside paragraphs containing an inline title;
+        // the shadow host's CSS provides the block layout for the images.
+        const host = element('span'); host.setAttribute('data-cinematch-ui', 'film'); host.hidden = true;
         const shadow = host.attachShadow({mode: 'open'}); shadow.adoptedStyleSheets = [sheet];
         entry = {host, shadow, ref, anchor: null, near: false, stable: false, phase: 'idle', version: 0, attempts: 0, fingerprint: '', timer: null};
         state.entries.set(key, entry);
@@ -181,7 +192,7 @@
       const tail = tails.get(anchor) ?? anchor;
       if (anchor === state.root) {if (!entry.host.isConnected) state.root.append(entry.host);}
       else if (tail.nextSibling !== entry.host) tail.after(entry.host);
-      tails.set(anchor, entry.host); watch(entry, anchor);
+      tails.set(anchor, entry.host); watch(entry, anchor.tagName === 'BR' ? anchor.parentElement : anchor);
     }
     for (const [key, entry] of state.entries) if (!keep.has(key)) {removeEntry(entry); state.entries.delete(key);}
   }

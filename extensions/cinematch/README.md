@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 2.0.0
+# CineMatch — estensione browser 2.1.0
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-2.0.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-2.1.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -19,6 +19,11 @@ Distribuzione manuale, non pubblicata sullo store e senza aggiornamento automati
 Guida Chrome: https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world.
 
 ## Esplorare e preparare una richiesta
+
+L'estensione usa solo il tema scuro: pannello, connessione TMDB, campi e menu.
+Le spunte sono disegnate; i menu di scelta sono liste personalizzate con ricerca
+digitando, frecce, Home/End, Invio, Esc e Tab. Si aprono sopra o sotto il campo
+in base allo spazio, senza essere tagliati dal bordo del pannello.
 
 In **Esplora**, cerca per corrente, sinonimo, autore o opera. I filtri per
 categoria, periodo e area sono espandibili. Apri una voce per caratteristiche,
@@ -38,8 +43,11 @@ Collega TMDB una sola volta dal pulsante **TMDB** nell'intestazione. Sono accett
 una chiave API v3 oppure un API Read Access Token. La connessione già salvata
 nelle versioni precedenti viene mantenuta: non serve reinserire la credenziale.
 
-Locandine e foto di registi/interpreti vengono aggiunte automaticamente dopo i
-titoli riconosciuti. Seguono tipografia e colori della chat, chiara o scura.
+Locandine e foto di registi/interpreti vengono aggiunte automaticamente subito
+dopo la riga del titolo, prima della descrizione. Questo vale anche per titoli
+in grassetto e descrizioni nello stesso paragrafo, separati da un ritorno a capo.
+Le immagini seguono tipografia e colori della pagina della chat; il tema delle
+schermate proprie dell'estensione rimane sempre scuro.
 Non vengono inseriti pannelli, titoli duplicati, pulsanti, impostazioni, moduli,
 selettori, riquadri di errore o richieste di correzione. Le immagini sono link alle
 schede TMDB; il testo originale dell'AI viene mantenuto.

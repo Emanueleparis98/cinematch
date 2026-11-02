@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 2.0.0
+# CineMatch — estensione browser 2.1.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-2.0.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-2.1.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -58,7 +58,12 @@ pubblica lo ZIP come artefatto CI. I test browser usano Chromium isolato e pagin
 simulate: nessun account reale o richiesta AI. I siti possono cambiare editor;
 in quel caso rimane il copia/incolla.
 
-Verifica immagini automatiche e privacy: [collaudo 2.0.0](docs/estensione-2.0.0-verifica.md).
+Il pannello e la connessione TMDB usano un tema fisso scuro. Spunte disegnate e
+menu personalizzati sostituiscono i menu del sistema, con navigazione da tastiera.
+Le immagini arrivano subito sotto la riga del titolo, prima della descrizione,
+anche quando il provider mette entrambi nello stesso paragrafo.
+
+Verifica immagini e controlli: [collaudo 2.1.0](docs/estensione-2.1.0-verifica.md).
 
 La raccolta conserva 44 movimenti, 14 tendenze/scenari, 12 generi/cicli,
 3 tradizioni e 1 tecnica. [Audit storico](docs/correnti-0.14.0-audit.md),

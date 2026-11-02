@@ -26,7 +26,9 @@ di errore. Il riconoscimento gestisce emoji, numerazioni e sottotitoli tradotti.
 Non acquisisce un database progressivo. Le bozze restano in storage.session;
 la credenziale può essere ricordata in storage.local su scelta dell'utente.
 Le immagini sono sempre automatiche; le vecchie preferenze di disattivazione
-non vengono usate. Il pannello adotta una nuova identità chiara con accento cobalto.
+non vengono usate. Il pannello adotta un'identità solo scura con accento cobalto,
+spunte disegnate e menu personalizzati accessibili. Le immagini vengono ancorate
+alla riga del titolo, prima della descrizione anche nei paragrafi con titolo inline.
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 

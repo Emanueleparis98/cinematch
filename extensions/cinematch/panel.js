@@ -1,4 +1,5 @@
 import {KINDS,MODES,PROVIDERS,defaultRequest,generatePrompt,matches,normalize,period,providerForUrl,signature} from "./core.js";
+import {enhanceSelects,refreshSelects} from "./controls.js";
 
 const $ = id => document.getElementById(id);
 const state = {request:defaultRequest(),query:"",kind:"",era:"all",region:"",sort:"chronological",tab:"explore",detail:null,prompt:"",generatedSig:null,provider:"chatgpt",targetTabId:null};
@@ -78,7 +79,7 @@ function generate() {
 async function syncActive() {
   try {
     const [tab]=await chrome.tabs.query({active:true,windowId});const provider=providerForUrl(tab?.url);
-    if(provider){state.provider=provider.id;state.targetTabId=tab.id;$("provider").value=provider.id;$("chat-state").textContent=`${provider.name} è pronta per la richiesta.`;$("chat-state").classList.add("ready");save();}
+    if(provider){state.provider=provider.id;state.targetTabId=tab.id;$("provider").value=provider.id;refreshSelects();$("chat-state").textContent=`${provider.name} è pronta per la richiesta.`;$("chat-state").classList.add("ready");save();}
     else {$("chat-state").textContent="Apri la chat per inserire la richiesta.";$("chat-state").classList.remove("ready");}
   }catch{$("chat-state").textContent="Puoi copiare il prompt o aprire la chat scelta.";}
 }
@@ -108,6 +109,7 @@ function fillForm() {
   $("watched").value=state.request.watched.join("\n");$("exact-count").checked=state.request.count!==null;$("count-wrap").hidden=state.request.count===null;$("count").value=String(state.request.count??5);
   for(const key of ["search","kind","era","region","sort","provider"])$(key).value=key==="search"?state.query:state[key];
   $("prompt-preview").value=state.prompt;
+  refreshSelects();
 }
 async function boot() {
   const response=await fetch(chrome.runtime.getURL("data/movements.json"));if(!response.ok)throw new Error("Reference unavailable");catalog=await response.json();
@@ -152,6 +154,7 @@ async function boot() {
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveNow();});
   document.addEventListener("keydown",event=>{if((event.ctrlKey||event.metaKey)&&event.key==="Enter"&&state.tab==="prompt"){event.preventDefault();generate();}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="f"){event.preventDefault();state.detail=null;$("browser").hidden=false;$("detail").hidden=true;showTab("explore");$("search").focus();}});
   if(new URL(location.href).searchParams.get("view")==="full")document.body.classList.add("full-page");
+  enhanceSelects();
   await syncActive();
 }
 boot().catch(()=>{$("boot-error").hidden=false;document.querySelector("main").hidden=true;$("actions").hidden=true;});

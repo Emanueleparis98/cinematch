@@ -6,7 +6,7 @@ import {insertIntoComposer} from '../extensions/cinematch/composer.js';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
 const extension=resolve('dist/CineMatch-Chrome');
 const profile=await mkdtemp(join(tmpdir(),'cinematch-extension-test-'));
-const context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,viewport:{width:420,height:850},args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
+const context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,reducedMotion:'reduce',viewport:{width:420,height:850},args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
 let passed=0;const errors=[];
 const check=async(name,fn)=>{await fn();passed++;console.log(`PASS ${name}`);};
 const fixture=body=>`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:20px}textarea,[contenteditable]{display:block;width:300px;min-height:120px}</style></head><body>${body}<script>window.submits=0;window.enters=0;window.inputs=0;document.addEventListener('submit',e=>{e.preventDefault();window.submits++});document.addEventListener('keydown',e=>{if(e.key==='Enter')window.enters++});document.addEventListener('input',()=>window.inputs++);</script></body></html>`;
@@ -27,6 +27,22 @@ try{
   await check('local fonts load with no remote font service',async()=>{
     await panel.evaluate(async()=>{await document.fonts.load('14px Manrope');await document.fonts.load('800 30px Manrope');await document.fonts.ready;});assert.equal(await panel.evaluate(()=>document.fonts.check('14px Manrope')),true);
   });
+  await check('extension stays dark and uses custom checkbox rendering',async()=>{
+    assert.equal(await panel.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark');
+    assert.equal(await panel.locator('.app-header').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(21, 29, 42)');
+    assert.equal(await panel.locator('.movement-row input').first().evaluate(el=>getComputedStyle(el).appearance),'none');
+    await panel.locator('.movement-row input').first().check();await mkdir('test-results',{recursive:true});await panel.locator('.movement-row').first().screenshot({path:'test-results/selection-checked.png'});await panel.locator('.movement-row input').first().uncheck();
+  });
+  await check('custom lists commit selections and reset without an operating-system menu',async()=>{
+    await panel.locator('.filter-disclosure summary').click();const trigger=panel.locator('#kind').locator('..').locator('.picker-trigger');
+    await trigger.click();await panel.getByRole('option',{name:'Movimento storico',exact:true}).click();assert.equal(await panel.locator('#kind').inputValue(),'movement');assert.equal(await panel.locator('.movement-row').count(),44);assert.ok((await trigger.innerText()).includes('Movimento storico'));
+    await panel.locator('#reset').click();assert.equal(await panel.locator('.movement-row').count(),74);assert.ok((await trigger.innerText()).includes('Tutte le categorie'));
+  });
+  await check('custom lists support keyboard navigation, cancellation and typeahead',async()=>{
+    const trigger=panel.locator('#sort').locator('..').locator('.picker-trigger');await trigger.focus();await trigger.press('ArrowDown');await trigger.press('End');await trigger.press('Enter');assert.equal(await panel.locator('#sort').inputValue(),'alphabetic');
+    await trigger.press('ArrowDown');await trigger.press('Home');await trigger.press('Escape');assert.equal(await panel.locator('#sort').inputValue(),'alphabetic');assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+    await trigger.press('c');await trigger.press('Enter');assert.equal(await panel.locator('#sort').inputValue(),'chronological');await panel.locator('.filter-disclosure summary').click();
+  });
   await check('search, detail and sources work',async()=>{
     await panel.locator('#search').fill('neorealismo');assert.ok(await panel.locator('.movement-row').count()>=1);
     await panel.getByRole('button',{name:'Neorealismo italiano',exact:true}).click();
@@ -46,6 +62,10 @@ try{
       await panel.screenshot({path:`test-results/extension-prompt-${width}.png`});
       const box=await panel.locator('#generate').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=height,`generate clipped at ${width}`);
     }
+  });
+  await check('menu opens above the dock and remains fully visible at 320px',async()=>{
+    await panel.setViewportSize({width:320,height:568});await panel.evaluate(()=>document.body.classList.remove('full-page'));
+    const trigger=panel.locator('#provider').locator('..').locator('.picker-trigger');await trigger.click();const box=await panel.locator('#cm-menu-provider').boundingBox(),button=await trigger.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=568);assert.ok(box.y<button.y);assert.equal(await panel.locator('#cm-menu-provider .picker-option').count(),4);await panel.screenshot({path:'test-results/dark-menu-320.png'});await trigger.press('Escape');
   });
   const send=message=>panel.evaluate(message=>chrome.runtime.sendMessage(message),message);
   const windowId=await panel.evaluate(async()=>(await chrome.windows.getCurrent()).id);
