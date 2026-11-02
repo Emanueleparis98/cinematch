@@ -1,12 +1,11 @@
 //! Avvia la versione in sviluppo senza prendere il mutex dell'app installata.
-//! Dati TMDB reali e configurazione locale; nessun provider AI.
+//! Guida e prompt locali; nessun servizio AI o archivio di film.
 fn main() -> eframe::Result<()> {
-    let cfg = cinematch::infra::config::Config::load();
     eframe::run_native(
-        "CineMatch · Catalogo 0.13.0",
+        "CineMatch · Correnti 0.14.0",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_title("CineMatch · Catalogo 0.13.0")
+                .with_title("CineMatch · Correnti 0.14.0")
                 .with_position([20.0, 20.0])
                 .with_inner_size([1220.0, 660.0])
                 .with_min_inner_size([800.0, 600.0])
@@ -15,7 +14,7 @@ fn main() -> eframe::Result<()> {
         },
         Box::new(move |cc| {
             cinematch::ui::lumen::install(&cc.egui_ctx);
-            Ok(Box::new(cinematch::app::App::new(&cc.egui_ctx, cfg)))
+            Ok(Box::new(cinematch::app::App::new(&cc.egui_ctx)))
         }),
     )
 }

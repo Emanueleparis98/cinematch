@@ -34,7 +34,6 @@ fn main() -> eframe::Result<()> {
     let Some(_instance) = infra::single_instance::acquire() else {
         return Ok(());
     };
-    let cfg = infra::config::Config::load();
     let renderer = renderer();
     let mut viewport = egui::ViewportBuilder::default()
         // A 150% su 1920x1200 l'area di lavoro e ~1280x752 logici:
@@ -61,7 +60,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             ui::lumen::install(&cc.egui_ctx);
-            Ok(Box::new(app::App::new(&cc.egui_ctx, cfg)))
+            Ok(Box::new(app::App::new(&cc.egui_ctx)))
         }),
     )
 }

@@ -1,0 +1,3270 @@
+[
+  {
+    "id": "cinema_attrazioni",
+    "label": "Cinema delle attrazioni",
+    "original_name": "Cinema of Attractions",
+    "kind": "tendency",
+    "start": 1895,
+    "end": 1907,
+    "regions": [
+      "Internazionale"
+    ],
+    "aliases": [
+      "Cinema of Attractions"
+    ],
+    "summary": "Concetto storiografico per leggere attrazione visiva e indirizzo allo spettatore nel primo cinema.",
+    "traits": [
+      "Esibizione",
+      "Meraviglia tecnica",
+      "Rapporto diretto con il pubblico"
+    ],
+    "authors": [
+      "Georges Méliès",
+      "Auguste e Louis Lumière"
+    ],
+    "works": [
+      {
+        "title": "L'Arrivée d'un train en gare de La Ciotat",
+        "year": 1896
+      },
+      {
+        "title": "Le Voyage dans la Lune",
+        "year": 1902
+      }
+    ],
+    "sources": [
+      {
+        "title": "theses.gla.ac.uk · Cinema delle attrazioni",
+        "url": "https://theses.gla.ac.uk/75787/1/13818523.pdf"
+      }
+    ],
+    "scope_note": "Categoria storiografica elaborata successivamente, non nome adottato dai cineasti del 1895. L’attrazione può convivere con la narrazione.",
+    "original_entry": false
+  },
+  {
+    "id": "brighton",
+    "label": "Scuola di Brighton",
+    "original_name": "Brighton School",
+    "kind": "movement",
+    "start": 1896,
+    "end": 1910,
+    "regions": [
+      "Regno Unito"
+    ],
+    "aliases": [
+      "Brighton School"
+    ],
+    "summary": "Raggruppamento storiografico di pionieri attivi nell'area di Brighton e Hove.",
+    "traits": [
+      "Sperimentazione del montaggio",
+      "Trucchi visivi",
+      "Primi piani"
+    ],
+    "authors": [
+      "George Albert Smith",
+      "James Williamson"
+    ],
+    "works": [
+      {
+        "title": "Grandma's Reading Glass",
+        "year": 1900
+      },
+      {
+        "title": "The Big Swallow",
+        "year": 1901
+      }
+    ],
+    "sources": [
+      {
+        "title": "screenarchive.brighton.ac.uk · Scuola di Brighton",
+        "url": "https://screenarchive.brighton.ac.uk/portfolio/carousel-projects/"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "film_dart",
+    "label": "Film d'Art",
+    "original_name": "Film d’Art",
+    "kind": "movement",
+    "start": 1908,
+    "end": 1914,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "French Film d'Art"
+    ],
+    "summary": "Progetto produttivo che porta prestigio letterario e teatrale nel cinema francese delle origini.",
+    "traits": [
+      "Adattamento",
+      "Interpreti teatrali",
+      "Legittimazione culturale"
+    ],
+    "authors": [
+      "André Calmettes",
+      "Charles Le Bargy"
+    ],
+    "works": [
+      {
+        "title": "L'Assassinat du duc de Guise",
+        "year": 1908
+      }
+    ],
+    "sources": [
+      {
+        "title": "cinematheque.ch · Film d'Art",
+        "url": "https://cinematheque.ch/actualites/toutes-les-actualites/lassassinat-du-duc-de-guise-et-lempreinte-ou-la-main-rouge"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "divismo",
+    "label": "Divismo italiano del muto",
+    "original_name": "Divismo",
+    "kind": "cycle",
+    "start": 1913,
+    "end": 1920,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Diva film",
+      "Italian diva cinema"
+    ],
+    "summary": "Ciclo del muto italiano che costruisce il film intorno alla presenza della diva.",
+    "traits": [
+      "Melodramma",
+      "Gesto e figura",
+      "Centralità della protagonista"
+    ],
+    "authors": [
+      "Mario Caserini",
+      "Nino Oxilia",
+      "Gustavo Serena"
+    ],
+    "works": [
+      {
+        "title": "Ma l'amor mio non muore!",
+        "year": 1913
+      },
+      {
+        "title": "Assunta Spina",
+        "year": 1915
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Divismo italiano del muto",
+        "url": "https://www.bfi.org.uk/lists/five-iconic-italian-actresses"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": false
+  },
+  {
+    "id": "futurismo",
+    "label": "Futurismo cinematografico",
+    "original_name": "Cinema futurista",
+    "kind": "movement",
+    "start": 1916,
+    "end": 1918,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Futurist cinema",
+      "Cinema futurista"
+    ],
+    "summary": "Progetto d'avanguardia legato al futurismo, di cui resta una documentazione filmica frammentaria.",
+    "traits": [
+      "Manifesto",
+      "Sperimentazione visiva",
+      "Scenografia e performance"
+    ],
+    "authors": [
+      "Arnaldo Ginna",
+      "Bruno Corra",
+      "Anton Giulio Bragaglia"
+    ],
+    "works": [
+      {
+        "title": "Thaïs",
+        "year": 1916
+      }
+    ],
+    "sources": [
+      {
+        "title": "cinematheque.fr · Futurismo cinematografico",
+        "url": "https://www.cinematheque.fr/film/154287.html"
+      }
+    ],
+    "scope_note": "Molte opere sono perdute. Thaïs è un caso di attribuzione discussa, legato soprattutto alle scenografie futuriste.",
+    "original_entry": false
+  },
+  {
+    "id": "impressionismo",
+    "label": "Impressionismo francese",
+    "original_name": "Impressionnisme cinématographique",
+    "kind": "movement",
+    "start": 1918,
+    "end": 1929,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "French Impressionism",
+      "Première avant-garde"
+    ],
+    "summary": "Ricerca di una specificità espressiva del cinema attraverso percezione e interiorità.",
+    "traits": [
+      "Soggettività",
+      "Effetti ottici",
+      "Ritmo visivo"
+    ],
+    "authors": [
+      "Louis Delluc",
+      "Jean Epstein",
+      "Germaine Dulac",
+      "Marcel L'Herbier"
+    ],
+    "works": [
+      {
+        "title": "La Roue",
+        "year": 1923
+      },
+      {
+        "title": "La Chute de la maison Usher",
+        "year": 1928
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Impressionismo francese",
+        "url": "https://www.bfi.org.uk/sight-and-sound/features/fantastique-dream-worlds-french-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "espressionismo",
+    "label": "Espressionismo tedesco",
+    "original_name": "Deutscher Expressionismus",
+    "kind": "movement",
+    "start": 1920,
+    "end": 1933,
+    "regions": [
+      "Germania"
+    ],
+    "aliases": [
+      "German Expressionism"
+    ],
+    "summary": "Deformazione visiva e inquietudine nel cinema tedesco del primo dopoguerra.",
+    "traits": [
+      "Scenografie espressive",
+      "Luci contrastate",
+      "Prospettive soggettive"
+    ],
+    "authors": [
+      "Robert Wiene",
+      "F. W. Murnau",
+      "Fritz Lang"
+    ],
+    "works": [
+      {
+        "title": "Il gabinetto del dottor Caligari",
+        "year": 1920
+      },
+      {
+        "title": "Nosferatu",
+        "year": 1922
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Espressionismo tedesco",
+        "url": "https://www.bfi.org.uk/lists/10-great-german-expressionist-films"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "soviet_montage",
+    "label": "Montaggio sovietico",
+    "original_name": "Soviet Montage",
+    "kind": "movement",
+    "start": 1920,
+    "end": 1935,
+    "regions": [
+      "Unione Sovietica"
+    ],
+    "aliases": [
+      "Soviet Montage"
+    ],
+    "summary": "Il rapporto fra inquadrature diventa una forza espressiva e politica.",
+    "traits": [
+      "Conflitto fra immagini",
+      "Ritmo",
+      "Sperimentazione documentaria"
+    ],
+    "authors": [
+      "Sergej Ejzenštejn",
+      "Dziga Vertov",
+      "Vsevolod Pudovkin"
+    ],
+    "works": [
+      {
+        "title": "La corazzata Potëmkin",
+        "year": 1925
+      },
+      {
+        "title": "L'uomo con la macchina da presa",
+        "year": 1929
+      }
+    ],
+    "sources": [
+      {
+        "title": "resource.download.wjec.co.uk · Montaggio sovietico",
+        "url": "https://resource.download.wjec.co.uk/vtc/2017-18/17-18_3-12/global-filmmaking-perspectives-film-movements-student-resource.pdf"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "wuxia",
+    "label": "Wuxia",
+    "original_name": "Wuxia",
+    "kind": "tradition",
+    "start": 1920,
+    "end": null,
+    "regions": [
+      "Cina",
+      "Hong Kong",
+      "Taiwan"
+    ],
+    "aliases": [
+      "Wuxia pian",
+      "Cinema cavalleresco cinese"
+    ],
+    "summary": "Tradizione di eroi marziali e codici cavallereschi, radicata nella letteratura cinese.",
+    "traits": [
+      "Etica cavalleresca",
+      "Coreografia",
+      "Storia e immaginario fantastico"
+    ],
+    "authors": [
+      "King Hu",
+      "Chang Cheh",
+      "Zhang Yimou"
+    ],
+    "works": [
+      {
+        "title": "A Touch of Zen",
+        "year": 1971
+      },
+      {
+        "title": "Hero",
+        "year": 2002
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Wuxia",
+        "url": "https://www.bfi.org.uk/lists/great-action-film-every-year-1924-now"
+      }
+    ],
+    "scope_note": "Tradizione già presente nel muto e tuttora rielaborata. Non è limitata al 1960–1990 né equivale a tutto il cinema di arti marziali.",
+    "original_entry": true
+  },
+  {
+    "id": "cinema_astratto",
+    "label": "Cinema astratto",
+    "original_name": "Abstract film",
+    "kind": "tradition",
+    "start": 1921,
+    "end": null,
+    "regions": [
+      "Internazionale"
+    ],
+    "aliases": [
+      "Abstract film",
+      "Cinéma pur",
+      "Absolute film"
+    ],
+    "summary": "Pratiche che organizzano forme, luce e ritmo oltre la rappresentazione narrativa.",
+    "traits": [
+      "Geometrie",
+      "Ritmo",
+      "Esplorazione del supporto"
+    ],
+    "authors": [
+      "Hans Richter",
+      "Viking Eggeling",
+      "Walter Ruttmann"
+    ],
+    "works": [
+      {
+        "title": "Rhythmus 21",
+        "year": 1921
+      },
+      {
+        "title": "Symphonie diagonale",
+        "year": 1924
+      }
+    ],
+    "sources": [
+      {
+        "title": "MoMA · Cinema astratto",
+        "url": "https://assets.moma.org/documents/moma_catalogue_2073_300297028.pdf"
+      }
+    ],
+    "scope_note": "Tradizione articolata in più fasi. Epoche e contesti diversi richiedono una distinzione esplicita.",
+    "original_entry": false
+  },
+  {
+    "id": "dada",
+    "label": "Dada cinematografico",
+    "original_name": "Cinéma dada",
+    "kind": "movement",
+    "start": 1921,
+    "end": 1928,
+    "regions": [
+      "Francia",
+      "Germania"
+    ],
+    "aliases": [
+      "Dada cinema",
+      "Dadaismo"
+    ],
+    "summary": "Esperimenti legati a Dada che mettono in discussione logica e convenzioni dell'immagine.",
+    "traits": [
+      "Caso e gioco",
+      "Discontinuità",
+      "Arti visive e performance"
+    ],
+    "authors": [
+      "René Clair",
+      "Man Ray",
+      "Hans Richter"
+    ],
+    "works": [
+      {
+        "title": "Le Retour à la raison",
+        "year": 1923
+      },
+      {
+        "title": "Entr'acte",
+        "year": 1924
+      }
+    ],
+    "sources": [
+      {
+        "title": "qagoma.qld.gov.au · Dada cinematografico",
+        "url": "https://www.qagoma.qld.gov.au/cinema/program/the-savage-eye-surrealism-and-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "kammerspiel",
+    "label": "Kammerspielfilm",
+    "original_name": "Kammerspiel",
+    "kind": "movement",
+    "start": 1921,
+    "end": 1929,
+    "regions": [
+      "Germania"
+    ],
+    "aliases": [
+      "Kammerspiel",
+      "Cinema da camera"
+    ],
+    "summary": "Drammi concentrati su pochi personaggi e ambienti nel cinema tedesco di Weimar.",
+    "traits": [
+      "Dramma intimo",
+      "Recitazione e gesto",
+      "Spazi quotidiani"
+    ],
+    "authors": [
+      "Lupu Pick",
+      "F. W. Murnau",
+      "Carl Mayer"
+    ],
+    "works": [
+      {
+        "title": "Scherben",
+        "year": 1921
+      },
+      {
+        "title": "L'ultima risata",
+        "year": 1924
+      }
+    ],
+    "sources": [
+      {
+        "title": "en.wikipedia.org · Kammerspielfilm",
+        "url": "https://en.wikipedia.org/wiki/Kammerspielfilm"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "surrealismo",
+    "label": "Surrealismo cinematografico",
+    "original_name": "Cinéma surréaliste",
+    "kind": "movement",
+    "start": 1928,
+    "end": 1939,
+    "regions": [
+      "Francia",
+      "Spagna"
+    ],
+    "aliases": [
+      "Surrealist cinema",
+      "Surrealismo"
+    ],
+    "summary": "Incontro fra cinema e avanguardia surrealista, con influenze molto più ampie.",
+    "traits": [
+      "Associazioni inattese",
+      "Desiderio e sogno",
+      "Sovversione della causalità"
+    ],
+    "authors": [
+      "Luis Buñuel",
+      "Salvador Dalí",
+      "Germaine Dulac"
+    ],
+    "works": [
+      {
+        "title": "La Coquille et le Clergyman",
+        "year": 1928
+      },
+      {
+        "title": "Un chien andalou",
+        "year": 1929
+      }
+    ],
+    "sources": [
+      {
+        "title": "qagoma.qld.gov.au · Surrealismo cinematografico",
+        "url": "https://www.qagoma.qld.gov.au/cinema/program/the-savage-eye-surrealism-and-cinema"
+      }
+    ],
+    "scope_note": "Il periodo indica l’avanguardia storica. Influenze e pratiche surrealiste proseguono in altre epoche e cinematografie.",
+    "original_entry": false
+  },
+  {
+    "id": "documentario_britannico",
+    "label": "Movimento documentaristico britannico",
+    "original_name": "British Documentary Movement",
+    "kind": "movement",
+    "start": 1929,
+    "end": 1950,
+    "regions": [
+      "Regno Unito"
+    ],
+    "aliases": [
+      "British Documentary Movement",
+      "Griersonian documentary"
+    ],
+    "summary": "Rete produttiva e culturale che collega documentario, lavoro e servizio pubblico.",
+    "traits": [
+      "Produzione istituzionale",
+      "Montaggio sonoro",
+      "Rappresentazione sociale"
+    ],
+    "authors": [
+      "John Grierson",
+      "Basil Wright",
+      "Harry Watt"
+    ],
+    "works": [
+      {
+        "title": "Drifters",
+        "year": 1929
+      },
+      {
+        "title": "Night Mail",
+        "year": 1936
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Movimento documentaristico britannico",
+        "url": "https://shop.bfi.org.uk/night-mail-dvd/"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "realismo_poetico",
+    "label": "Realismo poetico",
+    "original_name": "Réalisme poétique",
+    "kind": "movement",
+    "start": 1930,
+    "end": 1945,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "Poetic Realism",
+      "Réalisme poétique"
+    ],
+    "summary": "Tradizione francese che combina ambienti popolari e forte costruzione atmosferica.",
+    "traits": [
+      "Fatalismo",
+      "Ambienti popolari",
+      "Stilizzazione scenografica"
+    ],
+    "authors": [
+      "Marcel Carné",
+      "Jean Renoir",
+      "Julien Duvivier"
+    ],
+    "works": [
+      {
+        "title": "Il porto delle nebbie",
+        "year": 1938
+      },
+      {
+        "title": "Alba tragica",
+        "year": 1939
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Realismo poetico",
+        "url": "https://www.criterion.com/shop/collection/15-poetic-realism"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "film_noir",
+    "label": "Film Noir classico",
+    "original_name": "Film Noir",
+    "kind": "cycle",
+    "start": 1940,
+    "end": 1959,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "Classic Film Noir",
+      "Noir americano"
+    ],
+    "summary": "Categoria critica per film attraversati da fatalismo e instabilità morale.",
+    "traits": [
+      "Luci contrastate",
+      "Narrazioni criminali",
+      "Prospettive inaffidabili"
+    ],
+    "authors": [
+      "Billy Wilder",
+      "Jacques Tourneur",
+      "Fritz Lang"
+    ],
+    "works": [
+      {
+        "title": "La fiamma del peccato",
+        "year": 1944
+      },
+      {
+        "title": "Le catene della colpa",
+        "year": 1947
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Film Noir classico",
+        "url": "https://www.bfi.org.uk/lists/10-great-german-expressionist-films"
+      },
+      {
+        "title": "Criterion · Film Noir",
+        "url": "https://www.criterion.com/shop/browse/list?genre=film-noir"
+      }
+    ],
+    "scope_note": "Categoria critica retrospettiva dai confini discussi. Neo-noir e noir di altre cinematografie richiedono una distinzione esplicita.",
+    "original_entry": true
+  },
+  {
+    "id": "underground",
+    "label": "Cinema underground americano",
+    "original_name": "American Underground",
+    "kind": "tendency",
+    "start": 1943,
+    "end": 1975,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "American Underground",
+      "New American Cinema"
+    ],
+    "summary": "Scena sperimentale indipendente, eterogenea e legata a circuiti alternativi.",
+    "traits": [
+      "Autoproduzione",
+      "Esperienza soggettiva",
+      "Sperimentazione di visione e montaggio"
+    ],
+    "authors": [
+      "Maya Deren",
+      "Jonas Mekas",
+      "Stan Brakhage",
+      "Kenneth Anger"
+    ],
+    "works": [
+      {
+        "title": "Meshes of the Afternoon",
+        "year": 1943
+      },
+      {
+        "title": "Scorpio Rising",
+        "year": 1963
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Maya Deren e l’avanguardia americana",
+        "url": "https://www.bfi.org.uk/lists/international-womens-day-29-great-women-film"
+      },
+      {
+        "title": "MoMA · Cinema underground americano",
+        "url": "https://www.moma.org/calendar/events/11635"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  },
+  {
+    "id": "neorealismo",
+    "label": "Neorealismo italiano",
+    "original_name": "Neorealismo",
+    "kind": "movement",
+    "start": 1943,
+    "end": 1954,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Italian Neorealism",
+      "Neorealismo"
+    ],
+    "summary": "Esperienze quotidiane e trasformazioni sociali dell'Italia intorno alla guerra e al dopoguerra.",
+    "traits": [
+      "Ambienti reali",
+      "Attenzione alle condizioni materiali",
+      "Forme narrative aperte"
+    ],
+    "authors": [
+      "Roberto Rossellini",
+      "Vittorio De Sica",
+      "Luchino Visconti"
+    ],
+    "works": [
+      {
+        "title": "Roma città aperta",
+        "year": 1945
+      },
+      {
+        "title": "Ladri di biciclette",
+        "year": 1948
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Neorealismo italiano",
+        "url": "https://www.bfi.org.uk/sight-and-sound/features/roots-neorealism"
+      }
+    ],
+    "scope_note": "Il periodo identifica un nucleo storico. Attori professionisti, fantasia e costruzione narrativa non sono esclusioni automatiche.",
+    "original_entry": true
+  },
+  {
+    "id": "parallel_cinema",
+    "label": "Parallel Cinema indiano",
+    "original_name": "Indian New Wave",
+    "kind": "movement",
+    "start": 1950,
+    "end": 1990,
+    "regions": [
+      "India"
+    ],
+    "aliases": [
+      "Indian New Wave",
+      "Cinema parallelo"
+    ],
+    "summary": "Costellazione multilingue di pratiche indiane alternative al cinema commerciale dominante.",
+    "traits": [
+      "Realismo",
+      "Sperimentazione",
+      "Critica sociale"
+    ],
+    "authors": [
+      "Satyajit Ray",
+      "Mrinal Sen",
+      "Ritwik Ghatak",
+      "Shyam Benegal"
+    ],
+    "works": [
+      {
+        "title": "Pather Panchali",
+        "year": 1955
+      },
+      {
+        "title": "Manthan",
+        "year": 1976
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Parallel Cinema indiano",
+        "url": "https://www.bfi.org.uk/lists/indian-parallel-cinema-essential-directors"
+      }
+    ],
+    "scope_note": "Costellazione multilingue con antecedenti e continuità oltre il periodo indicativo; non tutto il cinema indiano non commerciale.",
+    "original_entry": false
+  },
+  {
+    "id": "rive_gauche",
+    "label": "Rive Gauche",
+    "original_name": "Rive Gauche",
+    "kind": "tendency",
+    "start": 1950,
+    "end": 1970,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "Left Bank Group",
+      "Gruppo della Riva Sinistra"
+    ],
+    "summary": "Raggruppamento vicino alla Nouvelle Vague, con legami letterari e documentari.",
+    "traits": [
+      "Memoria",
+      "Saggio e finzione",
+      "Ricerca temporale"
+    ],
+    "authors": [
+      "Alain Resnais",
+      "Agnès Varda",
+      "Chris Marker"
+    ],
+    "works": [
+      {
+        "title": "Hiroshima mon amour",
+        "year": 1959
+      },
+      {
+        "title": "La Jetée",
+        "year": 1962
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Rive Gauche",
+        "url": "https://www.bfi.org.uk/lists/10-great-french-new-wave-films"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  },
+  {
+    "id": "kaiju",
+    "label": "Kaiju",
+    "original_name": "Kaijū",
+    "kind": "tradition",
+    "start": 1954,
+    "end": null,
+    "regions": [
+      "Giappone",
+      "Internazionale"
+    ],
+    "aliases": [
+      "Kaijū",
+      "Giant monster movies"
+    ],
+    "summary": "Tradizione di film di mostri giganti che attraversa generazioni e produzioni nazionali.",
+    "traits": [
+      "Dimensioni spettacolari",
+      "Minaccia collettiva",
+      "Tecnologia e catastrofe"
+    ],
+    "authors": [
+      "Ishirō Honda",
+      "Shūsuke Kaneko",
+      "Takashi Yamazaki"
+    ],
+    "works": [
+      {
+        "title": "Godzilla",
+        "year": 1954
+      },
+      {
+        "title": "Godzilla Minus One",
+        "year": 2023
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Kaiju",
+        "url": "https://www.bfi.org.uk/features/where-begin-japan-kaiju-monster-movies"
+      }
+    ],
+    "scope_note": "La tradizione prosegue oltre il 1985, anche in produzioni e coproduzioni internazionali.",
+    "original_entry": true
+  },
+  {
+    "id": "tokusatsu",
+    "label": "Tokusatsu",
+    "original_name": "Tokusatsu",
+    "kind": "technique",
+    "start": 1954,
+    "end": null,
+    "regions": [
+      "Giappone"
+    ],
+    "aliases": [
+      "Special effects cinema",
+      "Effetti speciali giapponesi"
+    ],
+    "summary": "Ambito produttivo e tradizione degli effetti speciali nel cinema e nella televisione giapponesi.",
+    "traits": [
+      "Miniature",
+      "Riprese combinate",
+      "Lavoro artigianale sugli effetti"
+    ],
+    "authors": [
+      "Eiji Tsuburaya",
+      "Yasuyuki Inoue",
+      "Shinji Higuchi"
+    ],
+    "works": [
+      {
+        "title": "Godzilla",
+        "year": 1954
+      },
+      {
+        "title": "Rodan",
+        "year": 1956
+      }
+    ],
+    "sources": [
+      {
+        "title": "mot-art-museum.jp · Tokusatsu",
+        "url": "https://www.mot-art-museum.jp/en/pr_YasuyukiInoue_EN.pdf"
+      }
+    ],
+    "scope_note": "Il 1954 è un riferimento del consolidamento postbellico, non la nascita degli effetti speciali. È un ambito produttivo, non un solo genere.",
+    "original_entry": true
+  },
+  {
+    "id": "free_cinema",
+    "label": "Free Cinema",
+    "original_name": "British Free Cinema",
+    "kind": "movement",
+    "start": 1956,
+    "end": 1959,
+    "regions": [
+      "Regno Unito"
+    ],
+    "aliases": [
+      "British Free Cinema"
+    ],
+    "summary": "Programmi e manifesto per un cinema indipendente attento alla vita quotidiana britannica.",
+    "traits": [
+      "Produzioni leggere",
+      "Sguardo personale",
+      "Lavoro e tempo libero"
+    ],
+    "authors": [
+      "Lindsay Anderson",
+      "Karel Reisz",
+      "Tony Richardson"
+    ],
+    "works": [
+      {
+        "title": "O Dreamland",
+        "year": 1953
+      },
+      {
+        "title": "Momma Don't Allow",
+        "year": 1956
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Free Cinema",
+        "url": "https://player.bfi.org.uk/free/film/watch-enginemen-1959-online"
+      }
+    ],
+    "scope_note": "Il movimento è del 1956–1959; O Dreamland del 1953 è un antecedente poi incluso nei programmi.",
+    "original_entry": false
+  },
+  {
+    "id": "polish_school",
+    "label": "Scuola polacca",
+    "original_name": "Polish Film School",
+    "kind": "movement",
+    "start": 1956,
+    "end": 1963,
+    "regions": [
+      "Polonia"
+    ],
+    "aliases": [
+      "Polish Film School",
+      "Polska szkoła filmowa"
+    ],
+    "summary": "Rinnovamento del cinema polacco che rilegge guerra, memoria e responsabilità.",
+    "traits": [
+      "Memoria storica",
+      "Ambivalenza morale",
+      "Tradizioni figurative"
+    ],
+    "authors": [
+      "Andrzej Wajda",
+      "Andrzej Munk",
+      "Jerzy Kawalerowicz"
+    ],
+    "works": [
+      {
+        "title": "I dannati di Varsavia",
+        "year": 1957
+      },
+      {
+        "title": "Cenere e diamanti",
+        "year": 1958
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Scuola polacca",
+        "url": "https://www.criterion.com/shop/browse/list?country=Poland"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "peplum",
+    "label": "Peplum: ciclo italiano del dopoguerra",
+    "original_name": "Peplum",
+    "kind": "cycle",
+    "start": 1957,
+    "end": 1965,
+    "regions": [
+      "Italia",
+      "Francia",
+      "Spagna"
+    ],
+    "aliases": [
+      "Sword and sandal",
+      "Peplum italiano"
+    ],
+    "summary": "Ciclo di avventura storico-mitologica fiorente nel cinema italiano del dopoguerra.",
+    "traits": [
+      "Corpo eroico",
+      "Mito e spettacolo",
+      "Scenografie dell'antichità"
+    ],
+    "authors": [
+      "Pietro Francisci",
+      "Vittorio Cottafavi",
+      "Mario Bava"
+    ],
+    "works": [
+      {
+        "title": "Le fatiche di Ercole",
+        "year": 1958
+      },
+      {
+        "title": "Ercole al centro della Terra",
+        "year": 1961
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Peplum: ciclo italiano del dopoguerra",
+        "url": "https://www.bfi.org.uk/lists/10-great-greek-myth-adaptations"
+      }
+    ],
+    "scope_note": "La voce riguarda il ciclo italiano del dopoguerra. Il cinema sull’antichità esiste anche nel muto e in epoche successive.",
+    "original_entry": true
+  },
+  {
+    "id": "commedia_italiana",
+    "label": "Commedia all'italiana",
+    "original_name": "Commedia all’italiana",
+    "kind": "cycle",
+    "start": 1958,
+    "end": 1980,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Italian-style comedy",
+      "Commedia italiana"
+    ],
+    "summary": "Ciclo che intreccia comicità, costume e critica delle trasformazioni italiane.",
+    "traits": [
+      "Satira sociale",
+      "Ambivalenza dei personaggi",
+      "Comicità e amarezza"
+    ],
+    "authors": [
+      "Mario Monicelli",
+      "Dino Risi",
+      "Ettore Scola"
+    ],
+    "works": [
+      {
+        "title": "I soliti ignoti",
+        "year": 1958
+      },
+      {
+        "title": "Il sorpasso",
+        "year": 1962
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Commedia all'italiana",
+        "url": "https://shop.bfi.org.uk/commedia-all-italiana-three-films-by-dino-risi-3-disc-blu-ray-box-set/"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": false
+  },
+  {
+    "id": "nouvelle_vague",
+    "label": "Nouvelle Vague",
+    "original_name": "Nouvelle Vague",
+    "kind": "movement",
+    "start": 1958,
+    "end": 1968,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "French New Wave",
+      "Nuova onda francese"
+    ],
+    "summary": "Una generazione rinnova linguaggio e pratiche del cinema francese.",
+    "traits": [
+      "Riprese leggere",
+      "Libertà di montaggio",
+      "Dialogo con la storia del cinema"
+    ],
+    "authors": [
+      "Jean-Luc Godard",
+      "François Truffaut",
+      "Agnès Varda"
+    ],
+    "works": [
+      {
+        "title": "I quattrocento colpi",
+        "year": 1959
+      },
+      {
+        "title": "Fino all'ultimo respiro",
+        "year": 1960
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Nouvelle Vague",
+        "url": "https://www.criterion.com/shop/collection/4-french-new-wave"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "british_new_wave",
+    "label": "British New Wave",
+    "original_name": "Kitchen sink realism",
+    "kind": "movement",
+    "start": 1959,
+    "end": 1963,
+    "regions": [
+      "Regno Unito"
+    ],
+    "aliases": [
+      "Kitchen sink realism",
+      "Nuova onda britannica"
+    ],
+    "summary": "Rinnovamento del lungometraggio britannico attento alla classe e alla provincia.",
+    "traits": [
+      "Realismo sociale",
+      "Conflitti generazionali",
+      "Ambienti industriali"
+    ],
+    "authors": [
+      "Tony Richardson",
+      "Karel Reisz",
+      "Lindsay Anderson"
+    ],
+    "works": [
+      {
+        "title": "Sabato sera, domenica mattina",
+        "year": 1960
+      },
+      {
+        "title": "This Sporting Life",
+        "year": 1963
+      }
+    ],
+    "sources": [
+      {
+        "title": "psi329.cankaya.edu.tr · British New Wave",
+        "url": "https://psi329.cankaya.edu.tr/uploads/files/bfi-16%2B-source-guides-1960s-british-cinema-2000.pdf"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "japanese_new_wave",
+    "label": "Nouvelle Vague giapponese",
+    "original_name": "Japanese New Wave",
+    "kind": "movement",
+    "start": 1959,
+    "end": 1973,
+    "regions": [
+      "Giappone"
+    ],
+    "aliases": [
+      "Japanese New Wave",
+      "Nūberu bāgu"
+    ],
+    "summary": "Cinema giapponese che mette in discussione forme produttive e convenzioni sociali.",
+    "traits": [
+      "Conflitti generazionali",
+      "Politica del corpo",
+      "Sperimentazione narrativa"
+    ],
+    "authors": [
+      "Nagisa Ōshima",
+      "Shōhei Imamura",
+      "Masahiro Shinoda"
+    ],
+    "works": [
+      {
+        "title": "Racconto crudele della giovinezza",
+        "year": 1960
+      },
+      {
+        "title": "Porci, geishe e marinai",
+        "year": 1961
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Nouvelle Vague giapponese",
+        "url": "https://www.criterion.com/shop/collection/94-japanese-new-wave"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "novo_cinema",
+    "label": "Cinema Novo",
+    "original_name": "Cinema Novo",
+    "kind": "movement",
+    "start": 1960,
+    "end": 1972,
+    "regions": [
+      "Brasile"
+    ],
+    "aliases": [
+      "Brazilian Cinema Novo"
+    ],
+    "summary": "Rinnovamento brasiliano che intreccia ricerca formale, disuguaglianza e critica politica.",
+    "traits": [
+      "Produzione indipendente",
+      "Allegoria politica",
+      "Conflitti sociali"
+    ],
+    "authors": [
+      "Glauber Rocha",
+      "Nelson Pereira dos Santos",
+      "Ruy Guerra"
+    ],
+    "works": [
+      {
+        "title": "Il dio nero e il diavolo biondo",
+        "year": 1964
+      },
+      {
+        "title": "Terra in trance",
+        "year": 1967
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Cinema Novo",
+        "url": "https://www.criterion.com/current/posts/8307--be-realistic-demand-the-impossible"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "cinema_africano_indipendenze",
+    "label": "Cinema africano delle indipendenze",
+    "original_name": "Post-independence African cinema",
+    "kind": "tendency",
+    "start": 1960,
+    "end": 1980,
+    "regions": [
+      "Senegal",
+      "Mauritania",
+      "Africa"
+    ],
+    "aliases": [
+      "Post-independence African cinema",
+      "Cinema africano postcoloniale"
+    ],
+    "summary": "Percorso transnazionale sulle nuove rappresentazioni sviluppate intorno alle indipendenze africane.",
+    "traits": [
+      "Decolonizzazione dello sguardo",
+      "Lingue locali",
+      "Conflitti sociali"
+    ],
+    "authors": [
+      "Ousmane Sembène",
+      "Med Hondo",
+      "Djibril Diop Mambéty"
+    ],
+    "works": [
+      {
+        "title": "La Noire de…",
+        "year": 1966
+      },
+      {
+        "title": "Mandabi",
+        "year": 1968
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Cinema africano delle indipendenze",
+        "url": "https://whatson.bfi.org.uk/Online/default.asp?BOparam%3A%3AWScontent%3A%3AloadArticle%3A%3Apermalink=mandabi-2026"
+      }
+    ],
+    "scope_note": "Percorso editoriale, non movimento unico di un continente. Contesti, lingue e storie nazionali vanno distinti.",
+    "original_entry": false
+  },
+  {
+    "id": "italian_political",
+    "label": "Cinema politico italiano",
+    "original_name": "Cinema politico italiano",
+    "kind": "tendency",
+    "start": 1960,
+    "end": 1980,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Italian political cinema",
+      "Cinema civile"
+    ],
+    "summary": "Percorso critico sul potere, le istituzioni e i conflitti della società italiana.",
+    "traits": [
+      "Inchiesta",
+      "Rapporti di potere",
+      "Storia e finzione"
+    ],
+    "authors": [
+      "Francesco Rosi",
+      "Elio Petri",
+      "Gillo Pontecorvo"
+    ],
+    "works": [
+      {
+        "title": "Salvatore Giuliano",
+        "year": 1962
+      },
+      {
+        "title": "Indagine su un cittadino al di sopra di ogni sospetto",
+        "year": 1970
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Cinema politico italiano",
+        "url": "https://www.bfi.org.uk/lists/10-great-political-thrillers"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": true
+  },
+  {
+    "id": "cinema_verite",
+    "label": "Cinéma vérité",
+    "original_name": "Cinema verita",
+    "kind": "movement",
+    "start": 1960,
+    "end": 1970,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "Cinema verita",
+      "Cinema verità"
+    ],
+    "summary": "Pratica documentaria in cui incontro, intervento e autoriflessione entrano nel film.",
+    "traits": [
+      "Interazione",
+      "Suono sincrono",
+      "Riflessione sul dispositivo"
+    ],
+    "authors": [
+      "Jean Rouch",
+      "Edgar Morin"
+    ],
+    "works": [
+      {
+        "title": "Chronique d'un été",
+        "year": 1961
+      }
+    ],
+    "sources": [
+      {
+        "title": "MoMA · Cinéma vérité",
+        "url": "https://www.moma.org/calendar/events/10632"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "direct_cinema",
+    "label": "Direct Cinema",
+    "original_name": "Cinema diretto",
+    "kind": "movement",
+    "start": 1960,
+    "end": 1975,
+    "regions": [
+      "Stati Uniti",
+      "Canada"
+    ],
+    "aliases": [
+      "Cinema diretto",
+      "Observational documentary"
+    ],
+    "summary": "Pratiche documentarie osservative rese possibili da apparecchiature mobili e suono sincrono.",
+    "traits": [
+      "Osservazione",
+      "Ripresa mobile",
+      "Rapporto con l'evento"
+    ],
+    "authors": [
+      "Robert Drew",
+      "Richard Leacock",
+      "D. A. Pennebaker",
+      "Frederick Wiseman"
+    ],
+    "works": [
+      {
+        "title": "Primary",
+        "year": 1960
+      },
+      {
+        "title": "Titicut Follies",
+        "year": 1967
+      }
+    ],
+    "sources": [
+      {
+        "title": "MoMA · Direct Cinema",
+        "url": "https://www.moma.org/explore/inside_out/2013/12/24/frederick-wisemans-titicut-follies/"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "slow_cinema",
+    "label": "Slow Cinema",
+    "original_name": "Slow Cinema",
+    "kind": "tendency",
+    "start": 1960,
+    "end": null,
+    "regions": [
+      "Internazionale"
+    ],
+    "aliases": [
+      "Cinema della lentezza",
+      "Contemplative cinema"
+    ],
+    "summary": "Categoria critica che riunisce pratiche di durata, attesa e attenzione percettiva.",
+    "traits": [
+      "Piani prolungati",
+      "Tempi quotidiani",
+      "Spazi contemplativi"
+    ],
+    "authors": [
+      "Chantal Akerman",
+      "Béla Tarr",
+      "Tsai Ming-liang",
+      "Lav Diaz"
+    ],
+    "works": [
+      {
+        "title": "Jeanne Dielman, 23, quai du Commerce, 1080 Bruxelles",
+        "year": 1975
+      },
+      {
+        "title": "Sátántangó",
+        "year": 1994
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Slow Cinema",
+        "url": "https://www.bfi.org.uk/lists/10-great-slow-films"
+      }
+    ],
+    "scope_note": "Le radici precedono il termine critico. La lunghezza di un piano non certifica l’appartenenza; la pratica non termina nel 2020.",
+    "original_entry": true
+  },
+  {
+    "id": "eurospy",
+    "label": "Eurospy",
+    "original_name": "Eurospy",
+    "kind": "cycle",
+    "start": 1962,
+    "end": 1970,
+    "regions": [
+      "Italia",
+      "Francia",
+      "Germania",
+      "Spagna",
+      "Regno Unito"
+    ],
+    "aliases": [
+      "European spy films"
+    ],
+    "summary": "Ciclo europeo di spionaggio che dialoga con il successo di James Bond.",
+    "traits": [
+      "Agenti segreti",
+      "Coproduzioni",
+      "Ibridazioni con commedia e avventura"
+    ],
+    "authors": [
+      "Sergio Sollima",
+      "Alberto De Martino",
+      "Jess Franco"
+    ],
+    "works": [
+      {
+        "title": "Agente 077 missione Bloody Mary",
+        "year": 1965
+      },
+      {
+        "title": "Operazione Goldman",
+        "year": 1966
+      }
+    ],
+    "sources": [
+      {
+        "title": "kisskisskillkillarchive.com · Eurospy",
+        "url": "https://www.kisskisskillkillarchive.com/exhibitions-events/"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "portuguese_new_cinema",
+    "label": "Novo Cinema portoghese",
+    "original_name": "Novo Cinema português",
+    "kind": "movement",
+    "start": 1962,
+    "end": 1974,
+    "regions": [
+      "Portogallo"
+    ],
+    "aliases": [
+      "Portuguese New Cinema",
+      "Cinema Novo português"
+    ],
+    "summary": "Rinnovamento moderno portoghese sotto il regime e verso la sua conclusione.",
+    "traits": [
+      "Spazi urbani",
+      "Produzioni rinnovate",
+      "Ricerca autoriale"
+    ],
+    "authors": [
+      "Paulo Rocha",
+      "Fernando Lopes",
+      "António da Cunha Telles"
+    ],
+    "works": [
+      {
+        "title": "Os Verdes Anos",
+        "year": 1963
+      },
+      {
+        "title": "Belarmino",
+        "year": 1964
+      }
+    ],
+    "sources": [
+      {
+        "title": "cclm.cl · Novo Cinema portoghese",
+        "url": "https://www.cclm.cl/cineteca-nacional/os-verdes-anos/"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "spanish_new_cinema",
+    "label": "Nuevo Cine Español",
+    "original_name": "Nuevo Cine Español",
+    "kind": "movement",
+    "start": 1962,
+    "end": 1969,
+    "regions": [
+      "Spagna"
+    ],
+    "aliases": [
+      "Nuovo cinema spagnolo"
+    ],
+    "summary": "Rinnovamento spagnolo sviluppato fra istituzioni, censura e ricerca di nuove forme.",
+    "traits": [
+      "Critica sociale",
+      "Allegoria",
+      "Rinnovamento generazionale"
+    ],
+    "authors": [
+      "Carlos Saura",
+      "Basilio Martín Patino",
+      "Miguel Picazo"
+    ],
+    "works": [
+      {
+        "title": "La caccia",
+        "year": 1966
+      },
+      {
+        "title": "Nueve cartas a Berta",
+        "year": 1966
+      }
+    ],
+    "sources": [
+      {
+        "title": "filmoteca.cat · Nuevo Cine Español",
+        "url": "https://filmoteca.cat/web/ca/dossier-film/nuevo-cine-espanol-los-golfos"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "german_new_cinema",
+    "label": "Nuovo Cinema Tedesco",
+    "original_name": "Neuer Deutscher Film",
+    "kind": "movement",
+    "start": 1962,
+    "end": 1982,
+    "regions": [
+      "Germania"
+    ],
+    "aliases": [
+      "New German Cinema",
+      "Neuer Deutscher Film"
+    ],
+    "summary": "Rinnovamento autoriale della Germania occidentale legato anche alla svolta di Oberhausen.",
+    "traits": [
+      "Confronto con la memoria",
+      "Nuove forme produttive",
+      "Rielaborazione dei generi"
+    ],
+    "authors": [
+      "Rainer Werner Fassbinder",
+      "Werner Herzog",
+      "Wim Wenders"
+    ],
+    "works": [
+      {
+        "title": "Aguirre, furore di Dio",
+        "year": 1972
+      },
+      {
+        "title": "Il matrimonio di Maria Braun",
+        "year": 1979
+      }
+    ],
+    "sources": [
+      {
+        "title": "difarchiv.deutsches-filminstitut.de · Nuovo Cinema Tedesco",
+        "url": "https://difarchiv.deutsches-filminstitut.de/dt2ti0003.htm"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "yugoslav_black_wave",
+    "label": "Black Wave jugoslava",
+    "original_name": "Crni talas",
+    "kind": "movement",
+    "start": 1963,
+    "end": 1972,
+    "regions": [
+      "Jugoslavia"
+    ],
+    "aliases": [
+      "Yugoslav Black Wave",
+      "Crni talas"
+    ],
+    "summary": "Cinema critico jugoslavo che mette in tensione progetto socialista e realtà vissuta.",
+    "traits": [
+      "Satira",
+      "Montaggio sperimentale",
+      "Marginalità sociale"
+    ],
+    "authors": [
+      "Dušan Makavejev",
+      "Želimir Žilnik",
+      "Aleksandar Petrović"
+    ],
+    "works": [
+      {
+        "title": "Ho incontrato anche zingari felici",
+        "year": 1967
+      },
+      {
+        "title": "Early Works",
+        "year": 1969
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Black Wave jugoslava",
+        "url": "https://www.bfi.org.uk/features/dorde-kadijevic-obituary-leading-director-serbian-horror-radical-black-wave-movement"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "giallo_italiano",
+    "label": "Giallo italiano",
+    "original_name": "Giallo italiano",
+    "kind": "cycle",
+    "start": 1963,
+    "end": null,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Italian Giallo"
+    ],
+    "summary": "Tradizione del thriller italiano fra indagine, suspense e costruzione spettacolare della violenza.",
+    "traits": [
+      "Sperimentazione cromatica",
+      "Punti di vista ingannevoli",
+      "Centralità del suono"
+    ],
+    "authors": [
+      "Mario Bava",
+      "Dario Argento",
+      "Sergio Martino"
+    ],
+    "works": [
+      {
+        "title": "Sei donne per l'assassino",
+        "year": 1964
+      },
+      {
+        "title": "Profondo rosso",
+        "year": 1975
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Giallo italiano",
+        "url": "https://www.bfi.org.uk/features/suspiria-dario-argento-influences"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "czech_new_wave",
+    "label": "Nová vlna cecoslovacca",
+    "original_name": "Nová vlna",
+    "kind": "movement",
+    "start": 1963,
+    "end": 1969,
+    "regions": [
+      "Cecoslovacchia"
+    ],
+    "aliases": [
+      "Czechoslovak New Wave",
+      "Czech New Wave",
+      "Nová vlna"
+    ],
+    "summary": "Generazione cecoslovacca che sperimenta forma e critica delle convenzioni sociali.",
+    "traits": [
+      "Umorismo",
+      "Allegoria",
+      "Libertà narrativa"
+    ],
+    "authors": [
+      "Věra Chytilová",
+      "Miloš Forman",
+      "Jiří Menzel",
+      "Juraj Jakubisko"
+    ],
+    "works": [
+      {
+        "title": "Le margheritine",
+        "year": 1966
+      },
+      {
+        "title": "Treni strettamente sorvegliati",
+        "year": 1966
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Nová vlna cecoslovacca",
+        "url": "https://www.criterion.com/current/posts/7979-daisies-giggling-generals-one-and-two"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "spaghetti_western",
+    "label": "Spaghetti Western",
+    "original_name": "Western all’italiana",
+    "kind": "cycle",
+    "start": 1964,
+    "end": 1978,
+    "regions": [
+      "Italia",
+      "Spagna",
+      "Francia"
+    ],
+    "aliases": [
+      "Western all'italiana",
+      "Italowestern"
+    ],
+    "summary": "Ciclo europeo che rielabora il western attraverso paesaggi e antieroi.",
+    "traits": [
+      "Violenza stilizzata",
+      "Musica come struttura",
+      "Ambiguità morale"
+    ],
+    "authors": [
+      "Sergio Leone",
+      "Sergio Corbucci",
+      "Sergio Sollima"
+    ],
+    "works": [
+      {
+        "title": "Per un pugno di dollari",
+        "year": 1964
+      },
+      {
+        "title": "Django",
+        "year": 1966
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Spaghetti Western",
+        "url": "https://www.bfi.org.uk/lists/10-great-spaghetti-westerns"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "strutturale",
+    "label": "Cinema strutturale",
+    "original_name": "Structural film",
+    "kind": "movement",
+    "start": 1965,
+    "end": 1980,
+    "regions": [
+      "Stati Uniti",
+      "Canada",
+      "Regno Unito"
+    ],
+    "aliases": [
+      "Structural film",
+      "Structural materialist film"
+    ],
+    "summary": "Avanguardia che rende percepibili durata, procedimenti e materiali del film.",
+    "traits": [
+      "Strutture esplicite",
+      "Ripetizione",
+      "Percezione e supporto"
+    ],
+    "authors": [
+      "Michael Snow",
+      "Hollis Frampton",
+      "Peter Gidal"
+    ],
+    "works": [
+      {
+        "title": "Wavelength",
+        "year": 1967
+      },
+      {
+        "title": "Zorns Lemma",
+        "year": 1970
+      }
+    ],
+    "sources": [
+      {
+        "title": "en.wikipedia.org · Cinema strutturale",
+        "url": "https://en.wikipedia.org/wiki/Structural_film"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "cinema_marginal",
+    "label": "Cinema Marginal brasiliano",
+    "original_name": "Udigrudi",
+    "kind": "movement",
+    "start": 1967,
+    "end": 1973,
+    "regions": [
+      "Brasile"
+    ],
+    "aliases": [
+      "Udigrudi",
+      "Brazilian marginal cinema"
+    ],
+    "summary": "Cinema indipendente brasiliano radicale in conflitto con forme e sistemi dominanti.",
+    "traits": [
+      "Appropriazione",
+      "Produzioni precarie",
+      "Sperimentazione narrativa"
+    ],
+    "authors": [
+      "Rogério Sganzerla",
+      "Júlio Bressane",
+      "Ozualdo Candeias"
+    ],
+    "works": [
+      {
+        "title": "A Margem",
+        "year": 1967
+      },
+      {
+        "title": "O Bandido da Luz Vermelha",
+        "year": 1968
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Cinema Marginal brasiliano",
+        "url": "https://www.criterion.com/current/posts/7117-pixote-out-in-the-streets"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "la_rebellion",
+    "label": "L.A. Rebellion",
+    "original_name": "Los Angeles Rebellion",
+    "kind": "movement",
+    "start": 1967,
+    "end": 1991,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "Los Angeles Rebellion",
+      "Black independent cinema"
+    ],
+    "summary": "Rete di cineasti neri legata a UCLA, alternativa alle rappresentazioni dominanti.",
+    "traits": [
+      "Produzione indipendente",
+      "Comunità",
+      "Sperimentazione politica e formale"
+    ],
+    "authors": [
+      "Charles Burnett",
+      "Julie Dash",
+      "Haile Gerima",
+      "Billy Woodberry"
+    ],
+    "works": [
+      {
+        "title": "Killer of Sheep",
+        "year": 1977
+      },
+      {
+        "title": "Daughters of the Dust",
+        "year": 1991
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · L.A. Rebellion",
+        "url": "https://www.bfi.org.uk/features/short-history-black-us-indie-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "new_hollywood",
+    "label": "New Hollywood",
+    "original_name": "New Hollywood",
+    "kind": "movement",
+    "start": 1967,
+    "end": 1982,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "Hollywood Renaissance",
+      "American New Wave"
+    ],
+    "summary": "Rinnovamento industriale e autoriale statunitense fra fine anni Sessanta e primi Ottanta.",
+    "traits": [
+      "Protagonisti ambivalenti",
+      "Sperimentazione narrativa",
+      "Revisione dei generi"
+    ],
+    "authors": [
+      "Arthur Penn",
+      "Francis Ford Coppola",
+      "Martin Scorsese"
+    ],
+    "works": [
+      {
+        "title": "Gangster Story",
+        "year": 1967
+      },
+      {
+        "title": "Taxi Driver",
+        "year": 1976
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · New Hollywood",
+        "url": "https://www.bfi.org.uk/lists/great-new-hollywood-film-every-year-1967-1982"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": true
+  },
+  {
+    "id": "new_chilean_cinema",
+    "label": "Nuevo Cine Chileno",
+    "original_name": "Nuevo Cine Chileno",
+    "kind": "movement",
+    "start": 1967,
+    "end": 1973,
+    "regions": [
+      "Cile"
+    ],
+    "aliases": [
+      "New Chilean Cinema",
+      "Nuovo cinema cileno"
+    ],
+    "summary": "Rinnovamento cileno precedente al golpe, intrecciato a trasformazioni politiche e sperimentazione.",
+    "traits": [
+      "Critica sociale",
+      "Ricerca formale",
+      "Nuove produzioni"
+    ],
+    "authors": [
+      "Miguel Littín",
+      "Raúl Ruiz",
+      "Aldo Francia"
+    ],
+    "works": [
+      {
+        "title": "Tres tristes tigres",
+        "year": 1968
+      },
+      {
+        "title": "Valparaíso mi amor",
+        "year": 1969
+      }
+    ],
+    "sources": [
+      {
+        "title": "harvardfilmarchive.org · Nuevo Cine Chileno",
+        "url": "https://harvardfilmarchive.org/programs/remapping-latin-american-cinema-chilean-film-video-1963-2013/3"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "poliziottesco",
+    "label": "Poliziottesco",
+    "original_name": "Poliziottesco",
+    "kind": "cycle",
+    "start": 1968,
+    "end": 1982,
+    "regions": [
+      "Italia"
+    ],
+    "aliases": [
+      "Italian crime",
+      "Italian police films"
+    ],
+    "summary": "Ciclo criminale italiano legato alle tensioni e alle trasformazioni urbane degli anni Settanta.",
+    "traits": [
+      "Città e criminalità",
+      "Azione",
+      "Ambivalenza delle istituzioni"
+    ],
+    "authors": [
+      "Fernando Di Leo",
+      "Umberto Lenzi",
+      "Enzo G. Castellari"
+    ],
+    "works": [
+      {
+        "title": "Milano calibro 9",
+        "year": 1972
+      },
+      {
+        "title": "La mala ordina",
+        "year": 1972
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Poliziottesco",
+        "url": "https://shop.bfi.org.uk/the-italian-connection-limited-edition-blu-ray/"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "iranian_new_wave",
+    "label": "New Wave iraniana",
+    "original_name": "Iranian New Wave",
+    "kind": "movement",
+    "start": 1969,
+    "end": null,
+    "regions": [
+      "Iran"
+    ],
+    "aliases": [
+      "Iranian New Wave",
+      "Cinema-ye motafavet"
+    ],
+    "summary": "Rinnovamento iraniano articolato in fasi precedenti e successive alla rivoluzione.",
+    "traits": [
+      "Allegoria",
+      "Realtà e rappresentazione",
+      "Vincoli produttivi e censura"
+    ],
+    "authors": [
+      "Dariush Mehrjui",
+      "Abbas Kiarostami",
+      "Mohsen Makhmalbaf",
+      "Jafar Panahi"
+    ],
+    "works": [
+      {
+        "title": "La vacca",
+        "year": 1969
+      },
+      {
+        "title": "Close-Up",
+        "year": 1990
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · New Wave iraniana",
+        "url": "https://www.bfi.org.uk/sight-and-sound/features/rediscovery-chess-wind"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "third_cinema",
+    "label": "Third Cinema",
+    "original_name": "Terzo cinema",
+    "kind": "movement",
+    "start": 1969,
+    "end": null,
+    "regions": [
+      "Internazionale"
+    ],
+    "aliases": [
+      "Terzo cinema",
+      "Tercer Cine"
+    ],
+    "summary": "Progetto teorico e politico di cinema anticoloniale e collettivo, non una regione geografica.",
+    "traits": [
+      "Pratiche militanti",
+      "Forme collettive",
+      "Decolonizzazione"
+    ],
+    "authors": [
+      "Fernando Solanas",
+      "Octavio Getino",
+      "Jorge Sanjinés"
+    ],
+    "works": [
+      {
+        "title": "La hora de los hornos",
+        "year": 1968
+      },
+      {
+        "title": "Il coraggio del popolo",
+        "year": 1971
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Third Cinema",
+        "url": "https://www.criterion.com/current/posts/7132-restoration-as-reimagining-history"
+      }
+    ],
+    "scope_note": "Il manifesto è del 1969 e ha antecedenti. Progetto politico transnazionale, non sinonimo di cinema latinoamericano.",
+    "original_entry": false
+  },
+  {
+    "id": "australian_new_wave",
+    "label": "Australian New Wave",
+    "original_name": "Australian Film Revival",
+    "kind": "movement",
+    "start": 1970,
+    "end": 1989,
+    "regions": [
+      "Australia"
+    ],
+    "aliases": [
+      "Australian Film Revival",
+      "Nuova onda australiana"
+    ],
+    "summary": "Rilancio del cinema australiano che rilegge identità, paesaggio e storia nazionale.",
+    "traits": [
+      "Nuove produzioni",
+      "Rapporto con il paesaggio",
+      "Identità nazionale"
+    ],
+    "authors": [
+      "Peter Weir",
+      "Gillian Armstrong",
+      "Fred Schepisi",
+      "George Miller"
+    ],
+    "works": [
+      {
+        "title": "Picnic ad Hanging Rock",
+        "year": 1975
+      },
+      {
+        "title": "My Brilliant Career",
+        "year": 1979
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Australian New Wave",
+        "url": "https://www.bfi.org.uk/lists/10-great-australian-new-wave-films"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "blaxploitation",
+    "label": "Blaxploitation",
+    "original_name": "Blaxploitation",
+    "kind": "cycle",
+    "start": 1971,
+    "end": 1979,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "Black exploitation cinema"
+    ],
+    "summary": "Ciclo commerciale afroamericano segnato da nuove presenze, conflitti e stereotipi discussi.",
+    "traits": [
+      "Protagonismo nero",
+      "Musiche popolari",
+      "Rielaborazione dei generi"
+    ],
+    "authors": [
+      "Melvin Van Peebles",
+      "Gordon Parks",
+      "Jack Hill"
+    ],
+    "works": [
+      {
+        "title": "Shaft il detective",
+        "year": 1971
+      },
+      {
+        "title": "Blacula",
+        "year": 1972
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Blaxploitation",
+        "url": "https://www.bfi.org.uk/lists/10-great-blaxploitation-movies"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "slasher_era",
+    "label": "Slasher: ciclo anni Settanta e Ottanta",
+    "original_name": "Slasher era",
+    "kind": "cycle",
+    "start": 1974,
+    "end": 1990,
+    "regions": [
+      "Stati Uniti",
+      "Canada"
+    ],
+    "aliases": [
+      "Slasher era",
+      "Horror Slasher Anni '80"
+    ],
+    "summary": "Fase di affermazione dello slasher nordamericano, distinta dall'intera storia del sottogenere.",
+    "traits": [
+      "Minaccia seriale",
+      "Geografie dell'inseguimento",
+      "Soggettiva e suspense"
+    ],
+    "authors": [
+      "John Carpenter",
+      "Sean S. Cunningham",
+      "Wes Craven"
+    ],
+    "works": [
+      {
+        "title": "Halloween",
+        "year": 1978
+      },
+      {
+        "title": "Venerdì 13",
+        "year": 1980
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Slasher: ciclo anni Settanta e Ottanta",
+        "url": "https://www.bfi.org.uk/lists/great-horror-film-from-every-year-from-1922-now"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "no_wave",
+    "label": "No Wave Cinema",
+    "original_name": "New York No Wave",
+    "kind": "tendency",
+    "start": 1976,
+    "end": 1985,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "New York No Wave",
+      "No Wave"
+    ],
+    "summary": "Scena cinematografica newyorkese vicina a musica, performance e cultura punk.",
+    "traits": [
+      "Super 8",
+      "Spazi urbani",
+      "Reti artistiche indipendenti"
+    ],
+    "authors": [
+      "Amos Poe",
+      "Vivienne Dick",
+      "Eric Mitchell",
+      "Jim Jarmusch"
+    ],
+    "works": [
+      {
+        "title": "The Foreigner",
+        "year": 1978
+      },
+      {
+        "title": "Permanent Vacation",
+        "year": 1980
+      }
+    ],
+    "sources": [
+      {
+        "title": "MoMA · No Wave Cinema",
+        "url": "https://www.moma.org/calendar/events/3757"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  },
+  {
+    "id": "hongkong_new_wave",
+    "label": "Hong Kong New Wave",
+    "original_name": "Nuova onda di Hong Kong",
+    "kind": "movement",
+    "start": 1979,
+    "end": 1990,
+    "regions": [
+      "Hong Kong"
+    ],
+    "aliases": [
+      "Nuova onda di Hong Kong"
+    ],
+    "summary": "Generazione che rinnova il cinema di Hong Kong fra televisione, industria e identità locale.",
+    "traits": [
+      "Sperimentazione di genere",
+      "Storia e identità",
+      "Location urbane"
+    ],
+    "authors": [
+      "Ann Hui",
+      "Tsui Hark",
+      "Patrick Tam",
+      "Allen Fong"
+    ],
+    "works": [
+      {
+        "title": "The Butterfly Murders",
+        "year": 1979
+      },
+      {
+        "title": "Boat People",
+        "year": 1982
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Hong Kong New Wave",
+        "url": "https://www.bfi.org.uk/features/where-begin-with-tsui-hark"
+      }
+    ],
+    "scope_note": "Prima ondata: gli sviluppi successivi e la seconda generazione vanno distinti. Non equivale al solo cinema d’azione.",
+    "original_entry": false
+  },
+  {
+    "id": "fifth_generation",
+    "label": "Quinta generazione cinese",
+    "original_name": "Chinese Fifth Generation",
+    "kind": "movement",
+    "start": 1982,
+    "end": 1999,
+    "regions": [
+      "Cina"
+    ],
+    "aliases": [
+      "Chinese Fifth Generation"
+    ],
+    "summary": "Generazione formata dopo la Rivoluzione culturale che rinnova l'immagine del cinema cinese.",
+    "traits": [
+      "Paesaggi",
+      "Memoria storica",
+      "Composizione visiva"
+    ],
+    "authors": [
+      "Chen Kaige",
+      "Zhang Yimou",
+      "Tian Zhuangzhuang"
+    ],
+    "works": [
+      {
+        "title": "Terra gialla",
+        "year": 1984
+      },
+      {
+        "title": "Sorgo rosso",
+        "year": 1987
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Quinta generazione cinese",
+        "url": "https://www.bfi.org.uk/features/century-chinese-cinema-introduction"
+      }
+    ],
+    "scope_note": "Etichetta generazionale, non adesione a un manifesto. Il periodo non delimita la carriera degli autori.",
+    "original_entry": false
+  },
+  {
+    "id": "taiwan_new_cinema",
+    "label": "Taiwan New Cinema",
+    "original_name": "Taiwanese New Wave",
+    "kind": "movement",
+    "start": 1982,
+    "end": 1990,
+    "regions": [
+      "Taiwan"
+    ],
+    "aliases": [
+      "Taiwanese New Wave",
+      "Nuovo cinema taiwanese"
+    ],
+    "summary": "Rinnovamento collettivo taiwanese che porta vita quotidiana e memoria al centro del racconto.",
+    "traits": [
+      "Osservazione",
+      "Storia familiare",
+      "Trasformazioni sociali"
+    ],
+    "authors": [
+      "Hou Hsiao-hsien",
+      "Edward Yang",
+      "Chen Kun-hou"
+    ],
+    "works": [
+      {
+        "title": "Growing Up",
+        "year": 1983
+      },
+      {
+        "title": "Taipei Story",
+        "year": 1985
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Taiwan New Cinema",
+        "url": "https://www.bfi.org.uk/features/many-voices-behind-taiwan-new-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "transgression",
+    "label": "Cinema of Transgression",
+    "original_name": "Cinema della trasgressione",
+    "kind": "movement",
+    "start": 1985,
+    "end": 1995,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "Cinema della trasgressione"
+    ],
+    "summary": "Scena newyorkese che rivendica provocazione e rottura dei codici culturali.",
+    "traits": [
+      "Produzione indipendente",
+      "Corpo",
+      "Eredità punk"
+    ],
+    "authors": [
+      "Nick Zedd",
+      "Richard Kern",
+      "Tessa Hughes-Freeland"
+    ],
+    "works": [
+      {
+        "title": "Fingered",
+        "year": 1986
+      },
+      {
+        "title": "Nymphomania",
+        "year": 1994
+      }
+    ],
+    "sources": [
+      {
+        "title": "MoMA · Cinema of Transgression",
+        "url": "https://www.moma.org/calendar/events/11635"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "hk_action",
+    "label": "Heroic Bloodshed di Hong Kong",
+    "original_name": "Heroic Bloodshed",
+    "kind": "cycle",
+    "start": 1986,
+    "end": 1997,
+    "regions": [
+      "Hong Kong"
+    ],
+    "aliases": [
+      "Heroic Bloodshed",
+      "Hong Kong action"
+    ],
+    "summary": "Ciclo d'azione e melodramma criminale costruito su amicizia, lealtà e sacrificio.",
+    "traits": [
+      "Sparatorie coreografiche",
+      "Conflitti morali",
+      "Melodramma"
+    ],
+    "authors": [
+      "John Woo",
+      "Tsui Hark",
+      "Ringo Lam"
+    ],
+    "works": [
+      {
+        "title": "A Better Tomorrow",
+        "year": 1986
+      },
+      {
+        "title": "The Killer",
+        "year": 1989
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Heroic Bloodshed di Hong Kong",
+        "url": "https://www.bfi.org.uk/features/where-begin-with-tsui-hark"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "korean_new_wave",
+    "label": "Korean New Wave: prima ondata",
+    "original_name": "Korean New Wave",
+    "kind": "movement",
+    "start": 1987,
+    "end": 1996,
+    "regions": [
+      "Corea del Sud"
+    ],
+    "aliases": [
+      "Korean New Wave",
+      "Prima nuova onda coreana"
+    ],
+    "summary": "Generazione coreana che emerge nel contesto della democratizzazione.",
+    "traits": [
+      "Critica sociale",
+      "Storia recente",
+      "Rinnovamento del linguaggio"
+    ],
+    "authors": [
+      "Park Kwang-su",
+      "Jang Sun-woo",
+      "Lee Myung-se"
+    ],
+    "works": [
+      {
+        "title": "Chilsu e Mansu",
+        "year": 1988
+      },
+      {
+        "title": "A Single Spark",
+        "year": 1995
+      }
+    ],
+    "sources": [
+      {
+        "title": "encykorea.aks.ac.kr · Korean New Wave: prima ondata",
+        "url": "https://encykorea.aks.ac.kr/Article/E0074631"
+      }
+    ],
+    "scope_note": "Prima ondata: fine anni Ottanta–metà anni Novanta. Non coincide con tutto il cinema coreano successivo.",
+    "original_entry": true
+  },
+  {
+    "id": "new_queer_cinema",
+    "label": "New Queer Cinema",
+    "original_name": "Nuovo cinema queer",
+    "kind": "movement",
+    "start": 1989,
+    "end": 1999,
+    "regions": [
+      "Stati Uniti",
+      "Regno Unito",
+      "Internazionale"
+    ],
+    "aliases": [
+      "Nuovo cinema queer"
+    ],
+    "summary": "Etichetta critica affermata negli anni Novanta per pratiche queer indipendenti e conflittuali.",
+    "traits": [
+      "Rilettura dei generi",
+      "Politica della rappresentazione",
+      "Sperimentazione"
+    ],
+    "authors": [
+      "Todd Haynes",
+      "Cheryl Dunye",
+      "Gregg Araki",
+      "Derek Jarman"
+    ],
+    "works": [
+      {
+        "title": "Poison",
+        "year": 1991
+      },
+      {
+        "title": "The Watermelon Woman",
+        "year": 1996
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · New Queer Cinema",
+        "url": "https://www.bfi.org.uk/features/where-begin-with-new-queer-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "j_horror",
+    "label": "J-Horror",
+    "original_name": "J-Horror",
+    "kind": "cycle",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Giappone"
+    ],
+    "aliases": [
+      "Japanese horror",
+      "Horror giapponese contemporaneo"
+    ],
+    "summary": "Rinnovamento dell'orrore giapponese noto soprattutto per l'ondata fra anni Novanta e Duemila.",
+    "traits": [
+      "Presenze inquietanti",
+      "Tecnologie mediali",
+      "Suspense e fuori campo"
+    ],
+    "authors": [
+      "Kiyoshi Kurosawa",
+      "Hideo Nakata",
+      "Takashi Shimizu"
+    ],
+    "works": [
+      {
+        "title": "Cure",
+        "year": 1997
+      },
+      {
+        "title": "Ring",
+        "year": 1998
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · J-Horror",
+        "url": "https://www.bfi.org.uk/lists/90-great-films-1990s"
+      }
+    ],
+    "scope_note": "Genere o ciclo produttivo, distinto da un movimento con manifesto. Il periodo descrive un nucleo di riferimento, non vieta riprese successive.",
+    "original_entry": true
+  },
+  {
+    "id": "new_french_extremity",
+    "label": "New French Extremity",
+    "original_name": "New French Extremity",
+    "kind": "tendency",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Francia"
+    ],
+    "aliases": [
+      "Nuova estremità francese"
+    ],
+    "summary": "Etichetta critica per opere francesi che mettono alla prova i confini della rappresentazione del corpo.",
+    "traits": [
+      "Esperienza corporea",
+      "Provocazione formale",
+      "Desiderio e potere"
+    ],
+    "authors": [
+      "Claire Denis",
+      "Catherine Breillat",
+      "Gaspar Noé",
+      "Julia Ducournau"
+    ],
+    "works": [
+      {
+        "title": "Trouble Every Day",
+        "year": 2001
+      },
+      {
+        "title": "Titane",
+        "year": 2021
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · New French Extremity",
+        "url": "https://www.bfi.org.uk/features/pleasures-pain-new-french-extremity"
+      }
+    ],
+    "scope_note": "Etichetta discussa, formulata da James Quandt nel 2004. Non coincide con il solo horror e ha sviluppi successivi al 2010.",
+    "original_entry": true
+  },
+  {
+    "id": "nuevo_cine_argentino",
+    "label": "Nuevo Cine Argentino",
+    "original_name": "Nuevo Cine Argentino",
+    "kind": "movement",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Argentina"
+    ],
+    "aliases": [
+      "New Argentine Cinema",
+      "Nuovo cinema argentino"
+    ],
+    "summary": "Rinnovamento argentino legato a produzioni indipendenti e nuove sensibilità dello sguardo.",
+    "traits": [
+      "Spazi quotidiani",
+      "Nuove produzioni",
+      "Distanza dalle formule narrative"
+    ],
+    "authors": [
+      "Lucrecia Martel",
+      "Pablo Trapero",
+      "Martín Rejtman",
+      "Lisandro Alonso"
+    ],
+    "works": [
+      {
+        "title": "Mundo grúa",
+        "year": 1999
+      },
+      {
+        "title": "La ciénaga",
+        "year": 2001
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Nuevo Cine Argentino",
+        "url": "https://www.bfi.org.uk/sight-and-sound/news/lff-2011-new-new-argentine-cinema"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "new_turkish_cinema",
+    "label": "Nuovo cinema turco",
+    "original_name": "New Turkish Cinema",
+    "kind": "tendency",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Turchia"
+    ],
+    "aliases": [
+      "New Turkish Cinema",
+      "Yeni Türk Sineması"
+    ],
+    "summary": "Rinnovamento turco dagli anni Novanta, eterogeneo per estetiche e condizioni produttive.",
+    "traits": [
+      "Memoria",
+      "Spazi periferici",
+      "Nuove forme autoriali"
+    ],
+    "authors": [
+      "Nuri Bilge Ceylan",
+      "Zeki Demirkubuz",
+      "Yeşim Ustaoğlu"
+    ],
+    "works": [
+      {
+        "title": "Kasaba",
+        "year": 1997
+      },
+      {
+        "title": "Uzak",
+        "year": 2002
+      }
+    ],
+    "sources": [
+      {
+        "title": "ebs.cu.edu.tr · Nuovo cinema turco",
+        "url": "https://ebs.cu.edu.tr/En/Course/Information/689890"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  },
+  {
+    "id": "berlin_school",
+    "label": "Scuola di Berlino",
+    "original_name": "Berliner Schule",
+    "kind": "movement",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Germania"
+    ],
+    "aliases": [
+      "Berlin School",
+      "Berliner Schule"
+    ],
+    "summary": "Raggruppamento critico del cinema tedesco contemporaneo, con più generazioni e sensibilità.",
+    "traits": [
+      "Ellissi",
+      "Quotidianità",
+      "Rapporti sociali"
+    ],
+    "authors": [
+      "Angela Schanelec",
+      "Christian Petzold",
+      "Thomas Arslan"
+    ],
+    "works": [
+      {
+        "title": "La sicurezza interna",
+        "year": 2000
+      },
+      {
+        "title": "Marseille",
+        "year": 2004
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Scuola di Berlino",
+        "url": "https://www.criterion.com/current/posts/6814-angela-schanelec-in-north-america"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "sixth_generation",
+    "label": "Sesta generazione cinese",
+    "original_name": "Chinese Sixth Generation",
+    "kind": "tendency",
+    "start": 1990,
+    "end": null,
+    "regions": [
+      "Cina"
+    ],
+    "aliases": [
+      "Chinese Sixth Generation"
+    ],
+    "summary": "Etichetta generazionale per pratiche indipendenti attente alle trasformazioni urbane.",
+    "traits": [
+      "Produzione indipendente",
+      "Città",
+      "Storie quotidiane"
+    ],
+    "authors": [
+      "Jia Zhangke",
+      "Wang Xiaoshuai",
+      "Zhang Yuan"
+    ],
+    "works": [
+      {
+        "title": "Xiao Wu",
+        "year": 1997
+      },
+      {
+        "title": "Le biciclette di Pechino",
+        "year": 2001
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Sesta generazione cinese",
+        "url": "https://www.bfi.org.uk/features/century-chinese-cinema-introduction"
+      }
+    ],
+    "scope_note": "Etichetta discussa anche dagli autori associati. Cinema urbano o indipendente non bastano a definire un’appartenenza.",
+    "original_entry": false
+  },
+  {
+    "id": "dogme95",
+    "label": "Dogme 95",
+    "original_name": "Dogme 95",
+    "kind": "movement",
+    "start": 1995,
+    "end": 2005,
+    "regions": [
+      "Danimarca",
+      "Internazionale"
+    ],
+    "aliases": [
+      "Dogma 95"
+    ],
+    "summary": "Movimento con manifesto e regole dichiarate, nato in Danimarca e adottato anche altrove.",
+    "traits": [
+      "Voto di castità",
+      "Ripresa a mano",
+      "Restrizioni produttive volontarie"
+    ],
+    "authors": [
+      "Lars von Trier",
+      "Thomas Vinterberg",
+      "Harmony Korine"
+    ],
+    "works": [
+      {
+        "title": "Festen",
+        "year": 1998
+      },
+      {
+        "title": "Julien Donkey-Boy",
+        "year": 1999
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Dogme 95",
+        "url": "https://www.bfi.org.uk/features/where-begin-with-dogme-95"
+      }
+    ],
+    "scope_note": "Il 2005 indica la conclusione organizzata del movimento. Le adesioni furono internazionali; la ripresa a mano non basta a rendere un film Dogme.",
+    "original_entry": true
+  },
+  {
+    "id": "new_korean_cinema",
+    "label": "Nuovo cinema coreano contemporaneo",
+    "original_name": "New Korean Cinema",
+    "kind": "tendency",
+    "start": 1996,
+    "end": null,
+    "regions": [
+      "Corea del Sud"
+    ],
+    "aliases": [
+      "New Korean Cinema",
+      "Korean cinema renaissance"
+    ],
+    "summary": "Trasformazione industriale e autoriale distinta dalla prima Korean New Wave.",
+    "traits": [
+      "Ibridazione dei generi",
+      "Nuove condizioni industriali",
+      "Conflitti sociali"
+    ],
+    "authors": [
+      "Bong Joon-ho",
+      "Park Chan-wook",
+      "Lee Chang-dong",
+      "Hong Sang-soo"
+    ],
+    "works": [
+      {
+        "title": "Peppermint Candy",
+        "year": 1999
+      },
+      {
+        "title": "Memories of Murder",
+        "year": 2003
+      }
+    ],
+    "sources": [
+      {
+        "title": "koreanfilm.or.kr · Nuovo cinema coreano contemporaneo",
+        "url": "https://www.koreanfilm.or.kr/eng/publications/download.jsp?fileNm=history8.pdf"
+      }
+    ],
+    "scope_note": "Costellazione successiva alla prima ondata, non una scuola estetica unitaria né tutto il cinema coreano.",
+    "original_entry": false
+  },
+  {
+    "id": "thai_new_wave",
+    "label": "Nuova onda thailandese",
+    "original_name": "Thai New Wave",
+    "kind": "tendency",
+    "start": 1997,
+    "end": null,
+    "regions": [
+      "Thailandia"
+    ],
+    "aliases": [
+      "Thai New Wave"
+    ],
+    "summary": "Rinnovamento thailandese fra cinema di genere, produzioni indipendenti e festival.",
+    "traits": [
+      "Nuove forme produttive",
+      "Ibridazione",
+      "Memoria e modernità"
+    ],
+    "authors": [
+      "Pen-ek Ratanaruang",
+      "Nonzee Nimibutr",
+      "Apichatpong Weerasethakul"
+    ],
+    "works": [
+      {
+        "title": "Fun Bar Karaoke",
+        "year": 1997
+      },
+      {
+        "title": "Last Life in the Universe",
+        "year": 2003
+      }
+    ],
+    "sources": [
+      {
+        "title": "Criterion · Nuova onda thailandese",
+        "url": "https://www.criterion.com/current/posts/9136-first-look-first-weekend"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  },
+  {
+    "id": "romanian_new_wave",
+    "label": "Nuovo Cinema Romeno",
+    "original_name": "Romanian New Wave",
+    "kind": "movement",
+    "start": 2001,
+    "end": null,
+    "regions": [
+      "Romania"
+    ],
+    "aliases": [
+      "Romanian New Wave",
+      "Noul val românesc"
+    ],
+    "summary": "Rinnovamento romeno che interroga storia recente, istituzioni e vita ordinaria.",
+    "traits": [
+      "Durata",
+      "Umorismo secco",
+      "Dilemmi morali"
+    ],
+    "authors": [
+      "Cristi Puiu",
+      "Cristian Mungiu",
+      "Corneliu Porumboiu",
+      "Radu Jude"
+    ],
+    "works": [
+      {
+        "title": "La morte del signor Lazarescu",
+        "year": 2005
+      },
+      {
+        "title": "4 mesi, 3 settimane, 2 giorni",
+        "year": 2007
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Nuovo Cinema Romeno",
+        "url": "https://www.bfi.org.uk/lists/10-great-romanian-new-wave-films"
+      }
+    ],
+    "scope_note": "Date e attribuzioni sono indicative e possono variare fra gli studi. Collegare i film a pratiche, contesti e fonti, non soltanto ad anno o paese.",
+    "original_entry": false
+  },
+  {
+    "id": "mumblecore",
+    "label": "Mumblecore",
+    "original_name": "Mumblecore",
+    "kind": "tendency",
+    "start": 2002,
+    "end": null,
+    "regions": [
+      "Stati Uniti"
+    ],
+    "aliases": [
+      "American mumblecore"
+    ],
+    "summary": "Scena indipendente a basso budget centrata su relazioni e incertezze quotidiane.",
+    "traits": [
+      "Dialoghi informali",
+      "Produzioni leggere",
+      "Recitazione naturalistica"
+    ],
+    "authors": [
+      "Andrew Bujalski",
+      "Joe Swanberg",
+      "Lynn Shelton"
+    ],
+    "works": [
+      {
+        "title": "Funny Ha Ha",
+        "year": 2002
+      },
+      {
+        "title": "Humpday",
+        "year": 2009
+      }
+    ],
+    "sources": [
+      {
+        "title": "BFI · Mumblecore",
+        "url": "https://www.bfi.org.uk/features/where-begin-mumblecore"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": true
+  },
+  {
+    "id": "greek_weird_wave",
+    "label": "Greek Weird Wave",
+    "original_name": "Onda strana greca",
+    "kind": "tendency",
+    "start": 2009,
+    "end": null,
+    "regions": [
+      "Grecia"
+    ],
+    "aliases": [
+      "Onda strana greca",
+      "Weird Wave"
+    ],
+    "summary": "Etichetta critica per film greci che destabilizzano norme e relazioni di potere.",
+    "traits": [
+      "Recitazione straniata",
+      "Famiglia e controllo",
+      "Allegoria"
+    ],
+    "authors": [
+      "Yorgos Lanthimos",
+      "Athina Rachel Tsangari",
+      "Alexandros Avranas"
+    ],
+    "works": [
+      {
+        "title": "Dogtooth",
+        "year": 2009
+      },
+      {
+        "title": "Attenberg",
+        "year": 2010
+      }
+    ],
+    "sources": [
+      {
+        "title": "academic.oup.com · Greek Weird Wave",
+        "url": "https://academic.oup.com/edinburgh-scholarship-online/book/42766/chapter-abstract/360835746"
+      }
+    ],
+    "scope_note": "Raggruppamento critico o scena eterogenea dai confini discussi. La somiglianza stilistica non certifica un’appartenenza storica.",
+    "original_entry": false
+  }
+]

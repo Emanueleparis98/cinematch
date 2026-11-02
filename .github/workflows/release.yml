@@ -57,10 +57,14 @@ jobs:
           "tag=v$version" >> $env:GITHUB_OUTPUT
 
       - name: Test
-        run: cargo test --release --all-targets
+        run: cargo test --release --workspace --all-targets
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --workspace
+
+      - name: Crea plugin autonomo
+        shell: pwsh
+        run: .\scripts\package-plugin.ps1
 
       - name: Verifica metadati eseguibile
         shell: pwsh
@@ -149,6 +153,7 @@ jobs:
           files: |
             dist/CineMatch-Setup-*.exe
             dist/latest.json
+            dist/Cinema-Currents-*.zip
 
       - name: Verifica release pubblicata
         shell: pwsh

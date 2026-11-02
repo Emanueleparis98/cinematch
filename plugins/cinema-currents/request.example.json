@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "movements": ["neorealismo"],
+  "mode": "recommendations",
+  "count": 5,
+  "depth": "concise",
+  "relation": "historical",
+  "preferences": "Un percorso accessibile da guardare in coppia",
+  "exclusions": "Niente spoiler importanti",
+  "watched": ["Ladri di biciclette"],
+  "question": "Alterna opere note e scoperte meno conosciute."
+}

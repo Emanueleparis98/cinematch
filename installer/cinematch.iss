@@ -1,11 +1,11 @@
 ﻿; CineMatch - installer Windows per-utente (nessun UAC).
 ; Compilare dalla root del progetto:
-;   ISCC.exe /DMyAppVersion=0.13.0 installer\cinematch.iss
+;   ISCC.exe /DMyAppVersion=0.14.0 installer\cinematch.iss
 ; Il setup completo aggiorna l'installazione esistente e non tocca
 ; %APPDATA%\CineMatch (configurazione, chiavi e cache).
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.13.0"
+  #define MyAppVersion "0.14.0"
 #endif
 
 #define MyAppName "CineMatch"
@@ -22,7 +22,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases/latest
-AppComments=Catalogo cinematografico con filtri, tassonomia e correnti.
+AppComments=Correnti del cinema e generatore di prompt locale.
 AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
@@ -60,6 +60,9 @@ Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescr
 
 [Files]
 Source: "..\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\cinema-currents.exe"; DestDir: "{app}\plugins"; Flags: ignoreversion
+Source: "..\plugins\cinema-currents\README.md"; DestDir: "{app}\plugins"; DestName: "cinema-currents-README.md"; Flags: ignoreversion
+Source: "..\plugins\cinema-currents\request.example.json"; DestDir: "{app}\plugins"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

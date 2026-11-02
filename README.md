@@ -1,75 +1,82 @@
-# CineMatch
+# CineMatch 0.14.0
 
-Catalogo cinematografico desktop per Windows, versione 0.13.0. Ricerca per titolo,
-filtri combinabili, tassonomia e correnti. Nessuna chat e nessun provider AI.
+Guida Windows dedicata alle correnti del cinema e generatore locale di prompt
+per chat esterne. La nuova versione sostituisce il catalogo generale di film.
 
-## Consultazione online, senza archivio locale
+## Uso
 
-CineMatch consulta TMDB quando apri il catalogo, cerchi, cambi filtri, pagina o
-scheda. Non scarica gli export degli identificativi, non acquisisce progressivamente
-il database e non salva film o locandine sul disco. Le risposte e le immagini
-rimangono in cache limitate nella RAM della sessione e scompaiono alla chiusura.
-Non esistono lavori di completamento o indicizzazione in background.
+1. Cerca una corrente, un sinonimo, una figura o un'opera rappresentativa.
+2. Filtra per categoria, periodo e area; consulta caratteristiche, contesto e fonti.
+3. Premi **Prepara una ricerca**. Per più voci usa le caselle nell'elenco.
+4. Scegli obiettivo, quantità automatica o precisa, approfondimento e tipo di relazione.
+5. Scrivi la tua richiesta ed eventualmente preferenze, esclusioni e titoli già visti.
+6. Premi **Genera il prompt**, modifica il testo se vuoi e usa **Copia prompt**.
+7. Con **Apri chat** apri ChatGPT, DeepSeek, Claude, Gemini o un indirizzo HTTPS
+   personale. Incolla e invia tu il testo; puoi usarlo anche in una chat già aperta.
 
-Restano sul PC il programma, le impostazioni e, se collegata, la libreria personale
-SIMKL. Le credenziali sono conservate nel Windows Credential Manager. La consultazione
-richiede Internet. Il download di un aggiornamento del programma rimane un'azione
-esplicita, distinta dai dati del catalogo.
+**Ctrl+F** porta alla ricerca delle correnti; **Ctrl+Invio** genera il prompt
+nel compositore. Le azioni principali rimangono sopra l'area scorrevole.
+Sotto 1000 pixel logici, i passaggi fra elenco, scheda e compositore usano
+l'intera larghezza. Dimensione minima supportata: 800×600.
 
-## Uso e limiti della fonte
+## Contenuti e precisione storica
 
-1. Configura una API Key v3 o un Read Access Token v4 TMDB.
-2. Cerca un titolo oppure combina periodi, generi, paesi, temi e correnti.
-3. In **Ambito della ricerca** scegli date, anni precisi, adulti, contenuti video
-   e AND/OR dei generi. I filtri non aggiungono soglie editoriali di durata o voti.
-4. Naviga con le frecce o scrivi il numero di pagina e premi **Vai**.
+La raccolta comprende **74 voci**: **44 movimenti storici**, **14 tendenze/scenari**,
+**12 generi o cicli**, **3 tradizioni**, **1 tecnica/ambito produttivo**.
+Le 26 voci precedenti sono state riviste e sono state aggiunte 48 voci.
+Non tutte le voci sono movimenti storici: le categorie sono dichiarate.
 
-TMDB consente al massimo **500 pagine per singola query**. Una ricerca molto ampia
-può superare il numero di titoli effettivamente navigabili: l'app segnala il limite,
-non presenta quel totale come il censimento di tutti i film. Restringi gli anni o
-aggiungi criteri per accedere ad altri sottoinsiemi. Non viene promessa la copertura
-al 100% dei film esistenti o di ogni combinazione dei loro metadati.
+Ogni scheda comprende nome originale o internazionale, sinonimi, periodo indicativo,
+aree, caratteristiche, figure di riferimento, esempi di opere, limiti interpretativi
+ed approfondimenti. Le date non certificano appartenenze e le aree non sono filtri
+che escludono automaticamente opere. La raccolta è editoriale e ampliabile;
+non viene presentata come il censimento universale della storia del cinema.
 
-La ricerca per titolo usa l'endpoint TMDB dedicato. Gli ulteriori filtri e gli
-ordinamenti si applicano alla pagina corrente; il paginatore segue le pagine della
-ricerca per titolo. Anche le verifiche aggiuntive sulle durate e sui decenni separati
-possono produrre pagine vuote: la navigazione continua e il limite viene dichiarato.
-Una verifica di rete fallita restituisce un errore, senza scartare in silenzio il film.
+Fonti e confronto delle 26 voci precedenti: [audit della raccolta](docs/correnti-0.14.0-audit.md).
+La raccolta canonica è [movements.json](plugins/cinema-currents/assets/movements.json).
 
-Le risposte TMDB possono cambiare durante la sessione. **Aggiorna** rinnova le cache
-della ricerca. I temi sono keyword TMDB in AND: non c'è interpretazione narrativa,
-né eliminazione silenziosa dei criteri che non si riescono a risolvere.
+## Plugin separato
 
-## Correnti e fonti
-
-- **Candidati per ricetta**: periodo, origine ed eventuali keyword. Non certifica
-  l'appartenenza storica di ogni risultato.
-- **Appartenenza documentata**: solo relazioni con fonte incluse nell'app.
-- **Appartenenza e affinità con fonte**: comprende le selezioni editoriali più ampie.
-
-Le classificazioni incluse sono una raccolta parziale: per il Neorealismo,
-sei appartenenze documentate e dodici affinità da BFI e Criterion. I dati storici
-non vengono inventati per riempire le altre correnti. Le schede mostrano relazione,
-nota e collegamento alla fonte. Le classificazioni con fonte non ereditano
-automaticamente i limiti cronologici delle ricette.
-
-Le correnti sono alternative, oppure puoi richiederle tutte. Nel primo caso, con
-più correnti, ciascuna pagina riunisce la stessa pagina delle singole query e rimuove
-i duplicati al suo interno. L'ordine vale per quella pagina; le fonti possono
-sovrapporsi fra pagine. L'interfaccia lo dichiara e non mostra un totale unico esatto.
-
-## Sviluppo
+**Cinema Currents 1.0** è un pacchetto autonomo, utilizzabile anche senza CineMatch:
+una libreria Rust e un eseguibile con protocollo JSON. Il generatore dell'app usa
+la stessa libreria, senza processi o servizi in background.
 
 ```powershell
-cargo test --all-targets
-cargo clippy --all-targets -- -D warnings
-cargo check --features wgpu
-cargo run --example catalog_probe
-cargo build --release
-ISCC.exe /DMyAppVersion=0.13.0 installer\cinematch.iss
+.\cinema-currents.exe catalog
+Get-Content request.example.json -Raw | .\cinema-currents.exe generate
 ```
 
-Il probe reale usa soltanto TMDB, senza AI, e non conserva le risposte sul disco.
-Il precedente indice SQLite e i comandi di acquisizione sono stati rimossi.
-I documenti della versione 0.12.0 descrivono il comportamento storico, sostituito
-in questa versione. Verifica corrente in `docs/catalogo-0.13.0-verifica.md`.
+[Contratto, sorgenti e istruzioni del plugin](plugins/cinema-currents/README.md).
+Il pacchetto ZIP Windows contiene eseguibile, esempio e sorgenti riutilizzabili.
+Il plugin è incluso anche nella cartella `plugins` dell'installazione.
+
+## Rete, costi e dati
+
+La consultazione della guida e la generazione del prompt funzionano offline.
+L'app non richiede API key, non chiama servizi AI, non invia messaggi, non legge
+account e non scarica schede, locandine o database. Nessun prompt o risposta
+viene salvato automaticamente; le richieste rimangono nella RAM della sessione.
+La raccolta testuale è inclusa nel programma e occupa circa 86 KB nei sorgenti.
+
+Le fonti e la chat si aprono nel browser soltanto su azione dell'utente.
+Gli indirizzi delle chat non contengono il prompt o altri dati personali.
+Servono Internet e gli eventuali account richiesti dal sito. Qualità, disponibilità,
+prezzi e limiti della chat dipendono dal servizio esterno.
+
+L'aggiornamento conserva i file personali e le credenziali delle versioni precedenti;
+la nuova app non li usa. Per futuri aggiornamenti è disponibile l'installer completo
+nella sezione Releases del repository.
+
+## Sviluppo e distribuzione
+
+```powershell
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --features wgpu
+cargo build --release --workspace
+.\scripts\package-plugin.ps1
+ISCC.exe /DMyAppVersion=0.14.0 installer\cinematch.iss
+```
+
+I documenti delle versioni precedenti descrivono comportamenti storici.
+La verifica corrente è in [correnti-0.14.0-verifica.md](docs/correnti-0.14.0-verifica.md).

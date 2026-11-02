@@ -27,7 +27,7 @@ if ($running) {
 
 Write-Host "Compilazione release (incrementale)..." -ForegroundColor Cyan
 Push-Location $root
-cargo build --release
+cargo build --release --workspace
 $code = $LASTEXITCODE
 Pop-Location
 if ($code -ne 0) {
@@ -39,5 +39,5 @@ if ($code -ne 0) {
 $env:CINEMATCH_NO_UPDATE = "1"
 Start-Process -FilePath $exe
 $when = (Get-Date).ToString("dd/MM HH:mm")
-Write-Host "CineMatch avviato: build $when. La trovi in fondo alle Impostazioni." -ForegroundColor Green
-Write-Host "La chiave API TMDB si imposta dalla finestra Impostazioni (ingranaggio)." -ForegroundColor Green
+Write-Host "CineMatch avviato: build $when. Versione visibile nella barra inferiore." -ForegroundColor Green
+Write-Host "Guida e prompt funzionano localmente: nessuna API key richiesta." -ForegroundColor Green
