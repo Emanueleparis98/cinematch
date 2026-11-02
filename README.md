@@ -1,7 +1,62 @@
-# CineMatch 0.14.0
+# CineMatch — estensione browser 1.0.0
+
+**La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
+correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
+Claude e Gemini. Si apre accanto alla chat e inserisce il testo nell'editor:
+l'invio rimane all'utente. Non richiede app Windows, API key o chiamate AI a pagamento.
+
+## Installare l'estensione
+
+Estrai `CineMatch-Chrome-1.0.0.zip`, apri `chrome://extensions`, attiva
+**Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
+la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
+Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
+
+[Istruzioni complete, permessi e privacy](extensions/cinematch/README.md).
+Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato sullo store.
+
+## Flusso nel browser
+
+1. Cerca per corrente, autore, opera o sinonimo e consulta contesto e fonti.
+2. Seleziona una o più voci e passa a **Il tuo prompt**.
+3. Scegli obiettivo, quantità libera o precisa, preferenze, esclusioni e titoli già visti.
+4. Genera e modifica la richiesta. Apri la chat, poi premi **Inserisci nella chat**.
+5. Rileggi e invia dal sito. Una bozza già presente richiede la tua scelta prima
+   di essere modificata. **Copia** permette di usare qualsiasi altra chat.
+
+Nessun accesso alle conversazioni, nessun invio automatico, nessuna API AI.
+Solo quattro host AI autorizzati; nessuna cronologia o accesso generale ai siti.
+La bozza è conservata in memoria per la sessione del browser, senza archivio
+progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
+
+## Sviluppo dell'estensione
+
+```sh
+python scripts/build-extension.py
+pnpm install --frozen-lockfile
+pnpm test
+pnpm exec playwright install chromium
+pnpm test:browser
+```
+
+Python usa solo la libreria standard per assemblare `dist/CineMatch-Chrome` e lo
+ZIP. Node 24 e pnpm 11.25.0 servono soltanto ai test. La distribuzione non contiene
+Node, Python o dipendenze remote. Il workflow **Browser extension** verifica e
+pubblica lo ZIP come artefatto CI. I test browser usano Chromium isolato e pagine
+simulate: nessun account reale o richiesta AI. I siti possono cambiare editor;
+in quel caso rimane il copia/incolla.
+
+La raccolta conserva 44 movimenti, 14 tendenze/scenari, 12 generi/cicli,
+3 tradizioni e 1 tecnica. [Audit storico](docs/correnti-0.14.0-audit.md),
+[dati canonici](plugins/cinema-currents/assets/movements.json).
+
+---
+
+## Versione desktop precedente — 0.14.0
 
 Guida Windows dedicata alle correnti del cinema e generatore locale di prompt
-per chat esterne. La nuova versione sostituisce il catalogo generale di film.
+per chat esterne. I paragrafi seguenti documentano la versione precedente;
+non sono necessari per usare l'estensione browser.
 
 ## Uso
 

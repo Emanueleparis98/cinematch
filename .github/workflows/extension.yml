@@ -1,0 +1,35 @@
+name: Browser extension
+on:
+  push:
+    branches: [main]
+    paths: ['extensions/**', 'tests/extension*', 'scripts/build-extension.py', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
+  pull_request:
+    paths: ['extensions/**', 'tests/extension*', 'scripts/build-extension.py', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - run: pnpm install --frozen-lockfile
+      - run: python3 scripts/build-extension.py
+      - run: pnpm test
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: CineMatch-Chrome
+          path: dist/CineMatch-Chrome-*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: extension-screenshots
+          path: test-results/*.png
+          if-no-files-found: ignore

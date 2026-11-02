@@ -6,12 +6,14 @@ La nuova sezione eredita l'identità già presente nell'app, senza sostituirla.
 - Fondi scuri caldi, testo avorio, accento ember, palette in `src/ui/lumen.rs`.
 - Fraunces per i titoli; Instrument Sans per interfaccia e lettura;
   JetBrains Mono limitato a dati come versione e misure.
-- Schermata a due aree: navigazione e ricerca a sinistra, scheda o compositore
-  a destra. Elenco con righe e separatori, senza una griglia di schede decorative.
-- Sotto 1000 pixel logici, navigazione, scheda e compositore hanno passaggi
-  espliciti e usano l'intera larghezza; dimensione minima supportata 800×600.
-- Azioni di generazione, copia e apertura chat restano sopra l'area scorrevole
-  del compositore. I campi personali e il prompt sono modificabili.
+- Estensione: pannello laterale con due sezioni, Le correnti e Il tuo prompt.
+  Ricerca sopra un elenco con righe e separatori; filtri espandibili, schede con
+  ritorno esplicito all'elenco. Vista ampia facoltativa in una scheda del browser.
+- Layout verificato da 320×568 a 900×850. Intestazione e sezioni rimangono
+  visibili; scorre il contenuto. Sotto 340 px i campi dei filtri passano a una colonna.
+- Generazione, copia e inserimento restano nel piede del pannello. La scelta
+  per una bozza già presente è inline e non sovrascrive testo senza scelta esplicita.
+  Preferenze avanzate espandibili, prompt modificabile, nessun invio automatico.
 - Le categorie storiche sono testo esplicativo, non una codifica affidata solo
   al colore. I periodi indicativi e le note di attribuzione sono parte del contenuto.
 - Il prompt superato da nuovi criteri richiede una rigenerazione prima della copia.

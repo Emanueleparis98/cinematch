@@ -5,3 +5,9 @@
 
 # Impeccable (installazione locale OpenCode)
 .opencode/
+
+# Browser extension development artifacts
+node_modules/
+.extension-browser/
+.extension-test-profile*/
+test-results/

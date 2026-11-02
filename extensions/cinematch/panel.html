@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CineMatch · Correnti del cinema</title><link rel="stylesheet" href="panel.css">
+  <script type="module" src="panel.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand" aria-label="CineMatch">CINE <span>MATCH</span></div>
+    <button id="expand" class="icon-button" type="button" title="Apri CineMatch in una scheda" aria-label="Apri CineMatch in una scheda"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></button>
+  </header>
+  <nav class="tabs" role="tablist" aria-label="Sezioni">
+    <button id="explore-tab" role="tab" aria-controls="explore-pane" aria-selected="true" type="button">Le correnti</button>
+    <button id="prompt-tab" role="tab" aria-controls="prompt-pane" aria-selected="false" type="button">Il tuo prompt <span id="selection-count" class="badge">1</span></button>
+  </nav>
+  <main>
+    <section id="explore-pane" role="tabpanel" aria-labelledby="explore-tab">
+      <div id="browser">
+        <h1>Correnti del cinema</h1><p class="muted intro">74 voci, dalle origini a oggi. Movimenti, tendenze e tradizioni distinti.</p>
+        <label class="sr-only" for="search">Cerca una corrente, un autore o un film</label>
+        <input id="search" type="search" placeholder="Cerca corrente, autore o film…" autocomplete="off">
+        <details class="filter-disclosure"><summary>Filtri e ordinamento</summary><div class="filters">
+          <label>Categoria<select id="kind"><option value="">Tutte le categorie</option></select></label>
+          <label>Epoca<select id="era"><option value="all">Tutte le epoche</option><option value="origins">Fino al 1919</option><option value="interwar">1920–1945</option><option value="postwar">1946–1979</option><option value="recent">1980–1999</option><option value="contemporary">Dal 2000</option></select></label>
+          <label>Area<select id="region"><option value="">Tutte le aree</option></select></label>
+          <label>Ordine<select id="sort"><option value="chronological">Cronologico</option><option value="alphabetic">Alfabetico</option></select></label>
+        </div></details>
+        <div class="list-meta"><span id="results-count" role="status"></span><button id="reset" class="text-button" type="button">Azzera filtri</button></div>
+        <div id="movement-list" class="movement-list"></div>
+        <div id="empty" class="empty" hidden><h2>Nessuna voce trovata</h2><p>Prova un sinonimo, un autore o azzera i filtri.</p></div>
+      </div>
+      <article id="detail" hidden></article>
+    </section>
+    <section id="prompt-pane" role="tabpanel" aria-labelledby="prompt-tab" hidden>
+      <h1>La tua prossima visione</h1><p class="muted intro">Prepara la richiesta e portala nella chat. L’invio resta a te.</p>
+      <div id="selected" class="selected-list" aria-label="Voci selezionate"></div>
+      <form id="request-form">
+        <label>Che cosa vuoi chiedere?<select id="mode"></select></label>
+        <div class="quantity-row"><label class="checkbox-label"><input id="exact-count" type="checkbox"> Numero di film preciso</label><label id="count-wrap" hidden><span class="sr-only">Numero di film</span><input id="count" type="number" value="5" min="1" max="4294967295" step="1" inputmode="numeric"></label></div>
+        <label>La tua richiesta<textarea id="question" rows="3" placeholder="Per esempio: film con comicità, non soltanto dramma, da guardare in coppia."></textarea></label>
+        <div class="filters prompt-options">
+          <label>Approfondimento<select id="depth"><option value="concise">Sintetico</option><option value="detailed">Approfondito</option></select></label>
+          <label>Relazione con la corrente<select id="relation"><option value="historical">Appartenenza storica</option><option value="legacy">Anche influenze successive</option></select></label>
+        </div>
+        <details id="preferences-section"><summary>Preferenze, esclusioni e titoli già visti</summary>
+          <label>Preferenze<textarea id="preferences" rows="2" placeholder="Atmosfera, temi, durata o altre preferenze…"></textarea></label>
+          <label>Da escludere<textarea id="exclusions" rows="2" placeholder="Contenuti o caratteristiche da evitare…"></textarea></label>
+          <label>Già visti o già proposti<textarea id="watched" rows="3" placeholder="Un titolo per riga, oppure separati da punto e virgola."></textarea></label>
+        </details>
+      </form>
+      <section id="preview-section" hidden>
+        <div class="preview-heading"><h2>Pronto per la chat</h2><span id="prompt-length" class="muted"></span></div>
+        <p id="stale" class="notice" hidden>Criteri modificati: rigenera il prompt prima di copiarlo o inserirlo.</p>
+        <label class="sr-only" for="prompt-preview">Prompt modificabile</label><textarea id="prompt-preview" rows="14" spellcheck="false"></textarea>
+        <p class="muted small">Puoi modificare il testo. La qualità della risposta e i limiti d’uso dipendono dalla chat scelta.</p>
+      </section>
+    </section>
+  </main>
+  <footer id="actions" hidden>
+    <div class="provider-row"><label for="provider">Usa con</label><select id="provider"></select><button id="open-chat" class="text-button" type="button">Apri chat</button></div>
+    <p id="chat-state" class="chat-state"></p>
+    <button id="generate" class="primary" type="button">Genera il prompt</button>
+    <div class="send-row"><button id="copy" type="button" disabled>Copia</button><button id="insert" type="button" disabled>Inserisci nella chat</button></div>
+    <div id="conflict" class="conflict" hidden><p>Nella chat c’è già una bozza. Come vuoi procedere?</p><div class="send-row"><button id="append" type="button">Aggiungi in fondo</button><button id="replace" type="button">Sostituisci la bozza</button></div><button id="cancel-conflict" class="text-button" type="button">Mantieni la bozza</button></div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </footer>
+  <div id="boot-error" class="empty" hidden><h1>CineMatch non si è caricato</h1><p>Chiudi e riapri il pannello. Se il problema continua, ricarica l’estensione dalla pagina delle estensioni del browser.</p></div>
+</body>
+</html>
