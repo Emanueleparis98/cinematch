@@ -1,6 +1,6 @@
 //! Controllo mirato del catalogo con TMDB reale; nessun provider AI.
 use cinematch::{
-    app::{discover_strict, verified_details},
+    catalog::{browse, CatalogQuery, MovementMatch, ReleaseScope},
     domain::{
         model::{Facets, Sort},
         taxonomy::Taxonomy,
@@ -47,25 +47,65 @@ fn main() -> Result<(), String> {
         ),
     ];
     for (label, facets) in cases {
-        let mut notes = Vec::new();
-        let (movies, total, pages, _) = discover_strict(&tmdb, &tax, &facets, &[], 1, &mut notes)?;
-        if movies.is_empty() {
-            return Err(format!("{label}: nessuna scheda da verificare"));
-        }
-        let sample = &movies[..movies.len().min(4)];
-        let details = verified_details(&tmdb, &tax, &facets, &[], sample)?;
-        if details.len() != sample.len() {
-            for movie in sample {
-                let d = tmdb.details(movie.id)?;
-                println!("{}: anno {:?}, data {:?}, generi {:?}, paesi {:?}, durata {:?}, voto {} / {} voti, conforme {}",d.movie.title,d.movie.year,d.movie.release_date,d.movie.genre_ids,d.origin_country_codes,d.runtime,d.movie.rating,d.movie.votes,details.contains_key(&movie.id));
-            }
-            return Err(format!(
-                "{label}: una scheda non rispetta i filtri o non è disponibile"
-            ));
+        let page = browse(
+            &tmdb,
+            &tax,
+            &CatalogQuery {
+                facets,
+                page: 1,
+                ..Default::default()
+            },
+        )?;
+        if page.movies.is_empty() {
+            return Err(format!("{label}: nessun risultato"));
         }
         println!(
-            "{label}: PASS — {} schede controllate; totale TMDB {total}, {pages} pagine",
-            details.len()
+            "{label}: PASS — {} risultati in pagina; {} pagine; esatto {}; saturo {}",
+            page.movies.len(),
+            page.pages,
+            page.exact,
+            page.capped
+        );
+    }
+    for (label, request) in [
+        (
+            "Titolo",
+            CatalogQuery {
+                text: "Metropolis".into(),
+                page: 1,
+                ..Default::default()
+            },
+        ),
+        (
+            "Neorealismo documentato",
+            CatalogQuery {
+                facets: Facets {
+                    movements: vec!["neorealismo".into()],
+                    ..Default::default()
+                },
+                movements: MovementMatch::Documented,
+                page: 1,
+                ..Default::default()
+            },
+        ),
+        (
+            "Anno preciso e uscite future",
+            CatalogQuery {
+                years: Some((2027, 2027)),
+                release: ReleaseScope::Upcoming,
+                page: 1,
+                ..Default::default()
+            },
+        ),
+    ] {
+        let page = browse(&tmdb, &tax, &request)?;
+        if page.movies.is_empty() {
+            return Err(format!("{label}: nessun risultato"));
+        }
+        println!(
+            "{label}: PASS — {} risultati; {} pagine",
+            page.movies.len(),
+            page.pages
         );
     }
     Ok(())

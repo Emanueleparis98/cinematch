@@ -172,9 +172,8 @@ pub(crate) fn discover_params(
     if !q.countries.is_empty() {
         p.push(("with_origin_country".into(), q.countries.join("|")));
     }
-    // Le date si intersecano con oggi: «Più recenti» e gli altri
-    // ordinamenti mostrano solo film già usciti; «Prossimamente» parte da
-    // oggi e ordina per data crescente.
+    // Only the legacy upcoming sort adds a date boundary; the other
+    // sorts preserve the explicitly requested date scope.
     let (gte, lte) = date_bounds(q, today);
     if matches!((&gte, &lte), (Some(a), Some(b)) if a > b) {
         return Err("Il periodo selezionato non contiene film con questo ordinamento. Cambia periodo oppure ordinamento.".into());
@@ -245,6 +244,7 @@ pub struct Tmdb {
     throttle: Arc<Mutex<Instant>>,
     list_cache: Arc<Mutex<HashMap<String, PagedMovies>>>,
     details_cache: Arc<Mutex<HashMap<u64, Details>>>,
+    compact_cache: Arc<Mutex<HashMap<u64, Details>>>,
     keyword_cache: Arc<Mutex<HashMap<String, Option<u64>>>>,
     person_cache: Arc<Mutex<HashMap<String, Vec<Person>>>>,
     credits_cache: Arc<Mutex<HashMap<u64, PersonCredits>>>,
@@ -275,6 +275,7 @@ impl Tmdb {
             throttle: Arc::new(Mutex::new(start)),
             list_cache: Arc::new(Mutex::new(HashMap::new())),
             details_cache: Arc::new(Mutex::new(HashMap::new())),
+            compact_cache: Arc::new(Mutex::new(HashMap::new())),
             keyword_cache: Arc::new(Mutex::new(HashMap::new())),
             person_cache: Arc::new(Mutex::new(HashMap::new())),
             credits_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -293,6 +294,7 @@ impl Tmdb {
             throttle: self.throttle.clone(),
             list_cache: self.list_cache.clone(),
             details_cache: self.details_cache.clone(),
+            compact_cache: self.compact_cache.clone(),
             keyword_cache: self.keyword_cache.clone(),
             person_cache: self.person_cache.clone(),
             credits_cache: self.credits_cache.clone(),
@@ -473,9 +475,17 @@ impl Tmdb {
     }
 
     pub fn search(&self, query: &str, page: u32) -> Result<PagedMovies, String> {
+        self.search_scoped(query, page, false)
+    }
+    pub fn search_scoped(
+        &self,
+        query: &str,
+        page: u32,
+        include_adult: bool,
+    ) -> Result<PagedMovies, String> {
         let p = vec![
             ("query".to_string(), query.to_string()),
-            ("include_adult".into(), "false".into()),
+            ("include_adult".into(), include_adult.to_string()),
             ("page".into(), page.to_string()),
         ];
         let key = Self::cache_key("/search/movie", &p);
@@ -577,12 +587,21 @@ impl Tmdb {
         Ok(res)
     }
 
-    /// I voti IMDb possono cambiare dopo un aggiornamento: le schede salvate
-    /// vanno rilette per non mostrare il valore vecchio.
+    /// Clears full detail records kept in session memory.
     pub fn clear_details_cache(&self) {
         if let Ok(mut c) = self.details_cache.lock() {
             c.clear();
         }
+    }
+
+    pub fn clear_catalog_cache(&self) {
+        if let Ok(mut c) = self.list_cache.lock() {
+            c.clear();
+        }
+        if let Ok(mut c) = self.compact_cache.lock() {
+            c.clear();
+        }
+        self.clear_details_cache();
     }
 
     pub fn cached_details(&self, id: u64) -> Option<Details> {
@@ -605,7 +624,6 @@ impl Tmdb {
         )];
         let raw: ApiDetails = self.get(&format!("/movie/{id}"), &p)?;
         let details = raw.into_details(&self.region);
-        let details = self.attach_imdb(details);
         if let Ok(mut c) = self.details_cache.lock() {
             if c.len() > 200 {
                 c.clear();
@@ -614,8 +632,17 @@ impl Tmdb {
         }
         Ok(details)
     }
-    /// I lavori di indicizzazione richiedono metadati e keyword, senza filmografie o provider.
+    /// Compact on-demand verification, cached only in RAM.
     pub fn catalog_details(&self, id: u64) -> Result<Details, String> {
+        if let Some(d) = self.cached_details(id) {
+            return Ok(d);
+        }
+        if let Ok(c) = self.compact_cache.lock() {
+            if let Some(d) = c.get(&id) {
+                return Ok(d.clone());
+            }
+        }
+
         let raw: ApiDetails = self.get(
             &format!("/movie/{id}"),
             &[(
@@ -623,16 +650,14 @@ impl Tmdb {
                 "keywords,alternative_titles".into(),
             )],
         )?;
-        Ok(raw.into_details(&self.region))
-    }
-
-    /// Completamento con il voto IMDb, quando i dati pubblici sono stati scaricati
-    /// e il film ha un identificativo IMDb.
-    fn attach_imdb(&self, mut details: Details) -> Details {
-        if let Some(tconst) = details.movie.imdb_id.clone() {
-            details.imdb = crate::infra::imdb::lookup(&tconst);
+        let details = raw.into_details(&self.region);
+        if let Ok(mut c) = self.compact_cache.lock() {
+            if c.len() >= 200 {
+                c.clear();
+            }
+            c.insert(id, details.clone());
         }
-        details
+        Ok(details)
     }
 
     pub fn keyword_id(&self, keyword: &str) -> Result<Option<u64>, String> {
@@ -652,6 +677,9 @@ impl Tmdb {
             }
         }
         if let Ok(mut c) = self.keyword_cache.lock() {
+            if c.len() >= 400 {
+                c.clear();
+            }
             c.insert(key, found);
         }
         Ok(found)

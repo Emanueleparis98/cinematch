@@ -1,4 +1,4 @@
-use crate::catalog::{Catalog, CatalogQuery, Coverage, MovementMatch, ReleaseScope};
+use crate::catalog::{CatalogQuery, MovementMatch, ReleaseScope};
 use crate::domain::constraints::{self, Prune};
 use crate::domain::model::{Details, Facets, Movie, Sort, TrackState};
 use crate::domain::taxonomy::Taxonomy;
@@ -9,7 +9,7 @@ use crate::ui::facets::{FacetAction, Section};
 use crate::ui::images::ImageStore;
 use crate::ui::{detail, facets, fx, grid, lumen, theme, unlock};
 use crate::update;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -34,25 +34,14 @@ struct Results {
 }
 #[allow(clippy::large_enum_variant)]
 enum Msg {
-    CatalogProgress {
-        status: String,
-        coverage: Option<Coverage>,
-    },
-    CatalogDone(Result<Coverage, String>),
-    CatalogSources(Result<(u64, Coverage), String>),
     Results {
         gen: u64,
         payload: Box<Results>,
-    },
-    Unlocks {
-        gen: u64,
-        unlocks: Vec<unlock::Unlock>,
     },
     Details {
         gen: u64,
         res: Result<Details, String>,
         sources: Vec<crate::catalog::MovementFact>,
-        index_error: Option<String>,
     },
     Check {
         key: String,
@@ -61,12 +50,6 @@ enum Msg {
     OnboardingChecked {
         key: String,
         res: Result<String, String>,
-    },
-    Imdb {
-        res: Result<String, String>,
-    },
-    ImdbProgress {
-        done: u64,
     },
     UpdateChecked(Result<Option<update::Manifest>, String>),
     UpdateProgress {
@@ -126,14 +109,7 @@ struct UpdateUi {
     announced: Option<String>,
 }
 pub struct App {
-    catalog: Option<Catalog>,
-    catalog_coverage: Coverage,
     catalog_query: CatalogQuery,
-    catalog_cancel: Option<Arc<AtomicBool>>,
-    catalog_status: String,
-    catalog_error: Option<String>,
-    catalog_pending: Option<CatalogQuery>,
-    catalog_selection_active: bool,
     search_cancel: Option<Arc<AtomicBool>>,
     total_is_exact: bool,
     ctx: egui::Context,
@@ -221,38 +197,17 @@ pub struct App {
     toast: Option<(String, Instant)>,
     boot_done: bool,
 
-    imdb_busy: bool,
-    imdb_progress: Option<(u64, u64)>,
-    imdb_status: Option<String>,
     /// I font CJK (titoli giapponesi, coreani) si caricano una volta sola.
     cjk_loaded: bool,
 }
 impl App {
     pub fn new(ctx: &egui::Context, cfg: Config) -> Self {
-        let mut app = Self::with_local_data(
+        Self::with_local_data(
             ctx,
             cfg,
             simkl::load_tokens().ok().flatten(),
             simkl::load_store(),
-        );
-        match Catalog::open(Config::dir().join("catalog.sqlite3")) {
-            Ok(catalog) => {
-                if let Err(error) = catalog.install_bundled_sources() {
-                    app.catalog_error = Some(error);
-                }
-                app.keyword_map = catalog.known_keywords().unwrap_or_default();
-                match catalog.coverage() {
-                    Ok(coverage) => app.catalog_coverage = coverage,
-                    Err(error) => app.catalog_error = Some(error),
-                }
-                app.catalog = Some(catalog);
-                if app.catalog_coverage.identities > 0 {
-                    app.first_run = false;
-                }
-            }
-            Err(error) => app.catalog_error = Some(error),
-        }
-        app
+        )
     }
     fn with_local_data(
         ctx: &egui::Context,
@@ -268,14 +223,7 @@ impl App {
         let settings = SettingsDraft::from(&cfg);
         let first_run = !cfg.has_key();
         let mut app = Self {
-            catalog: None,
-            catalog_coverage: Coverage::default(),
             catalog_query: CatalogQuery::default(),
-            catalog_cancel: None,
-            catalog_status: String::new(),
-            catalog_error: None,
-            catalog_pending: None,
-            catalog_selection_active: false,
             search_cancel: None,
             total_is_exact: true,
             ctx: ctx.clone(),
@@ -335,9 +283,6 @@ impl App {
             update: UpdateUi::default(),
             toast: None,
             boot_done: false,
-            imdb_busy: false,
-            imdb_progress: None,
-            imdb_status: None,
             cjk_loaded: false,
         };
         // La libreria SIMKL si aggiorna all'avvio, ma non più di una volta
@@ -357,50 +302,6 @@ impl App {
     }
     fn spawn_search(&mut self) {
         self.dirty = None;
-        if self.tmdb.is_none() {
-            if let Some(catalog) = self.catalog.clone() {
-                if let Some(cancel) = self.search_cancel.take() {
-                    cancel.store(true, Ordering::Relaxed);
-                }
-                self.gen += 1;
-                let gen = self.gen;
-                self.loading = true;
-                let mut q = self.catalog_query.clone();
-                q.facets = self.facets.clone();
-                q.text = self.grid_query.clone();
-                q.page = self.page;
-                q.known = self.keyword_map.clone();
-                if self.cfg.simkl.hide_watched {
-                    q.hidden = self
-                        .simkl_store
-                        .movies
-                        .values()
-                        .filter(|m| m.status == "completed")
-                        .map(|m| m.tmdb)
-                        .collect();
-                }
-                let tax = self.tax.clone();
-                let tx = self.tx.clone();
-                let ctx = self.ctx.clone();
-                std::thread::spawn(move || {
-                    let mut payload=Results{total_is_exact:true,facets:q.facets.clone(),removed:Vec::new(),info:vec!["Consultazione dell'indice locale. Le schede non ancora acquisite richiedono TMDB per il completamento.".into()],notes:Vec::new(),movies:Vec::new(),total:0,total_pages:0,headline:"Catalogo indicizzato".into(),error:None,keyword_pairs:Vec::new()};
-                    match catalog.query(&tax, &q, &crate::infra::winclock::today_iso()) {
-                        Ok(p) => {
-                            payload.movies = p.movies;
-                            payload.total = p.total.min(u32::MAX as u64) as u32;
-                            payload.total_pages = p.pages;
-                        }
-                        Err(e) => payload.error = Some(e),
-                    }
-                    let _ = tx.send(Msg::Results {
-                        gen,
-                        payload: Box::new(payload),
-                    });
-                    ctx.request_repaint();
-                });
-                return;
-            }
-        }
         let Some(tmdb) = self.tmdb.clone() else {
             self.loading = false;
             self.first_run = true;
@@ -429,20 +330,10 @@ impl App {
         let page = self.page;
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
-        let catalog = self.catalog.clone();
         let mut catalog_query = self.catalog_query.clone();
         catalog_query.facets = eff.clone();
         catalog_query.text = text.clone();
         catalog_query.page = page;
-        if self.cfg.simkl.hide_watched {
-            catalog_query.hidden = self
-                .simkl_store
-                .movies
-                .values()
-                .filter(|m| m.status == "completed")
-                .map(|m| m.tmdb)
-                .collect();
-        }
         std::thread::spawn(move || {
             let mut payload = Results {
                 total_is_exact: true,
@@ -458,7 +349,7 @@ impl App {
                 keyword_pairs: Vec::new(),
             };
             let mut keyword_facets = eff.clone();
-            if catalog.is_some() && catalog_query.movements != MovementMatch::Candidates {
+            if catalog_query.movements != MovementMatch::Candidates {
                 keyword_facets.movements.clear();
             }
             resolve_keywords(
@@ -471,98 +362,29 @@ impl App {
             );
             let outcome = (|| {
                 require_keywords(&tax, &keyword_facets, &kw)?;
-                if let Some(catalog) = &catalog {
-                    catalog.save_keywords(&kw)?;
-                    catalog_query.known = kw.clone();
-                    let result = catalog.query(
-                        &tax,
-                        &catalog_query,
-                        &crate::infra::winclock::today_iso(),
-                    )?;
-                    if result.unverified > 0 {
-                        payload.info.push(format!("{} titoli nell'indice devono ancora ricevere i metadati: i filtri contano le corrispondenze verificabili nelle schede acquisite.", theme::thousands(result.unverified.min(u32::MAX as u64) as u32)));
-                    }
-                    if !eff.movements.is_empty() {
-                        payload.info.push(match catalog_query.movements {
-                            MovementMatch::Candidates => "Correnti: candidati per periodo, origine ed eventuale keyword. L'appartenenza storica non è verificata.".into(),
-                            MovementMatch::Documented => "Correnti: soltanto appartenenze documentate nelle fonti acquisite. La raccolta delle fonti è parziale.".into(),
-                            MovementMatch::Affinity => "Correnti: appartenenze e affinità con una fonte acquisita. La raccolta delle fonti è parziale.".into(),
-                        });
-                    }
-                    return Ok((
-                        result.movies,
-                        result.total.min(u32::MAX as u64) as u32,
-                        result.pages,
-                        "Catalogo indicizzato".into(),
-                    ));
-                }
-                if !text.is_empty() {
-                    if eff.is_empty() && eff.sort == Sort::Popularity {
-                        let p = tmdb.search(&text, page)?;
-                        return Ok((
-                            p.results.into_iter().map(Movie::from).collect(),
-                            p.total_results,
-                            p.total_pages,
-                            format!("Risultati per «{text}»"),
-                        ));
-                    }
-                    let upstream = tmdb.search(&text, page)?;
-                    let raw = upstream.results.into_iter().map(Movie::from).collect();
-                    let details =
-                        verified_details(&tmdb, &tax, &eff, &kw, &filter_movies(raw, &tax, &eff))?;
-                    let mut movies = details.into_values().map(|d| d.movie).collect::<Vec<_>>();
-                    sort_movies(&mut movies, eff.sort);
-                    payload.total_is_exact = false;
-                    payload.info.push("Ricerca per titolo: filtri e ordinamento applicati alla pagina corrente. Le pagine si riferiscono alla ricerca TMDB completa.".into());
-                    return Ok((
-                        movies,
-                        upstream.total_results,
-                        upstream.total_pages,
-                        format!("Risultati per «{text}»"),
-                    ));
-                }
-                payload.total_is_exact = !constraints::decade_gap(&tax, &eff)
-                    && eff.runtime.is_none()
-                    && eff.sort != Sort::Newest;
-                discover_strict(&tmdb, &tax, &eff, &kw, page, &mut payload.info)
+                catalog_query.known = kw.clone();
+                crate::catalog::browse(&tmdb, &tax, &catalog_query)
             })();
             match outcome {
-                Ok((movies, total, pages, headline)) => {
-                    payload.movies = movies;
-                    payload.total = total;
-                    payload.total_pages = if catalog.is_some() {
-                        pages
+                Ok(result) => {
+                    payload.movies = result.movies;
+                    payload.total = result.total;
+                    payload.total_pages = result.pages;
+                    payload.total_is_exact = result.exact;
+                    payload.info.extend(result.notes);
+                    payload.headline = if text.is_empty() {
+                        "Catalogo online".into()
                     } else {
-                        pages.min(500)
+                        format!("Risultati per «{text}»")
                     };
-                    if catalog.is_none() && pages > 500 {
-                        payload.total_is_exact = false;
-                        payload.info.push("Risposta online satura: il totale della fonte non è il censimento del catalogo. Prepara l'indice locale per navigare l'insieme.".into());
-                    }
-                    payload.headline = headline;
                 }
-                Err(e) => payload.error = Some(e),
+                Err(error) => payload.error = Some(error),
             }
-            let unlockable = catalog.is_none()
-                && text.is_empty()
-                && page == 1
-                && payload.error.is_none()
-                && payload.movies.len() <= 3
-                && payload.removed.is_empty();
-            let seen = payload.movies.iter().map(|m| m.id).collect::<HashSet<_>>();
-            let current_total = payload.total;
             let _ = tx.send(Msg::Results {
                 gen,
                 payload: Box::new(payload),
             });
             ctx.request_repaint();
-            if unlockable {
-                let unlocks = unlock_options(&tmdb, &tax, &eff, &kw, current_total, &seen);
-                if !unlocks.is_empty() {
-                    let _ = tx.send(Msg::Unlocks { gen, unlocks });
-                    ctx.request_repaint();
-                }
-            }
         });
         self.ctx.request_repaint();
     }
@@ -576,217 +398,9 @@ impl App {
             None
         }
     }
-    fn start_catalog_sync(&mut self, import: bool, adult: bool) {
-        self.start_catalog_job(import, adult, None);
-    }
-    fn start_catalog_selection(&mut self) {
-        if self.catalog_coverage.snapshot.is_none() {
-            return;
-        }
-        let mut request = self.catalog_query.clone();
-        request.facets = self.facets.clone();
-        request.text = self.grid_query.clone();
-        request.known = self.keyword_map.clone();
-        if let Some(cancel) = &self.catalog_cancel {
-            self.catalog_pending = Some(request);
-            cancel.store(true, Ordering::Relaxed);
-            self.catalog_status = "Passo al completamento dei filtri selezionati…".into();
-        } else {
-            self.start_catalog_job(false, false, Some(request));
-        }
-    }
-    fn start_catalog_job(
-        &mut self,
-        import: bool,
-        adult: bool,
-        mut selection: Option<CatalogQuery>,
-    ) {
-        if self.catalog_cancel.is_some() {
-            return;
-        }
-        let (Some(catalog), Some(tmdb)) = (self.catalog.clone(), self.tmdb.clone()) else {
-            return;
-        };
-        if let Err(error) = catalog.set_paused(false) {
-            self.catalog_error = Some(error);
-            return;
-        }
-        self.catalog_error = None;
-        self.catalog_selection_active = selection.is_some();
-        self.catalog_status = "Preparazione del catalogo…".into();
-        let (tmdb, request_cancel) = tmdb.cancellable();
-        // La stessa bandiera interrompe il lavoro e le richieste di rete.
-        self.catalog_cancel = Some(request_cancel.clone());
-        let cancel = request_cancel;
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        let language = self.cfg.language.clone();
-        let scope = (
-            self.catalog_query.include_adult,
-            self.catalog_query.include_video,
-        );
-        let tax = self.tax.clone();
-        std::thread::spawn(move || {
-            let result = (|| {
-                let mut last = Instant::now() - Duration::from_secs(1);
-                if import {
-                    crate::catalog::sync::download_snapshot(
-                        &catalog,
-                        &Config::dir().join("catalog-exports"),
-                        &cancel,
-                        adult,
-                        |p| {
-                            use crate::catalog::sync::Progress;
-                            let ready = matches!(p, Progress::Ready(_));
-                            if ready {
-                                let _ = catalog.install_bundled_sources();
-                            }
-                            if last.elapsed() < Duration::from_millis(300) && !ready {
-                                return;
-                            }
-                            last = Instant::now();
-                            let status = match p {
-                                Progress::Download(bytes) => format!(
-                                    "Scarico gli identificativi: {:.1} MB",
-                                    bytes as f64 / 1_000_000.0
-                                ),
-                                Progress::Import(n) => format!(
-                                    "Preparo l'indice: {} titoli",
-                                    theme::thousands(n.min(u32::MAX as u64) as u32)
-                                ),
-                                Progress::Ready(status) => status,
-                                _ => return,
-                            };
-                            let _ = tx.send(Msg::CatalogProgress {
-                                status,
-                                coverage: if ready { catalog.coverage().ok() } else { None },
-                            });
-                            ctx.request_repaint();
-                        },
-                    )?;
-                }
-                let mut last_coverage = 0;
-                let mut report = |p| {
-                    if let crate::catalog::sync::Progress::Metadata { done, failed } = p {
-                        if last.elapsed() < Duration::from_millis(500) {
-                            return;
-                        }
-                        last = Instant::now();
-                        let _ = tx.send(Msg::CatalogProgress {
-                            status: format!(
-                                "Completo le schede: {done} aggiornate · {failed} da riprovare"
-                            ),
-                            coverage: if done >= last_coverage + 20 {
-                                last_coverage = done;
-                                catalog.coverage().ok()
-                            } else {
-                                None
-                            },
-                        });
-                        ctx.request_repaint();
-                    }
-                };
-                if let Some(request) = &mut selection {
-                    let mut keyword_facets = request.facets.clone();
-                    if request.movements != MovementMatch::Candidates {
-                        keyword_facets.movements.clear();
-                    }
-                    let mut pairs = Vec::new();
-                    let mut notes = Vec::new();
-                    resolve_keywords(
-                        &tmdb,
-                        &tax,
-                        &keyword_facets,
-                        &mut request.known,
-                        &mut pairs,
-                        &mut notes,
-                    );
-                    require_keywords(&tax, &keyword_facets, &request.known)?;
-                    catalog.save_keywords(&request.known)?;
-                    crate::catalog::sync::enrich_selection(
-                        &catalog,
-                        &tmdb,
-                        &language,
-                        &tax,
-                        request,
-                        &cancel,
-                        &mut report,
-                    )?;
-                } else {
-                    crate::catalog::sync::enrich(
-                        &catalog,
-                        &tmdb,
-                        &language,
-                        &cancel,
-                        None,
-                        scope,
-                        &mut report,
-                    )?;
-                }
-                catalog.coverage()
-            })();
-            let _ = tx.send(Msg::CatalogDone(result));
-            ctx.request_repaint();
-        });
-    }
     fn poll(&mut self) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                Msg::CatalogProgress { status, coverage } => {
-                    self.catalog_status = status;
-                    if let Some(coverage) = coverage {
-                        let first =
-                            self.catalog_coverage.identities == 0 && coverage.identities > 0;
-                        self.catalog_coverage = coverage;
-                        if first || (self.page == 1 && !self.loading && self.dirty.is_none()) {
-                            self.launch_search();
-                        }
-                    }
-                }
-                Msg::CatalogDone(result) => {
-                    let paused = self
-                        .catalog_cancel
-                        .take()
-                        .is_some_and(|c| c.load(Ordering::Relaxed));
-                    let selection = self.catalog_selection_active;
-                    self.catalog_selection_active = false;
-                    let succeeded = result.is_ok();
-                    match result {
-                        Ok(coverage) => {
-                            self.catalog_coverage = coverage;
-                            self.catalog_status = if paused {
-                                "In pausa. I progressi sono salvati."
-                            } else {
-                                "Sincronizzazione completata."
-                            }
-                            .into();
-                        }
-                        Err(error) => {
-                            if paused {
-                                self.catalog_status = "In pausa. I progressi sono salvati.".into();
-                            } else {
-                                self.catalog_error = Some(error);
-                            }
-                        }
-                    }
-                    if self.page == 1 {
-                        self.launch_search();
-                    }
-                    if let Some(request) = self.catalog_pending.take() {
-                        self.start_catalog_job(false, false, Some(request));
-                    } else if selection && succeeded && !paused {
-                        self.start_catalog_sync(false, false);
-                    }
-                }
-                Msg::CatalogSources(result) => match result {
-                    Ok((count, coverage)) => {
-                        self.catalog_coverage = coverage;
-                        self.catalog_status =
-                            format!("{count} classificazioni importate con fonte.");
-                        self.launch_search();
-                    }
-                    Err(error) => self.catalog_error = Some(error),
-                },
                 Msg::Results { gen, payload } => {
                     if gen != self.gen {
                         continue;
@@ -794,7 +408,7 @@ impl App {
                     self.loading = false;
                     let mut p = *payload;
                     let net_ok = p.error.is_none();
-                    if self.cfg.simkl.hide_watched && self.catalog.is_none() {
+                    if self.cfg.simkl.hide_watched {
                         let before = p.movies.len();
                         p.movies.retain(|m| {
                             self.simkl_store
@@ -841,26 +455,12 @@ impl App {
                         }
                     }
                 }
-                Msg::Unlocks { gen, unlocks } => {
-                    if gen == self.gen {
-                        self.unlocks = unlocks;
-                        self.ctx.request_repaint();
-                    }
-                }
-                Msg::Details {
-                    gen,
-                    res,
-                    sources,
-                    index_error,
-                } => {
+                Msg::Details { gen, res, sources } => {
                     if gen != self.detail_gen {
                         continue;
                     }
                     self.detail_loading = false;
                     self.detail_sources = sources;
-                    if let Some(error) = index_error {
-                        self.catalog_error = Some(error);
-                    }
                     // Un 404 o un JSON rotto non significano "offline": il
                     // badge lo aggiorna solo una risposta riuscita.
                     if res.is_ok() {
@@ -919,25 +519,6 @@ impl App {
                             }
                         }
                         Err(e) => self.settings_check = Some(format!("✕ {e}")),
-                    }
-                }
-
-                Msg::Imdb { res } => {
-                    self.imdb_busy = false;
-                    self.imdb_progress = None;
-                    if res.is_ok() {
-                        if let Some(tmdb) = &self.tmdb {
-                            tmdb.clear_details_cache();
-                        }
-                    }
-                    self.imdb_status = Some(match res {
-                        Ok(m) => format!("✔ {m}"),
-                        Err(e) => format!("✕ {e}"),
-                    });
-                }
-                Msg::ImdbProgress { done } => {
-                    if self.imdb_busy {
-                        self.imdb_progress = Some((done, 0));
                     }
                 }
 
@@ -1541,9 +1122,6 @@ impl App {
         }
     }
     fn launch_search(&mut self) {
-        if let Some(catalog) = &self.catalog {
-            catalog.invalidate();
-        }
         self.spawn_search();
     }
     fn load_trending(&mut self) {
@@ -1590,7 +1168,7 @@ impl App {
     }
     fn open_detail(&mut self, id: u64) {
         let Some(tmdb) = self.tmdb.clone() else {
-            self.toast("La consultazione dell'indice è disponibile; per aprire la scheda completa configura TMDB nelle Impostazioni.");
+            self.toast("Configura TMDB nelle Impostazioni per consultare il catalogo online.");
             return;
         };
         self.detail_why = self.detail_context(id);
@@ -1601,29 +1179,13 @@ impl App {
         let gen = self.detail_gen;
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
-        let catalog = self.catalog.clone();
-        let language = self.cfg.language.clone();
         std::thread::spawn(move || {
             let res = tmdb.details(id);
-            let mut sources = Vec::new();
-            let mut index_error = None;
-            if let Some(catalog) = catalog {
-                if let Ok(d) = &res {
-                    if let Err(error) = catalog.save_details(d, &language) {
-                        index_error = Some(error);
-                    }
-                }
-                match catalog.movement_facts(id) {
-                    Ok(facts) => sources = facts,
-                    Err(error) => index_error = Some(error),
-                }
-            }
-            let _ = tx.send(Msg::Details {
-                gen,
-                res,
-                sources,
-                index_error,
-            });
+            let sources = crate::catalog::bundled_sources()
+                .into_iter()
+                .filter(|f| f.movie_id == id)
+                .collect();
+            let _ = tx.send(Msg::Details { gen, res, sources });
             ctx.request_repaint();
         });
     }
@@ -1653,7 +1215,7 @@ impl App {
         }
 
         self.resanitize();
-        if self.tmdb.is_none() && self.catalog.is_none() {
+        if self.tmdb.is_none() {
             return;
         }
         self.schedule_search();
@@ -1705,27 +1267,6 @@ impl App {
             let tmdb = Tmdb::new(key.clone(), lang);
             let res = tmdb.ping();
             let _ = tx.send(Msg::OnboardingChecked { key, res });
-            ctx.request_repaint();
-        });
-    }
-    fn start_imdb_download(&mut self) {
-        if self.imdb_busy {
-            return;
-        }
-        self.imdb_busy = true;
-        self.imdb_status = None;
-        self.imdb_progress = Some((0, 0));
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-        std::thread::spawn(move || {
-            // l'avanzamento arriva a blocchi di circa 2 MB: non serve di piu
-            let cb = |done: u64| {
-                if done % (2 * 1_048_576) < 262_144 {
-                    let _ = tx.send(Msg::ImdbProgress { done });
-                }
-            };
-            let res = crate::infra::imdb::download(&cb);
-            let _ = tx.send(Msg::Imdb { res });
             ctx.request_repaint();
         });
     }
@@ -1982,100 +1523,57 @@ impl App {
         }
     }
     fn catalog_bar(&mut self, ui: &mut egui::Ui) {
-        if self.first_run || self.show_settings || self.catalog.is_none() {
+        if self.first_run || self.show_settings {
             return;
         }
-        egui::Panel::top("catalog-coverage")
-            .exact_size(34.0)
-            .frame(egui::Frame::NONE.fill(lumen::DEEP).inner_margin(egui::Margin::symmetric(14, 5)))
+        egui::Panel::top("catalog-online")
+            .exact_size(30.0)
+            .frame(egui::Frame::NONE.fill(lumen::DEEP).inner_margin(egui::Margin::symmetric(14,5)))
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if self.catalog_cancel.is_some() { ui.spinner(); }
-                    let s = &self.catalog_coverage;
-                    let text = if s.identities == 0 {
-                        self.catalog_status.clone()
-                    } else {
-                        format!("{} nell’indice · {} schede acquisite", theme::thousands(s.identities.min(u32::MAX as u64) as u32), theme::thousands(s.enriched.min(u32::MAX as u64) as u32))
-                    };
-                    ui.add(egui::Label::new(lumen::body(11.0, text).color(lumen::MUTED)).truncate())
-                        .on_hover_text(format!("Snapshot: {}\nI filtri operano sulle schede acquisite. I titoli ancora da completare restano ricercabili per nome.\n{}",s.snapshot.as_deref().unwrap_or("in preparazione"),self.catalog_status));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if lumen::link(ui, "Archivio e copertura", lumen::EMBER).clicked() {
-                            self.filters_open = true;
-                            ui.ctx().data_mut(|d|d.insert_temp(egui::Id::unique("catalog-controls-open"),true));
-                        }
-                        if (!self.facets.is_empty() || !self.grid_query.trim().is_empty() || self.catalog_query.scope_filters()>0) && self.catalog_coverage.snapshot.is_some()
-                            && lumen::link(ui,"Completa filtri",lumen::MUTED).clicked(){self.start_catalog_selection();}
-                    });
-                });
+                ui.add(egui::Label::new(lumen::body(11.0,"Catalogo online · nessun archivio di film sul PC").color(lumen::MUTED)).truncate())
+                    .on_hover_text("Schede e locandine restano soltanto nella memoria della sessione. È necessaria una connessione Internet.");
             });
     }
     fn catalog_controls(&mut self, ui: &mut egui::Ui) {
-        if self.catalog.is_none() {
-            return;
-        }
         let mut changed = false;
         let open = ui
             .ctx()
             .data(|d| d.get_temp::<bool>(egui::Id::unique("catalog-controls-open")))
             .unwrap_or(false);
-        let response=egui::CollapsingHeader::new("Archivio e copertura").id_salt("catalog-controls").open(Some(open)).show(ui,|ui| {
-            let s=&self.catalog_coverage;
-            ui.label(lumen::body(12.0,format!("{} titoli indicizzati; {} schede acquisite.",theme::thousands(s.identities.min(u32::MAX as u64) as u32),theme::thousands(s.enriched.min(u32::MAX as u64) as u32))));
-            ui.label(lumen::body(11.0,format!("Snapshot {} · durate note {} · origini note {}",s.snapshot.as_deref().unwrap_or("non ancora pubblicato"),s.runtime_known,s.origin_known)).color(lumen::MUTED));
-            ui.label(lumen::body(11.0,"I filtri contano i dati verificabili nelle schede acquisite. Le informazioni mancanti restano sconosciute.").color(lumen::MUTED));
-            if !self.catalog_status.is_empty() {ui.label(lumen::body(11.0,&self.catalog_status));}
-            if let Some(error)=&self.catalog_error {ui.label(lumen::body(11.0,error).color(theme::WARN));}
-            ui.horizontal_wrapped(|ui| {
-                if let Some(cancel)=&self.catalog_cancel {
-                    if ui.button("Pausa").clicked(){self.catalog_pending=None;cancel.store(true,Ordering::Relaxed);if let Some(c)=&self.catalog {let _=c.set_paused(true);}self.catalog_status="Sospendo la sincronizzazione…".into();}
-                }else{
-                    if ui.button("Riprendi schede").clicked(){self.start_catalog_sync(self.catalog_coverage.snapshot.is_none(),false);}
-                    if ui.button("Aggiorna indice").clicked(){self.start_catalog_sync(true,false);}
+        let response = egui::CollapsingHeader::new("Ambito della ricerca")
+            .id_salt("catalog-controls").open(Some(open)).show(ui, |ui| {
+                ui.label(lumen::body(11.0,"Consulta TMDB direttamente. Le query molto ampie raggiungono il limite di 500 pagine: restringi gli anni per esplorare altri titoli.").color(lumen::MUTED));
+                egui::ComboBox::from_id_salt("catalog-release")
+                    .selected_text(match self.catalog_query.release {ReleaseScope::All=>"Tutte le date",ReleaseScope::Released=>"Già usciti",ReleaseScope::Upcoming=>"Uscite future"})
+                    .show_ui(ui,|ui| {for (value,label) in [(ReleaseScope::All,"Tutte le date"),(ReleaseScope::Released,"Già usciti"),(ReleaseScope::Upcoming,"Uscite future")] {
+                        changed |= ui.selectable_value(&mut self.catalog_query.release,value,label).changed();
+                    }});
+                let mut precise = self.catalog_query.years.is_some();
+                if ui.checkbox(&mut precise,"Intervallo di anni preciso").changed() {
+                    self.catalog_query.years = precise.then_some((1900,crate::infra::winclock::today_iso()[..4].parse().unwrap_or(2026))); changed = true;
                 }
-            });
-            ui.add_space(8.0);
-            egui::ComboBox::from_id_salt("catalog-release").selected_text(match self.catalog_query.release {
-                ReleaseScope::All=>"Tutte le date",ReleaseScope::Released=>"Già usciti",ReleaseScope::Upcoming=>"Uscite future",ReleaseScope::Undated=>"Data non conosciuta",
-            }).show_ui(ui,|ui|{
-                for (value,label) in [(ReleaseScope::All,"Tutte le date"),(ReleaseScope::Released,"Già usciti"),(ReleaseScope::Upcoming,"Uscite future"),(ReleaseScope::Undated,"Data non conosciuta")]{
-                    changed|=ui.selectable_value(&mut self.catalog_query.release,value,label).changed();
-                }
-            });
-            changed|=ui.checkbox(&mut self.catalog_query.include_video,"Includi contenuti video").changed();
-            changed|=ui.checkbox(&mut self.catalog_query.any_genres,"Unisci i generi selezionati (OR)").changed();
-            changed|=ui.checkbox(&mut self.catalog_query.include_adult,"Includi titoli per adulti").changed();
-            if self.catalog_query.include_adult {
-                ui.label(lumen::body(11.0,"Gli identificativi per adulti usano un export separato.").color(lumen::MUTED));
-                if self.catalog_cancel.is_none() && ui.button("Acquisisci indice per adulti").clicked(){self.start_catalog_sync(true,true);}
-            }
-            ui.add_space(8.0);
-            ui.label(lumen::body(12.0,"Classificazione delle correnti"));
-            egui::ComboBox::from_id_salt("catalog-movements").selected_text(match self.catalog_query.movements {
-                MovementMatch::Candidates=>"Candidati per ricetta",MovementMatch::Documented=>"Appartenenza documentata",MovementMatch::Affinity=>"Appartenenza e affinità con fonte",
-            }).show_ui(ui,|ui|{
-                for (value,label) in [(MovementMatch::Candidates,"Candidati per ricetta"),(MovementMatch::Documented,"Appartenenza documentata"),(MovementMatch::Affinity,"Appartenenza e affinità con fonte")]{
-                    changed|=ui.selectable_value(&mut self.catalog_query.movements,value,label).changed();
-                }
-            });
-            changed|=ui.checkbox(&mut self.catalog_query.all_movements,"Richiedi tutte le correnti selezionate").changed();
-            ui.label(lumen::body(11.0,if self.catalog_query.movements==MovementMatch::Candidates {
-                "Periodo, origine ed eventuale keyword suggeriscono candidati; non certificano l'appartenenza. Le correnti selezionate si uniscono, salvo richiesta di tutte."
-            }else{"La raccolta delle fonti è parziale: un titolo senza classificazione acquisita non è automaticamente estraneo alla corrente."}).color(lumen::MUTED));
-            if ui.button("Importa classificazioni con fonte…").clicked(){
-                if let Some(path)=rfd::FileDialog::new().set_title("Importa classificazioni con fonte").add_filter("Classificazioni JSON", &["json"]).pick_file(){
-                    let catalog=self.catalog.clone().unwrap();let tx=self.tx.clone();let ctx=self.ctx.clone();
-                    std::thread::spawn(move || {
-                        let result=(||{
-                            if std::fs::metadata(&path).map_err(|e|e.to_string())?.len()>16*1024*1024{return Err("File troppo grande: massimo 16 MB.".into());}
-                            let raw=std::fs::read_to_string(path).map_err(|e|e.to_string())?;
-                            let facts:Vec<crate::catalog::MovementFact>=serde_json::from_str(&raw).map_err(|e|format!("File di classificazioni non valido: {e}"))?;
-                            let count=catalog.import_movements(&facts)?;Ok((count,catalog.coverage()?))
-                        })();let _=tx.send(Msg::CatalogSources(result));ctx.request_repaint();
+                if let Some((a,b)) = &mut self.catalog_query.years {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("Dal"); changed |= ui.add(egui::DragValue::new(a).range(1800..=2199)).changed();
+                        ui.label("al"); changed |= ui.add(egui::DragValue::new(b).range(1800..=2199)).changed();
                     });
+                    if *a > *b { ui.label(lumen::body(11.0,"L'anno iniziale deve precedere quello finale.").color(theme::WARN)); }
                 }
-            }
-        });
+                changed |= ui.checkbox(&mut self.catalog_query.include_video,"Includi contenuti video").changed();
+                changed |= ui.checkbox(&mut self.catalog_query.include_adult,"Includi titoli per adulti").changed();
+                changed |= ui.checkbox(&mut self.catalog_query.any_genres,"Unisci i generi selezionati (OR)").changed();
+                ui.add_space(8.0);
+                ui.label(lumen::body(12.0,"Classificazione delle correnti"));
+                egui::ComboBox::from_id_salt("catalog-movements")
+                    .selected_text(match self.catalog_query.movements {MovementMatch::Candidates=>"Candidati per ricetta",MovementMatch::Documented=>"Appartenenza documentata",MovementMatch::Affinity=>"Appartenenza e affinità con fonte"})
+                    .show_ui(ui,|ui| {for (value,label) in [(MovementMatch::Candidates,"Candidati per ricetta"),(MovementMatch::Documented,"Appartenenza documentata"),(MovementMatch::Affinity,"Appartenenza e affinità con fonte")] {
+                        changed |= ui.selectable_value(&mut self.catalog_query.movements,value,label).changed();
+                    }});
+                changed |= ui.checkbox(&mut self.catalog_query.all_movements,"Richiedi tutte le correnti selezionate").changed();
+                ui.label(lumen::body(11.0,if self.catalog_query.movements == MovementMatch::Candidates {
+                    "Le ricette individuano candidati per periodo, origine e keyword; non certificano l'appartenenza storica."
+                } else {"Le classificazioni con fonte incluse nell'app sono una raccolta parziale. L'assenza di un titolo non prova che sia estraneo alla corrente."}).color(lumen::MUTED));
+            });
         if response.header_response.clicked() {
             ui.ctx()
                 .data_mut(|d| d.insert_temp(egui::Id::unique("catalog-controls-open"), !open));
@@ -2115,25 +1613,22 @@ impl App {
                             "CERCO…".to_string()
                         } else {
                             if self.total_is_exact {
-                                let noun = if self.catalog.is_some() {
-                                    if !self.facets.movements.is_empty() {
-                                        if self.catalog_query.movements == MovementMatch::Candidates
-                                        {
-                                            "CANDIDATI"
-                                        } else {
-                                            "CON FONTE"
-                                        }
-                                    } else if self.facets.is_empty() {
-                                        "TITOLI"
+                                let noun = if !self.facets.movements.is_empty() {
+                                    if self.catalog_query.movements == MovementMatch::Candidates {
+                                        "CANDIDATI"
                                     } else {
-                                        "CORRISPONDENZE"
+                                        "CON FONTE"
                                     }
                                 } else {
                                     "FILM"
                                 };
                                 format!("{} {noun}", theme::thousands(self.total))
                             } else {
-                                format!("{} IN PAGINA", self.movies.len())
+                                if self.total_pages == 500 {
+                                    "LIMITE TMDB · 500 PAGINE".into()
+                                } else {
+                                    format!("{} IN PAGINA", self.movies.len())
+                                }
                             }
                         };
                         ui.label(lumen::mono(9.0, count).color(lumen::FAINT));
@@ -2224,6 +1719,9 @@ impl App {
             self.toggle_filters();
         }
         if refresh {
+            if let Some(tmdb) = &self.tmdb {
+                tmdb.clear_catalog_cache();
+            }
             self.resanitize();
             self.page = 1;
             self.schedule_search();
@@ -2249,10 +1747,7 @@ impl App {
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         ui.add_space(14.0);
-                        let busy = self.loading
-                            || self.detail_loading
-                            || self.update.checking
-                            || self.imdb_busy;
+                        let busy = self.loading || self.detail_loading || self.update.checking;
                         let (color, state) = if busy {
                             (lumen::EMBER, "LAVORO")
                         } else {
@@ -2515,11 +2010,7 @@ impl App {
                         egui::RichText::new(if !self.total_is_exact && self.total_pages > 1 {
                             "Nessun risultato compatibile in questa pagina"
                         } else {
-                            if self.catalog.is_some() {
-                                "Nessuna corrispondenza nelle schede acquisite"
-                            } else {
-                                "Nessun risultato con questi vincoli"
-                            }
+                            "Nessun risultato con questi vincoli"
                         })
                         .size(15.0)
                         .color(theme::DIM),
@@ -2537,27 +2028,6 @@ impl App {
             });
             if retry {
                 self.launch_search();
-            }
-            if self.catalog.is_some()
-                && self.catalog_coverage.snapshot.is_some()
-                && self.results_error.is_none()
-                && (!self.facets.is_empty()
-                    || !self.grid_query.trim().is_empty()
-                    || self.catalog_query.scope_filters() > 0)
-            {
-                ui.add_space(12.0);
-                ui.vertical_centered(|ui| {
-                    if ui.button("Completa le schede per questi filtri").clicked() {
-                        self.start_catalog_selection();
-                    }
-                    ui.label(
-                        lumen::body(
-                            11.0,
-                            "Il completamento può proseguire mentre esplori il catalogo.",
-                        )
-                        .color(lumen::MUTED),
-                    );
-                });
             }
             return;
         }
@@ -3209,70 +2679,8 @@ impl App {
                 ui.add_space(4.0);
                 language_picker(ui, &mut self.settings.language);
 
-                // ---- dati locali: voti IMDb ----
                 ui.add_space(8.0);
-                lumen::hairline(ui);
-                ui.add_space(4.0);
-                ui.label(lumen::mono(10.0, "DATI LOCALI").color(lumen::IVORY));
-                ui.add_space(2.0);
-                let ready = crate::infra::imdb::is_ready();
-                ui.horizontal(|ui| {
-                    let label = if ready {
-                        "Aggiorna i voti IMDb"
-                    } else {
-                        "Scarica i voti IMDb"
-                    };
-                    let imdb_btn = ui
-                        .add_enabled_ui(!self.imdb_busy, |ui| {
-                            lumen::button_sized(ui, label, false, 200.0)
-                        })
-                        .inner;
-                    if imdb_btn
-                        .on_hover_text(
-                            "Dataset IMDb per uso personale e non commerciale, salvato su questo PC. Mostra il voto IMDb accanto a quello TMDB.",
-                        )
-                        .clicked()
-                    {
-                        self.start_imdb_download();
-                    }
-                    ui.add_space(8.0);
-                    if ready {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "✔ presenti · {:.0} MB",
-                                crate::infra::imdb::data_size_mb()
-                            ))
-                            .size(10.5)
-                            .color(theme::DIM),
-                        );
-                    } else {
-                        ui.label(
-                            egui::RichText::new("facoltativo")
-                                .size(10.5)
-                                .color(theme::DIM),
-                        );
-                    }
-                });
-                if self.imdb_busy {
-                    ui.horizontal(|ui| {
-                        fx::dot(ui, lumen::EMBER, 0.0);
-                        let text = match self.imdb_progress {
-                            Some((done, total)) if total > 0 => format!(
-                                "scarico e scompato: {:.1} / {:.1} MB",
-                                done as f64 / 1_048_576.0,
-                                total as f64 / 1_048_576.0
-                            ),
-                            Some((done, _)) => {
-                                format!("scarico: {:.1} MB", done as f64 / 1_048_576.0)
-                            }
-                            None => "preparo il download…".to_string(),
-                        };
-                        ui.label(egui::RichText::new(text).size(10.5).color(theme::DIM));
-                    });
-                }
-                if let Some(msg) = &self.imdb_status {
-                    ui.label(egui::RichText::new(msg).size(10.5).color(theme::DIM));
-                }
+                ui.label(lumen::body(11.0,"Catalogo online: nessun database di film o cache di locandine viene salvato sul disco. Restano le impostazioni e, se collegata, la tua libreria SIMKL.").color(lumen::MUTED));
 
                 ui.add_space(10.0);
                 lumen::hairline(ui);
@@ -3472,14 +2880,7 @@ impl App {
         self.shortcuts(&ctx);
         if !self.boot_done {
             self.boot_done = true;
-            if self.tmdb.is_some() || self.catalog_coverage.identities > 0 {
-                if self
-                    .catalog
-                    .as_ref()
-                    .is_some_and(|c| !c.is_paused().unwrap_or(true))
-                {
-                    self.start_catalog_sync(self.catalog_coverage.snapshot.is_none(), false);
-                }
+            if self.tmdb.is_some() {
                 self.load_trending();
             } else {
                 self.first_run = true;
@@ -3696,53 +3097,7 @@ fn filter_movies(movies: Vec<Movie>, tax: &Taxonomy, f: &Facets) -> Vec<Movie> {
         .collect()
 }
 
-fn unlock_options(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    facets: &Facets,
-    kw: &[(String, u64)],
-    current_total: u32,
-    seen: &HashSet<u64>,
-) -> Vec<unlock::Unlock> {
-    let mut out = Vec::new();
-    for (label, relaxed) in unlock_candidates(tax, facets) {
-        let Ok(q) = constraints::to_discover(tax, &relaxed, kw, 1) else {
-            continue;
-        };
-        let Ok(page) = tmdb.discover(&q) else {
-            continue;
-        };
-        // Una variante che non aggiunge nemmeno un film non è un compromesso.
-        if page.total_results <= current_total {
-            continue;
-        }
-        let mut preview = page
-            .results
-            .iter()
-            .filter(|m| !seen.contains(&m.id))
-            .map(|m| m.title.clone())
-            .take(2)
-            .collect::<Vec<_>>();
-        if preview.is_empty() {
-            preview = page
-                .results
-                .iter()
-                .take(2)
-                .map(|m| m.title.clone())
-                .collect();
-        }
-        out.push(unlock::Unlock {
-            label,
-            facets: relaxed,
-            total: page.total_results,
-            preview,
-        });
-    }
-    out.sort_by_key(|u| u.total);
-    out.truncate(3);
-    out
-}
-
+#[cfg(test)]
 fn unlock_candidates(tax: &Taxonomy, f: &Facets) -> Vec<(String, Facets)> {
     let mut out = Vec::new();
     if let Some(v) = f.min_rating {
@@ -3861,6 +3216,7 @@ fn unlock_candidates(tax: &Taxonomy, f: &Facets) -> Vec<(String, Facets)> {
     out
 }
 
+#[cfg(test)]
 fn runtime_label(a: u32, b: u32) -> String {
     if a == 0 {
         format!("fino a {b} min")
@@ -3988,7 +3344,7 @@ fn resolve_keywords(
     }
 }
 
-fn sort_movies(movies: &mut [Movie], sort: Sort) {
+pub(crate) fn sort_movies(movies: &mut [Movie], sort: Sort) {
     movies.sort_by(|a, b| {
         let order = match sort {
             Sort::Rating => b
@@ -4004,7 +3360,12 @@ fn sort_movies(movies: &mut [Movie], sort: Sort) {
     });
 }
 
-fn verified_match(d: &Details, tax: &Taxonomy, facets: &Facets, known: &[(String, u64)]) -> bool {
+pub(crate) fn verified_match(
+    d: &Details,
+    tax: &Taxonomy,
+    facets: &Facets,
+    known: &[(String, u64)],
+) -> bool {
     if require_keywords(tax, facets, known).is_err() {
         return false;
     }
@@ -4459,85 +3820,11 @@ mod tests {
     use egui::ResizeDirection as Dir;
 
     #[test]
-    fn indice_locale_si_consulta_senza_credenziale_e_i_controlli_si_adattano() {
-        let path = std::env::temp_dir().join(format!(
-            "cinematch-app-index-{}-{}.sqlite3",
-            std::process::id(),
-            simkl::now_secs()
-        ));
-        let catalog = Catalog::open(&path).unwrap();
-        let data = (1..=22)
-            .map(|id| format!("{{\"id\":{id},\"original_title\":\"Film {id}\"}}\n"))
-            .collect::<String>();
-        catalog
-            .import_export(std::io::Cursor::new(data), "2026-11-02", false, |_| true)
-            .unwrap();
-        for size in [[800.0, 600.0], [1220.0, 660.0], [1920.0, 1080.0]] {
-            let ctx = egui::Context::default();
-            crate::ui::fonts::install_lumen(&ctx);
-            let mut app =
-                App::with_local_data(&ctx, Config::default(), None, simkl::Store::default());
-            app.catalog = Some(catalog.clone());
-            app.catalog_coverage = catalog.coverage().unwrap();
-            app.first_run = false;
-            app.boot_done = true;
-            app.update.last_check = Some(Instant::now());
-            app.spawn_search();
-            let deadline = Instant::now() + Duration::from_secs(3);
-            while app.loading && Instant::now() < deadline {
-                app.poll();
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            assert!(!app.loading);
-            assert_eq!(app.total, 22);
-            assert_eq!(app.movies.len(), 20);
-            assert_eq!(app.total_pages, 2);
-            ctx.data_mut(|d| d.insert_temp(egui::Id::unique("catalog-controls-open"), true));
-            let out =
-                crate::ui::layout_test_support::frame(&ctx, egui::vec2(size[0], size[1]), |ui| {
-                    app.update_ui(ui)
-                });
-            let text = out
-                .shapes
-                .iter()
-                .filter_map(|s| {
-                    if let egui::epaint::Shape::Text(t) = &s.shape {
-                        Some(t.galley.text())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-            assert!(
-                text.contains("Archivio e copertura"),
-                "Controlli mancanti a {size:?}"
-            );
-            assert_eq!(
-                ctx.data(|d| d.get_temp::<bool>(egui::Id::unique("catalog-controls-open"))),
-                Some(true),
-                "Il comando deve mantenere aperti i controlli anche nei frame successivi"
-            );
-            assert!(
-                text.contains("nell’indice"),
-                "Copertura mancante a {size:?}: {text}"
-            );
-            assert!(
-                text.contains("Vai"),
-                "Navigazione mancante a {size:?}: {text}"
-            );
-        }
-        catalog.invalidate();
-        drop(catalog);
-        for suffix in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
-        }
-    }
-    #[test]
     fn catalogo_impostazioni_e_primo_avvio_si_adattano_alle_dimensioni_supportate() {
         for size in [[800.0, 600.0], [1024.0, 768.0], [1440.0, 900.0]] {
             for state in [
                 "catalogo",
+                "ambito",
                 "caricamento",
                 "errore",
                 "impostazioni",
@@ -4561,6 +3848,12 @@ mod tests {
                 app.loading = state == "caricamento";
                 if state == "errore" {
                     app.results_error = Some("Errore di prova".into());
+                }
+                if state == "ambito" {
+                    app.catalog_query.years = Some((1940, 1960));
+                    ctx.data_mut(|d| {
+                        d.insert_temp(egui::Id::unique("catalog-controls-open"), true)
+                    });
                 }
                 if state == "catalogo" {
                     app.movies = (1..=12)
@@ -4596,6 +3889,17 @@ mod tests {
                         text.contains("Film di prova"),
                         "Catalogo mancante a {size:?}"
                     ),
+                    "ambito" => {
+                        assert!(
+                            text.contains("Ambito della ricerca")
+                                && text.contains("Intervallo di anni preciso"),
+                            "Controlli online mancanti a {size:?}: {text}"
+                        );
+                        assert!(text.contains("nessun archivio di film sul PC"));
+                        assert!(
+                            !text.contains("Riprendi schede") && !text.contains("schede acquisite")
+                        );
+                    }
                     "caricamento" => assert!(text.contains("Aggiorno il catalogo")),
                     "errore" => assert!(text.contains("Ricerca non completata")),
                     "impostazioni" => assert!(text.contains("Impostazioni")),

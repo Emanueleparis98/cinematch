@@ -7,6 +7,8 @@ use crate::domain::model::{Details, Movie};
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiMovie {
     #[serde(default)]
+    pub video: bool,
+    #[serde(default)]
     pub id: u64,
     #[serde(default)]
     pub title: String,
@@ -229,6 +231,10 @@ pub struct AlternativeTitles {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiDetails {
     #[serde(default)]
+    pub adult: bool,
+    #[serde(default)]
+    pub video: bool,
+    #[serde(default)]
     pub alternative_titles: Option<AlternativeTitles>,
     #[serde(default)]
     pub origin_country: Vec<String>,
@@ -328,6 +334,8 @@ impl ApiDetails {
             }
         }
         Details {
+            adult: self.adult,
+            video: self.video,
             alternative_titles: self
                 .alternative_titles
                 .map(|a| a.titles.into_iter().map(|t| t.title).collect())

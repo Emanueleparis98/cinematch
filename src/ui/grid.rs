@@ -73,11 +73,7 @@ fn card(
         ui.painter().text(
             center + egui::vec2(0.0, 18.0),
             Align2::CENTER_CENTER,
-            if m.release_date.is_none() && m.genre_ids.is_empty() {
-                "Scheda da completare"
-            } else {
-                "Locandina non disponibile"
-            },
+            "Locandina non disponibile",
             FontId::proportional(10.0),
             lumen::MUTED,
         );
