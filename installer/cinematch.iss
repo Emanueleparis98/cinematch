@@ -68,4 +68,10 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 ; Anche in modalita silenziosa (aggiornamento) rilancia l'app alla fine.
-Filename: "{app}\{#MyAppExeName}"; Description: "Avvia {#MyAppName}"; Flags: nowait
+Filename: "{app}\{#MyAppExeName}"; Description: "Avvia {#MyAppName}"; Flags: nowait; Check: ShouldLaunch
+
+[Code]
+function ShouldLaunch: Boolean;
+begin
+  Result := ExpandConstant('{param:NOLAUNCH|0}') <> '1';
+end;

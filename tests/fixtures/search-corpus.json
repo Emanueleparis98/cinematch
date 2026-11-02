@@ -1,0 +1,4207 @@
+{
+  "version": 2,
+  "requests": [
+    {
+      "id": "request-1-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su amicizia significativa tra un cane e un gatto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "request-1-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su amicizia significativa tra un cane e un gatto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "request-1-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su amicizia significativa tra un cane e un gatto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "request-1-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su amicizia significativa tra un cane e un gatto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "request-1-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su amicizia significativa tra un cane e un gatto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "request-2-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su spooky per Halloween, piacevoli e senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "request-2-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su spooky per Halloween, piacevoli e senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "request-2-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su spooky per Halloween, piacevoli e senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "request-2-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su spooky per Halloween, piacevoli e senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "request-2-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su spooky per Halloween, piacevoli e senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "request-3-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su viaggi nel tempo con paradossi temporali."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "request-3-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su viaggi nel tempo con paradossi temporali."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "request-3-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su viaggi nel tempo con paradossi temporali."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "request-3-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su viaggi nel tempo con paradossi temporali."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "request-3-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su viaggi nel tempo con paradossi temporali."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "request-4-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un'amicizia tra persone di generazioni diverse."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "request-4-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un'amicizia tra persone di generazioni diverse."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "request-4-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un'amicizia tra persone di generazioni diverse."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "request-4-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un'amicizia tra persone di generazioni diverse."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "request-4-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un'amicizia tra persone di generazioni diverse."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "request-5-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su esplorazione spaziale realistica senza guerre galattiche."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "request-5-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su esplorazione spaziale realistica senza guerre galattiche."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "request-5-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su esplorazione spaziale realistica senza guerre galattiche."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "request-5-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su esplorazione spaziale realistica senza guerre galattiche."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "request-5-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su esplorazione spaziale realistica senza guerre galattiche."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "request-6-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su misteri da risolvere insieme, senza violenza grafica."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "request-6-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su misteri da risolvere insieme, senza violenza grafica."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "request-6-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su misteri da risolvere insieme, senza violenza grafica."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "request-6-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su misteri da risolvere insieme, senza violenza grafica."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "request-6-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su misteri da risolvere insieme, senza violenza grafica."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "request-7-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su una donna che cambia vita dopo i sessant'anni."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "request-7-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su una donna che cambia vita dopo i sessant'anni."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "request-7-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su una donna che cambia vita dopo i sessant'anni."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "request-7-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su una donna che cambia vita dopo i sessant'anni."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "request-7-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su una donna che cambia vita dopo i sessant'anni."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "request-8-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su rapporto padre-figlia in un viaggio."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "request-8-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su rapporto padre-figlia in un viaggio."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "request-8-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su rapporto padre-figlia in un viaggio."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "request-8-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su rapporto padre-figlia in un viaggio."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "request-8-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su rapporto padre-figlia in un viaggio."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "request-9-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su avventure sottomarine senza squali assassini."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "request-9-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su avventure sottomarine senza squali assassini."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "request-9-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su avventure sottomarine senza squali assassini."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "request-9-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su avventure sottomarine senza squali assassini."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "request-9-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su avventure sottomarine senza squali assassini."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "request-10-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su amicizia tra un essere umano e un robot, senza romance."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-10-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su amicizia tra un essere umano e un robot, senza romance."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-10-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su amicizia tra un essere umano e un robot, senza romance."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-10-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su amicizia tra un essere umano e un robot, senza romance."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-10-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su amicizia tra un essere umano e un robot, senza romance."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-11-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su una cena che fa emergere segreti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "request-11-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su una cena che fa emergere segreti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "request-11-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su una cena che fa emergere segreti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "request-11-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su una cena che fa emergere segreti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "request-11-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su una cena che fa emergere segreti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "request-12-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su musica jazz raccontata attraverso un musicista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "request-12-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su musica jazz raccontata attraverso un musicista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "request-12-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su musica jazz raccontata attraverso un musicista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "request-12-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su musica jazz raccontata attraverso un musicista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "request-12-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su musica jazz raccontata attraverso un musicista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "request-13-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su la cucina come modo per ricucire rapporti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "request-13-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su la cucina come modo per ricucire rapporti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "request-13-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su la cucina come modo per ricucire rapporti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "request-13-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su la cucina come modo per ricucire rapporti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "request-13-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su la cucina come modo per ricucire rapporti familiari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "request-14-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su animazione per adulti sulla memoria, senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "request-14-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su animazione per adulti sulla memoria, senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "request-14-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su animazione per adulti sulla memoria, senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "request-14-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su animazione per adulti sulla memoria, senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "request-14-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su animazione per adulti sulla memoria, senza horror."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "request-15-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un investigatore sordo interpretato con rispetto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "request-15-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un investigatore sordo interpretato con rispetto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "request-15-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un investigatore sordo interpretato con rispetto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "request-15-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un investigatore sordo interpretato con rispetto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "request-15-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un investigatore sordo interpretato con rispetto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "request-16-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su commedie ambientate quasi tutte in un aeroporto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "request-16-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su commedie ambientate quasi tutte in un aeroporto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "request-16-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su commedie ambientate quasi tutte in un aeroporto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "request-16-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su commedie ambientate quasi tutte in un aeroporto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "request-16-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su commedie ambientate quasi tutte in un aeroporto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "request-17-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su rivalità tra sorelle che diventa solidarietà."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "request-17-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su rivalità tra sorelle che diventa solidarietà."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "request-17-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su rivalità tra sorelle che diventa solidarietà."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "request-17-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su rivalità tra sorelle che diventa solidarietà."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "request-17-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su rivalità tra sorelle che diventa solidarietà."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "request-18-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su viaggi in treno in cui sconosciuti diventano amici."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "request-18-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su viaggi in treno in cui sconosciuti diventano amici."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "request-18-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su viaggi in treno in cui sconosciuti diventano amici."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "request-18-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su viaggi in treno in cui sconosciuti diventano amici."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "request-18-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su viaggi in treno in cui sconosciuti diventano amici."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "request-19-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su persone anziane che formano una squadra sportiva."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "request-19-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su persone anziane che formano una squadra sportiva."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "request-19-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su persone anziane che formano una squadra sportiva."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "request-19-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su persone anziane che formano una squadra sportiva."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "request-19-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su persone anziane che formano una squadra sportiva."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "request-20-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su una casa che sembra infestata ma ha una spiegazione non soprannaturale."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "request-20-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su una casa che sembra infestata ma ha una spiegazione non soprannaturale."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "request-20-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su una casa che sembra infestata ma ha una spiegazione non soprannaturale."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "request-20-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su una casa che sembra infestata ma ha una spiegazione non soprannaturale."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "request-20-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su una casa che sembra infestata ma ha una spiegazione non soprannaturale."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "request-21-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su fantascienza sulla linguistica e comunicazione aliena."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "request-21-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su fantascienza sulla linguistica e comunicazione aliena."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "request-21-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su fantascienza sulla linguistica e comunicazione aliena."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "request-21-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su fantascienza sulla linguistica e comunicazione aliena."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "request-21-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su fantascienza sulla linguistica e comunicazione aliena."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "request-22-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un cane che aiuta una persona ad affrontare il lutto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "request-22-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un cane che aiuta una persona ad affrontare il lutto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "request-22-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un cane che aiuta una persona ad affrontare il lutto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "request-22-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un cane che aiuta una persona ad affrontare il lutto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "request-22-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un cane che aiuta una persona ad affrontare il lutto."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "request-23-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un ladro che non ricorre alla violenza."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "request-23-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un ladro che non ricorre alla violenza."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "request-23-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un ladro che non ricorre alla violenza."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "request-23-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un ladro che non ricorre alla violenza."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "request-23-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un ladro che non ricorre alla violenza."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "request-24-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un amore fra persone di paesi diversi senza finale tragico."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "request-24-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un amore fra persone di paesi diversi senza finale tragico."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "request-24-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un amore fra persone di paesi diversi senza finale tragico."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "request-24-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un amore fra persone di paesi diversi senza finale tragico."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "request-24-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un amore fra persone di paesi diversi senza finale tragico."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "request-25-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su lavoro artigianale e trasmissione del mestiere."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "request-25-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su lavoro artigianale e trasmissione del mestiere."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "request-25-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su lavoro artigianale e trasmissione del mestiere."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "request-25-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su lavoro artigianale e trasmissione del mestiere."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "request-25-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su lavoro artigianale e trasmissione del mestiere."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "request-26-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su una spedizione polare storica, non documentari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "request-26-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su una spedizione polare storica, non documentari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "request-26-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su una spedizione polare storica, non documentari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "request-26-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su una spedizione polare storica, non documentari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "request-26-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su una spedizione polare storica, non documentari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "request-27-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un bambino che stringe amicizia con un anziano senza parentela."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "request-27-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un bambino che stringe amicizia con un anziano senza parentela."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "request-27-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un bambino che stringe amicizia con un anziano senza parentela."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "request-27-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un bambino che stringe amicizia con un anziano senza parentela."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "request-27-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un bambino che stringe amicizia con un anziano senza parentela."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "request-28-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su persone che risolvono conflitti tramite scacchi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "request-28-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su persone che risolvono conflitti tramite scacchi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "request-28-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su persone che risolvono conflitti tramite scacchi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "request-28-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su persone che risolvono conflitti tramite scacchi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "request-28-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su persone che risolvono conflitti tramite scacchi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "request-29-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su commedie sulla burocrazia senza satira politica pesante."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "request-29-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su commedie sulla burocrazia senza satira politica pesante."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "request-29-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su commedie sulla burocrazia senza satira politica pesante."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "request-29-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su commedie sulla burocrazia senza satira politica pesante."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "request-29-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su commedie sulla burocrazia senza satira politica pesante."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "request-30-1",
+      "split": "development",
+      "turns": [
+        "Consigliami un film su un'eredità che riunisce una famiglia litigiosa."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "request-30-5",
+      "split": "development",
+      "turns": [
+        "Consigliami 5 film su un'eredità che riunisce una famiglia litigiosa."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "request-30-12",
+      "split": "development",
+      "turns": [
+        "Consigliami 12 film su un'eredità che riunisce una famiglia litigiosa."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "request-30-7",
+      "split": "development",
+      "turns": [
+        "Consigliami 7 film su un'eredità che riunisce una famiglia litigiosa."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "request-30-open",
+      "split": "development",
+      "turns": [
+        "Consigliami dei film su un'eredità che riunisce una famiglia litigiosa."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "request-31-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su amicizia fra nemici durante una guerra."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "request-31-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su amicizia fra nemici durante una guerra."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "request-31-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su amicizia fra nemici durante una guerra."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "request-31-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su amicizia fra nemici durante una guerra."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "request-31-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su amicizia fra nemici durante una guerra."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "request-32-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su biblioteche come luoghi centrali della storia."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "request-32-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su biblioteche come luoghi centrali della storia."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "request-32-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su biblioteche come luoghi centrali della storia."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "request-32-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su biblioteche come luoghi centrali della storia."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "request-32-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su biblioteche come luoghi centrali della storia."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "request-33-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su un'AI che sceglie di proteggere una persona."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "request-33-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su un'AI che sceglie di proteggere una persona."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "request-33-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su un'AI che sceglie di proteggere una persona."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "request-33-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su un'AI che sceglie di proteggere una persona."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "request-33-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su un'AI che sceglie di proteggere una persona."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "request-34-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su la ricostruzione di un giardino dopo una perdita."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "request-34-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su la ricostruzione di un giardino dopo una perdita."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "request-34-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su la ricostruzione di un giardino dopo una perdita."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "request-34-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su la ricostruzione di un giardino dopo una perdita."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "request-34-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su la ricostruzione di un giardino dopo una perdita."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "request-35-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su un rapporto non romantico tra due viaggiatori solitari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-35-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su un rapporto non romantico tra due viaggiatori solitari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-35-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su un rapporto non romantico tra due viaggiatori solitari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-35-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su un rapporto non romantico tra due viaggiatori solitari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-35-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su un rapporto non romantico tra due viaggiatori solitari."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "request-36-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su una donna pilota di aerei come protagonista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "request-36-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su una donna pilota di aerei come protagonista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "request-36-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su una donna pilota di aerei come protagonista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "request-36-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su una donna pilota di aerei come protagonista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "request-36-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su una donna pilota di aerei come protagonista."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "request-37-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su la vita di una comunità su un'isola senza naufragi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "request-37-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su la vita di una comunità su un'isola senza naufragi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "request-37-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su la vita di una comunità su un'isola senza naufragi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "request-37-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su la vita di una comunità su un'isola senza naufragi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "request-37-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su la vita di una comunità su un'isola senza naufragi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "request-38-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su commedie ambientate in una sola notte."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "request-38-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su commedie ambientate in una sola notte."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "request-38-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su commedie ambientate in una sola notte."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "request-38-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su commedie ambientate in una sola notte."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "request-38-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su commedie ambientate in una sola notte."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "request-39-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su una relazione madre-figlio raccontata dal punto di vista della madre."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "request-39-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su una relazione madre-figlio raccontata dal punto di vista della madre."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "request-39-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su una relazione madre-figlio raccontata dal punto di vista della madre."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "request-39-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su una relazione madre-figlio raccontata dal punto di vista della madre."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "request-39-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su una relazione madre-figlio raccontata dal punto di vista della madre."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "request-40-1",
+      "split": "held_out",
+      "turns": [
+        "Consigliami un film su sopravvivenza in montagna senza animali mostruosi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        1
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    },
+    {
+      "id": "request-40-5",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 5 film su sopravvivenza in montagna senza animali mostruosi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        5
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    },
+    {
+      "id": "request-40-12",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 12 film su sopravvivenza in montagna senza animali mostruosi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        12
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    },
+    {
+      "id": "request-40-7",
+      "split": "held_out",
+      "turns": [
+        "Consigliami 7 film su sopravvivenza in montagna senza animali mostruosi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        7
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    },
+    {
+      "id": "request-40-open",
+      "split": "held_out",
+      "turns": [
+        "Consigliami dei film su sopravvivenza in montagna senza animali mostruosi."
+      ],
+      "expected_actions": [
+        "new"
+      ],
+      "expected_counts": [
+        null
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "conversation-1",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su amicizia significativa tra un cane e un gatto.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "conversation-2",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su spooky per Halloween, piacevoli e senza horror.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "conversation-3",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su viaggi nel tempo con paradossi temporali.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "conversation-4",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un'amicizia tra persone di generazioni diverse.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "conversation-5",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su esplorazione spaziale realistica senza guerre galattiche.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "conversation-6",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su misteri da risolvere insieme, senza violenza grafica.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "conversation-7",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su una donna che cambia vita dopo i sessant'anni.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "conversation-8",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su rapporto padre-figlia in un viaggio.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "conversation-9",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su avventure sottomarine senza squali assassini.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "conversation-10",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su amicizia tra un essere umano e un robot, senza romance.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "conversation-11",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su una cena che fa emergere segreti familiari.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "cena e rivelazioni familiari centrali",
+      "semantic_forbidden": "sola scena a tavola"
+    },
+    {
+      "id": "conversation-12",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su musica jazz raccontata attraverso un musicista.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "jazz e musicista centrali",
+      "semantic_forbidden": "sola colonna sonora jazz"
+    },
+    {
+      "id": "conversation-13",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su la cucina come modo per ricucire rapporti familiari.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "cucina e riconciliazione",
+      "semantic_forbidden": "sola ambientazione ristorante"
+    },
+    {
+      "id": "conversation-14",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su animazione per adulti sulla memoria, senza horror.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "animazione e memoria centrali",
+      "semantic_forbidden": "animazione solo per bambini"
+    },
+    {
+      "id": "conversation-15",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un investigatore sordo interpretato con rispetto.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "protagonista investigatore sordo",
+      "semantic_forbidden": "sordità incidentale"
+    },
+    {
+      "id": "conversation-16",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su commedie ambientate quasi tutte in un aeroporto.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "commedia e aeroporto prevalenti",
+      "semantic_forbidden": "singola scena di volo"
+    },
+    {
+      "id": "conversation-17",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su rivalità tra sorelle che diventa solidarietà.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "evoluzione del rapporto fra sorelle",
+      "semantic_forbidden": "semplice compresenza"
+    },
+    {
+      "id": "conversation-18",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su viaggi in treno in cui sconosciuti diventano amici.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "treno e amicizia centrale",
+      "semantic_forbidden": "solo trasporto accessorio"
+    },
+    {
+      "id": "conversation-19",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su persone anziane che formano una squadra sportiva.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "squadra di anziani",
+      "semantic_forbidden": "allenatore anziano e giocatori giovani"
+    },
+    {
+      "id": "conversation-20",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su una casa che sembra infestata ma ha una spiegazione non soprannaturale.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "apparente infestazione risolta razionalmente",
+      "semantic_forbidden": "fantasmi reali"
+    },
+    {
+      "id": "conversation-21",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su fantascienza sulla linguistica e comunicazione aliena.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "lingua e comprensione centrali",
+      "semantic_forbidden": "solo battaglie aliene"
+    },
+    {
+      "id": "conversation-22",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un cane che aiuta una persona ad affrontare il lutto.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "rapporto cane-persona e lutto",
+      "semantic_forbidden": "semplice presenza animale"
+    },
+    {
+      "id": "conversation-23",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un ladro che non ricorre alla violenza.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "furto e metodo non violento",
+      "semantic_forbidden": "rapina sanguinosa"
+    },
+    {
+      "id": "conversation-24",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un amore fra persone di paesi diversi senza finale tragico.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "relazione interculturale e finale non tragico",
+      "semantic_forbidden": "morte degli amanti"
+    },
+    {
+      "id": "conversation-25",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su lavoro artigianale e trasmissione del mestiere.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "apprendimento artigianale centrale",
+      "semantic_forbidden": "lavoro solo accessorio"
+    },
+    {
+      "id": "conversation-26",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su una spedizione polare storica, non documentari.",
+        "altre ancora?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "spedizione polare e finzione storica",
+      "semantic_forbidden": "documentario"
+    },
+    {
+      "id": "conversation-27",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un bambino che stringe amicizia con un anziano senza parentela.",
+        "ne conosci altri?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "amicizia bambino-anziano",
+      "semantic_forbidden": "rapporto nonno-nipote"
+    },
+    {
+      "id": "conversation-28",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su persone che risolvono conflitti tramite scacchi.",
+        "vorrei cambiare tutti i titoli",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "scacchi e conflitto centrali",
+      "semantic_forbidden": "scena accessoria di scacchi"
+    },
+    {
+      "id": "conversation-29",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su commedie sulla burocrazia senza satira politica pesante.",
+        "cos'altro potrei guardare?",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "commedia burocratica",
+      "semantic_forbidden": "dramma politico"
+    },
+    {
+      "id": "conversation-30",
+      "split": "development",
+      "turns": [
+        "Vorrei 5 film su un'eredità che riunisce una famiglia litigiosa.",
+        "continua la ricerca",
+        "Mantieni tutto ma limita la durata a 100 minuti.",
+        "Cambiamo argomento: qual è la differenza fra montaggio parallelo e alternato? Non propormi film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "eredità e ricongiungimento",
+      "semantic_forbidden": "eredità non centrale"
+    },
+    {
+      "id": "conversation-31",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su amicizia significativa tra un cane e un gatto.",
+        "Mi servono ulteriori titoli",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 85 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "rapporto di amicizia fra le due specie",
+      "semantic_forbidden": "mera presenza o rivalità"
+    },
+    {
+      "id": "conversation-32",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su spooky per Halloween, piacevoli e senza horror.",
+        "Non questi, rinnovami la selezione",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 95 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "atmosfera giocosa e spettrale",
+      "semantic_forbidden": "horror, angoscia e trauma"
+    },
+    {
+      "id": "conversation-33",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su viaggi nel tempo con paradossi temporali.",
+        "Andiamo avanti con altre possibilita",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 110 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "viaggio temporale centrale",
+      "semantic_forbidden": "soli flashback"
+    },
+    {
+      "id": "conversation-34",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su un'amicizia tra persone di generazioni diverse.",
+        "Ne vorrei ancora senza ripetere quelli gia indicati",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 125 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "legame intergenerazionale significativo",
+      "semantic_forbidden": "semplice parentela incidentale"
+    },
+    {
+      "id": "conversation-35",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su esplorazione spaziale realistica senza guerre galattiche.",
+        "Proponi una selezione diversa",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 150 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "esplorazione scientifica",
+      "semantic_forbidden": "guerra come motore principale"
+    },
+    {
+      "id": "conversation-36",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su misteri da risolvere insieme, senza violenza grafica.",
+        "Mi servono ulteriori titoli",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 80 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "indagine e gioco di deduzione",
+      "semantic_forbidden": "gore"
+    },
+    {
+      "id": "conversation-37",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su una donna che cambia vita dopo i sessant'anni.",
+        "Non questi, rinnovami la selezione",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 100 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "protagonista anziana e nuovo inizio",
+      "semantic_forbidden": "ruolo marginale"
+    },
+    {
+      "id": "conversation-38",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su rapporto padre-figlia in un viaggio.",
+        "Andiamo avanti con altre possibilita",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 105 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "viaggio e relazione padre-figlia centrali",
+      "semantic_forbidden": "sola presenza dei due"
+    },
+    {
+      "id": "conversation-39",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su avventure sottomarine senza squali assassini.",
+        "Ne vorrei ancora senza ripetere quelli gia indicati",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 115 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "esplorazione marina",
+      "semantic_forbidden": "squali antagonisti"
+    },
+    {
+      "id": "conversation-40",
+      "split": "development",
+      "turns": [
+        "Cerco cinque film su amicizia tra un essere umano e un robot, senza romance.",
+        "Proponi una selezione diversa",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 130 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "amicizia uomo-robot",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "conversation-41",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su amicizia fra nemici durante una guerra.",
+        "Mi servono ulteriori titoli",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 85 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "amicizia oltre le fazioni",
+      "semantic_forbidden": "sola tregua tattica"
+    },
+    {
+      "id": "conversation-42",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su biblioteche come luoghi centrali della storia.",
+        "Non questi, rinnovami la selezione",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 95 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "biblioteca centrale",
+      "semantic_forbidden": "breve scena in biblioteca"
+    },
+    {
+      "id": "conversation-43",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su un'AI che sceglie di proteggere una persona.",
+        "Andiamo avanti con altre possibilita",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 110 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "scelta protettiva AI centrale",
+      "semantic_forbidden": "AI solo antagonista"
+    },
+    {
+      "id": "conversation-44",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su la ricostruzione di un giardino dopo una perdita.",
+        "Ne vorrei ancora senza ripetere quelli gia indicati",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 125 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "giardino e elaborazione della perdita",
+      "semantic_forbidden": "solo sfondo verde"
+    },
+    {
+      "id": "conversation-45",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su un rapporto non romantico tra due viaggiatori solitari.",
+        "Proponi una selezione diversa",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 150 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "amicizia e viaggio condiviso",
+      "semantic_forbidden": "relazione romantica"
+    },
+    {
+      "id": "conversation-46",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su una donna pilota di aerei come protagonista.",
+        "Mi servono ulteriori titoli",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 80 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "protagonista pilota",
+      "semantic_forbidden": "assistente di volo"
+    },
+    {
+      "id": "conversation-47",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su la vita di una comunità su un'isola senza naufragi.",
+        "Non questi, rinnovami la selezione",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 100 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "comunità insulare",
+      "semantic_forbidden": "naufragio come trama centrale"
+    },
+    {
+      "id": "conversation-48",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su commedie ambientate in una sola notte.",
+        "Andiamo avanti con altre possibilita",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 105 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "commedia e unità temporale notturna",
+      "semantic_forbidden": "storia su più giorni"
+    },
+    {
+      "id": "conversation-49",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su una relazione madre-figlio raccontata dal punto di vista della madre.",
+        "Ne vorrei ancora senza ripetere quelli gia indicati",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 115 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "punto di vista materno",
+      "semantic_forbidden": "madre marginale"
+    },
+    {
+      "id": "conversation-50",
+      "split": "held_out",
+      "turns": [
+        "Cerco cinque film su sopravvivenza in montagna senza animali mostruosi.",
+        "Proponi una selezione diversa",
+        "Mantieni tutto il resto, ma la durata deve essere inferiore a 130 minuti.",
+        "Cambio domanda: spiegami cosa significa piano sequenza, senza suggerire film."
+      ],
+      "expected_actions": [
+        "new",
+        "more",
+        "refine",
+        "answer"
+      ],
+      "expected_counts": [
+        5,
+        5,
+        5,
+        null
+      ],
+      "semantic_required": "sopravvivenza montana",
+      "semantic_forbidden": "mostri"
+    }
+  ]
+}

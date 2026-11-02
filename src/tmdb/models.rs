@@ -205,11 +205,20 @@ impl KeywordResults {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ExternalIds {
     #[serde(default)]
+    pub wikidata_id: Option<String>,
+    #[serde(default)]
     pub imdb_id: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
+pub struct CollectionRef { pub id:u64 }
+
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiDetails {
+    #[serde(default)]
+    pub popularity: f32,
+    #[serde(default)]
+    pub belongs_to_collection: Option<CollectionRef>,
     #[serde(default)]
     pub keywords: Option<KeywordResults>,
     #[serde(default)]
@@ -269,7 +278,7 @@ impl ApiDetails {
             backdrop_path: self.backdrop_path.clone(),
             rating: self.vote_average,
             votes: self.vote_count,
-            popularity: 0.0,
+            popularity: self.popularity,
             genre_ids,
             lang: self.original_language.clone(),
             imdb_id: imdb_id.clone(),
@@ -300,6 +309,10 @@ impl ApiDetails {
             }
         }
         Details {
+            cast_full:self.credits.as_ref().map(|c|c.cast.iter().take(128).map(|a|a.name.clone()).collect()).unwrap_or_default(),
+            directors:self.credits.as_ref().map(|c|c.crew.iter().filter(|m|m.job.eq_ignore_ascii_case("Director")).map(|m|m.name.clone()).collect()).unwrap_or_default(),
+            collection_id: self.belongs_to_collection.map(|c|c.id),
+            wikidata_id: self.external_ids.as_ref().and_then(|e| e.wikidata_id.clone()),
             keywords: self.keywords.map(|k| k.ids()).unwrap_or_default(),
             movie,
             tagline: self.tagline.clone().unwrap_or_default(),

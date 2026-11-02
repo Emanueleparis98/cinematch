@@ -252,7 +252,9 @@ impl Tmdb {
             if self.cancelled() {
                 return Err(CANCELLED.into());
             }
-            let request = self.http.get(&url).query(&[("language", self.lang.as_str())]);
+            let request = self.http.get(&url);
+            let request = if params.iter().any(|(key,_)| key == "language") { request }
+                else { request.query(&[("language", self.lang.as_str())]) };
             let request = match &auth {
                 Credential::Query(key) => request.query(&[("api_key", key.as_str())]),
                 Credential::Bearer { token, .. } => request.bearer_auth(token),
@@ -468,6 +470,18 @@ impl Tmdb {
         let res: PagedMovies = self.get("/search/movie", &p)?;
         self.list_store(key, &res);
         Ok(res)
+    }
+
+    /// Risolve anche un titolo internazionale quando il catalogo UI è italiano.
+    /// La lingua fa parte della chiave: nessuna contaminazione della cache UI.
+    pub fn search_english(&self, query: &str) -> Result<PagedMovies, String> {
+        let params = vec![("query".into(),query.into()),("include_adult".into(),"false".into()),
+            ("page".into(),"1".into()),("language".into(),"en-US".into())];
+        let key = Self::cache_key("/search/movie",&params);
+        if let Some(hit) = self.list_cached(&key) { return Ok(hit); }
+        let result: PagedMovies = self.get("/search/movie",&params)?;
+        self.list_store(key,&result);
+        Ok(result)
     }
 
     /// Cerca una persona (regista o attore) per nome.

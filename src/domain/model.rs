@@ -140,6 +140,10 @@ pub struct ImdbRating {
 
 #[derive(Clone, Debug, Default)]
 pub struct Details {
+    pub cast_full: Vec<String>,
+    pub directors: Vec<String>,
+    pub collection_id: Option<u64>,
+    pub wikidata_id: Option<String>,
     pub movie: Movie,
     pub tagline: String,
     pub runtime: Option<u32>,

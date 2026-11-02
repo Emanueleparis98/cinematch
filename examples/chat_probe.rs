@@ -1,477 +1,146 @@
-//! Prova end-to-end della chat senza aprire la finestra:
-//! messaggio -> interprete (contesto della chat) -> candidati reali TMDB ->
-//! curatela (streaming) -> film pertinenti con «perche» e consiglio.
-//!
-//! Uso: cargo run --release --example chat_probe -- "5 slasher anni 80" "e uno piu recente?"
-//! Legge la configurazione vera da %APPDATA%\CineMatch\config.json.
-
-use std::collections::HashMap;
-
-use cinematch::ai::{
-    build_provider, classify_chat_action, curator, ChatAction, Intent, IntentProvider, Theme,
-};
-use cinematch::app::chat_pool;
-use cinematch::domain::constraints;
-use cinematch::domain::model::{Facets, Movie, Sort};
-use cinematch::domain::taxonomy::Taxonomy;
-use cinematch::infra::config::Config;
-use cinematch::tmdb::Tmdb;
-
-fn merge(base: &mut Facets, extra: &Facets) {
-    for d in &extra.decades {
-        if !base.decades.contains(d) {
-            base.decades.push(d.clone());
-        }
-    }
-    for m in &extra.movements {
-        if !base.movements.contains(m) {
-            base.movements.push(m.clone());
-        }
-    }
-    for g in &extra.genres {
-        if !base.genres.contains(g) {
-            base.genres.push(*g);
-        }
-    }
-    for g in &extra.without_genres {
-        if !base.without_genres.contains(g) {
-            base.without_genres.push(*g);
-        }
-    }
-    if !extra.countries.is_empty() {
-        base.countries = extra.countries.clone();
-    }
-    for m in &extra.moods {
-        if !base.moods.contains(m) {
-            base.moods.push(m.clone());
-        }
-    }
-    for k in &extra.keywords {
-        if !base.keywords.contains(k) {
-            base.keywords.push(k.clone());
-        }
-    }
-    if extra.min_rating.is_some() {
-        base.min_rating = extra.min_rating;
-    }
-    if extra.max_rating.is_some() {
-        base.max_rating = extra.max_rating;
-    }
-    if extra.min_votes.is_some() {
-        base.min_votes = extra.min_votes;
-    }
-    if extra.runtime.is_some() {
-        base.runtime = extra.runtime;
-    }
-    if extra.sort != Sort::Popularity {
-        base.sort = extra.sort;
-    }
-}
-
-fn merge_themes(base: &mut Vec<Theme>, extra: &[Theme]) {
-    for theme in extra {
-        if let Some(existing) = base
-            .iter_mut()
-            .find(|t| t.label.eq_ignore_ascii_case(&theme.label))
-        {
-            for concept in &theme.concepts {
-                if !existing
-                    .concepts
-                    .iter()
-                    .any(|c| c.label.eq_ignore_ascii_case(&concept.label))
-                {
-                    existing.concepts.push(concept.clone());
-                }
-            }
-            for title in &theme.seed_titles {
-                if !existing.seed_titles.contains(title) {
-                    existing.seed_titles.push(title.clone());
-                }
-            }
-        } else {
-            base.push(theme.clone());
-        }
-    }
-    base.truncate(2);
-}
-
-fn understood(tax: &Taxonomy, f: &Facets, themes: &[Theme]) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    for m in &f.movements {
-        if let Some(mv) = tax.movement(m) {
-            parts.push(mv.label.clone());
-        }
-    }
-    if !f.decades.is_empty() {
-        parts.push(
-            f.decades
-                .iter()
-                .filter_map(|d| tax.decade(d))
-                .map(|d| d.label.clone())
-                .collect::<Vec<_>>()
-                .join(" + "),
-        );
-    }
-    if !f.genres.is_empty() {
-        parts.push(
-            f.genres
-                .iter()
-                .filter_map(|g| tax.genre_name(*g))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
-    }
-    if !f.countries.is_empty() {
-        parts.push(
-            f.countries
-                .iter()
-                .map(|c| tax.country_label(c))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
-    }
-    if !f.moods.is_empty() {
-        let moods = f
-            .moods
-            .iter()
-            .filter_map(|m| tax.mood(m))
-            .map(|m| m.label.clone())
-            .collect::<Vec<_>>()
-            .join(" + ");
-        if !moods.is_empty() {
-            parts.push(moods);
-        }
-    }
-    if let Some(r) = f.min_rating {
-        parts.push(format!("voto >= {r}"));
-    }
-    if let Some((min, max)) = f.runtime {
-        parts.push(if min == 0 {
-            format!("fino a {max} min")
-        } else {
-            format!("{min}-{max} min")
-        });
-    }
-    if !themes.is_empty() {
-        parts.push(format!(
-            "temi: {}",
-            themes
-                .iter()
-                .map(|t| t.label.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-    if parts.is_empty() {
-        "ricerca libera".into()
-    } else {
-        parts.join(" · ")
-    }
-}
-
-fn candidate_of(
-    tax: &Taxonomy,
-    m: &Movie,
-    reasons: &HashMap<u64, String>,
-    relevance: &HashMap<u64, f32>,
-) -> curator::Candidate {
-    curator::Candidate {
-        id: m.id,
-        title: m.title.clone(),
-        year: m.year,
-        rating: m.rating,
-        votes: m.votes,
-        genres: m
-            .genre_ids
-            .iter()
-            .filter_map(|g| tax.genre_name(*g))
-            .collect::<Vec<_>>()
-            .join(", "),
-        overview: m.overview.chars().take(720).collect(),
-        reason: reasons.get(&m.id).cloned(),
-        relevance: relevance.get(&m.id).copied().unwrap_or(1.0),
-            ..Default::default()
-    }
-}
-
-/// Un turno di chat: interpreta, cerca, cura. Ritorna il contesto effettivo e i
-/// titoli proposti (per la memoria del turno successivo).
-fn turn(
-    tmdb: &Tmdb,
-    tax: &Taxonomy,
-    provider: &std::sync::Arc<dyn IntentProvider>,
-    text: &str,
-    active: &Intent,
-    history: &[(String, String)],
-    exclude: &[u64],
-) -> Option<(Intent, Vec<String>, Vec<u64>)> {
-    println!("\n=== messaggio: «{text}» ===");
-    let pre_action = classify_chat_action(text, active);
-    let pre_follow = pre_action.is_contextual();
-    let empty = Intent::default();
-    let parse_active = if provider.is_llm() || pre_follow {
-        active
-    } else {
-        &empty
-    };
-    let parse_history: &[(String, String)] =
-        if provider.is_llm() || pre_follow { history } else { &[] };
-    let started = std::time::Instant::now();
-    let intent = match provider.parse_chat(text, tax, parse_history, parse_active) {
-        Ok(i) => i,
-        Err(e) => {
-            println!("interprete non disponibile: {e}");
-            return None;
-        }
-    };
-    let mut action = intent.action;
-    if action == ChatAction::New
-        && pre_follow
-        && intent.is_empty()
-        && intent.mode != "reset"
-        && intent.mode != "off_topic"
-    {
-        action = pre_action;
-    }
-    let follow = action.is_contextual();
-    for n in &intent.notes {
-        println!("  nota: {n}");
-    }
-    println!(
-        "  azione: {:?} · facce: decenni={:?} movimenti={:?} generi={:?} esclusi={:?} paesi={:?} mood={:?} voto={:?} voti={:?} durata={:?} ordine={:?} modalita={:?}",
-        action,
-        intent.facets.decades,
-        intent.facets.movements,
-        intent.facets.genres,
-        intent.facets.without_genres,
-        intent.facets.countries,
-        intent.facets.moods,
-        intent.facets.min_rating,
-        intent.facets.min_votes,
-        intent.facets.runtime,
-        intent.facets.sort,
-        intent.mode
-    );
-    for theme in &intent.themes {
-        println!(
-            "  tema: {} [{}] seed={:?}",
-            theme.label,
-            theme
-                .concepts
-                .iter()
-                .map(|c| c.label.as_str())
-                .collect::<Vec<_>>()
-                .join(" + "),
-            theme.seed_titles
-        );
-    }
-
-    let mut eff = if follow {
-        active.facets.clone()
-    } else {
-        Facets::default()
-    };
-    let mut themes = if follow {
-        active.themes.clone()
-    } else {
-        Vec::new()
-    };
-    if action == ChatAction::Reset || intent.mode.eq_ignore_ascii_case("reset") {
-        eff = Facets::default();
-        themes.clear();
-    } else if intent.source == "AI" {
-        if action.is_contextual() && intent.is_empty() && !active.is_empty() {
-            eff = active.facets.clone();
-            themes = active.themes.clone();
-        } else {
-            eff = intent.facets.clone();
-            themes = intent.themes.clone();
-        }
-    } else if action.is_contextual() {
-        merge(&mut eff, &intent.facets);
-        merge_themes(&mut themes, &intent.themes);
-    } else {
-        eff = intent.facets.clone();
-        themes = intent.themes.clone();
-    }
-    let (eff, removed) = constraints::sanitize(tax, &eff);
-    for r in &removed {
-        println!("  vincolo: {r}");
-    }
-    let title = intent.free_text.clone().or_else(|| if action.is_contextual() { active.free_text.clone() } else { None });
-    let similar = intent
-        .similar_to
-        .clone()
-        .or_else(|| {
-            if action.is_contextual() {
-                active.similar_to.clone()
-            } else {
-                None
-            }
-        });
-    let context = Intent {
-        facets: eff.clone(),
-        themes: themes.clone(),
-        free_text: title.clone(),
-        similar_to: similar.clone(),
-        action,
-        ..Default::default()
-    };
-    let off_topic = action == ChatAction::OffTopic || intent.mode.eq_ignore_ascii_case("off_topic");
-    let mut descr = understood(tax, &eff, &themes);
-    if themes.is_empty() {
-        if let Some(s) = similar.as_deref() {
-            descr = format!("simili a «{s}»");
-        } else if let Some(t) = title.as_deref() {
-            descr = if descr.eq_ignore_ascii_case("ricerca libera") {
-                format!("titolo «{t}»")
-            } else {
-                format!("titolo «{t}» · {descr}")
-            };
-        }
-    }
-    if off_topic && eff.is_empty() && themes.is_empty() {
-        descr = "film del momento".to_string();
-    }
-    println!("  capito: {descr}");
-
-    let mut pool = match chat_pool(
-        tmdb,
-        tax,
-        &eff,
-        &themes,
-        &[],
-        title.as_deref(),
-        similar.as_deref(),
-        &mut Vec::new(),
-        exclude,
-    ) {
-        Ok(p) => p,
-        Err(e) => {
-            println!("errore ricerca: {e}");
-            return None;
-        }
-    };
-    println!(
-        "  candidati reali: {} · totale TMDB: {} · griglia: {}",
-        pool.movies.len(),
-        pool.total,
-        pool.grid_ready
-    );
-    if let Some(limit) = &pool.limit {
-        println!("  limite: {limit}");
-    }
-    for (id, reason) in &pool.reasons {
-        println!("  match {id}: {reason}");
-    }
-    let details = match cinematch::app::verified_details(tmdb, tax, &eff, &pool.keyword_pairs, &pool.movies) {
-        Ok(details) => details,
-        Err(error) => { println!("errore verifica: {error}"); return None; }
-    };
-    pool.movies.retain(|m| details.get(&m.id).is_some_and(|d| d.movie.year.is_some() && !d.movie.overview.trim().is_empty()) && !exclude.contains(&m.id));
-    pool.movies.truncate(20);
-    let movies = pool.movies;
-
-    let req = curator::Request {
-        user_text: text.to_string(),
-        understood: descr,
-        limit: pool.limit,
-        history: if follow { history.to_vec() } else { Vec::new() },
-        candidates: movies
-            .iter()
-            .map(|m| {
-                let d = &details[&m.id];
-                let mut candidate = candidate_of(tax, &d.movie, &pool.reasons, &pool.relevance);
-                candidate.runtime = d.runtime;
-                candidate.director = d.director.clone();
-                candidate.providers = d.flatrate.clone();
-                candidate
-            })
-            .collect(),
-    };
-    let mut chunks = 0usize;
-    let cur = match provider.curate(&req, &mut |_chunk| {
-        chunks += 1;
-    }) {
-        Ok(c) => c,
-        Err(e) => {
-            println!("  curatela AI non disponibile ({e}): uso la scelta deterministica");
-            curator::deterministic(&req)
-        }
-    };
-    println!("  streaming: {chunks} frammenti");
-    println!("\nintro: {}", cur.intro);
-    let mut titles: Vec<String> = Vec::new();
-    let mut ids: Vec<u64> = Vec::new();
-    for (i, p) in cur.picks.iter().enumerate() {
-        let Some(m) = movies.iter().find(|m| m.id == p.id) else {
-            continue;
-        };
-        titles.push(m.title.clone());
-        ids.push(m.id);
-        let year = m.year.map(|y| y.to_string()).unwrap_or_else(|| "?".into());
-        println!("\n{}. {} ({year})  id={}", i + 1, m.title, m.id);
-        println!("   perche: {}", p.perche);
-        println!("   consiglio: {}", p.consiglio);
-    }
-
-    // Verifica del percorso «scheda del film scelto»: regia, durata, dove si vede.
-    if let Some(first) = cur.picks.first() {
-        match tmdb.details(first.id) {
-            Ok(d) => println!(
-                "\nscheda {}: regia={:?} durata={:?} abbonamento={:?} imdb={:?}",
-                d.movie.title,
-                d.director,
-                d.runtime,
-                d.flatrate,
-                d.imdb.map(|i| i.rating)
-            ),
-            Err(e) => println!("\nscheda non disponibile: {e}"),
-        }
-    }
-
-    println!("\nscelte: {} · tempo: {:.1}s", titles.len(), started.elapsed().as_secs_f64());
-    Some((context, titles, ids))
-}
+//! Esegue il motore della UI, con credenziali locali mai stampate.
+//! cargo run --example chat_probe -- "5 film ..." "altre ancora?"
+//! --plan-only misura la comprensione, --critical esegue il corpus critico.
+use cinematch::{ai::build_provider, infra::config::Config, search, tmdb::Tmdb};
+use serde_json::{json, Value};
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
 fn main() {
-    let phrases: Vec<String> = std::env::args().skip(1).collect();
-    let phrases = if phrases.is_empty() {
-        vec!["5 slasher anni 80 poco conosciuti".to_string()]
-    } else {
-        phrases
-    };
-
+    if let Err(error) = execute() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
+}
+fn execute() -> Result<(), String> {
     let cfg = Config::load();
-    let tax = Taxonomy::load();
-    let provider = build_provider(&cfg.ai);
-    println!("interprete: {}", provider.label());
-
-    let tmdb = match Tmdb::new(cfg.tmdb_api_key.clone(), cfg.language.clone()).ping() {
-        Ok(_) => Tmdb::new(cfg.tmdb_api_key.clone(), cfg.language.clone()),
-        Err(e) => {
-            println!("TMDB non disponibile: {e}");
-            return;
+    if std::env::args().any(|a| a == "--provider-status") {
+        let llm = cinematch::ai::llm_config(&cfg.ai).ok_or("Nessun provider AI configurato")?;
+        if llm.base_url != cinematch::ai::OPENROUTER_BASE {
+            return Err("Il controllo crediti è disponibile per OpenRouter.".into());
         }
-    };
-
-    let mut active = Intent::default();
-    let mut history: Vec<(String, String)> = Vec::new();
-    let mut seen: Vec<u64> = Vec::new();
-    for phrase in &phrases {
-        let exclude = if classify_chat_action(phrase, &active) == ChatAction::Replace {
-            seen.clone()
-        } else {
-            Vec::new()
-        };
-        match turn(&tmdb, &tax, &provider, phrase, &active, &history, &exclude) {
-            Some((context, _titles, ids)) => {
-                active = context;
-                seen.extend(ids);
-                history.push(("utente".into(), phrase.clone()));
-
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| e.to_string())?;
+        for endpoint in ["key", "credits"] {
+            let response = client
+                .get(format!("https://openrouter.ai/api/v1/{endpoint}"))
+                .bearer_auth(&llm.api_key)
+                .send()
+                .map_err(|_| "Provider non raggiungibile")?;
+            if !response.status().is_success() {
+                println!("{endpoint}: HTTP {}", response.status().as_u16());
+                continue;
             }
-            None => break,
+            let v: Value = response.json().map_err(|_| "Stato account non leggibile")?;
+            let data = &v["data"];
+            if endpoint == "key" {
+                println!("{}", json!({"key_limit_remaining":data["limit_remaining"]}));
+            } else {
+                println!(
+                    "{}",
+                    json!({"account_credits_remaining":data["total_credits"].as_f64().zip(data["total_usage"].as_f64()).map(|(a,b)|a-b)})
+                );
+            }
+        }
+        return Ok(());
+    }
+    let provider = build_provider(&cfg.ai);
+    let tmdb = Tmdb::new(cfg.tmdb_api_key.clone(), cfg.language.clone());
+    let source = search::TmdbSource::new(&tmdb)?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let plan_only = args.iter().any(|s| s == "--plan-only");
+    let critical = args.iter().any(|s| s == "--critical");
+    let scenarios: Vec<Value> = if critical {
+        serde_json::from_str(include_str!("../tests/fixtures/search-critical.json"))
+            .map_err(|e| e.to_string())?
+    } else {
+        vec![
+            json!({"id":"manual","turns":args.iter().filter(|a|!a.starts_with("--")).collect::<Vec<_>>()}),
+        ]
+    };
+    let mut report = Vec::new();
+    let mut failures = Vec::new();
+    for scenario in scenarios {
+        let mut seen = std::collections::HashSet::new();
+        let mut state = search::ConversationState::default();
+        for user in scenario["turns"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            let started = Instant::now();
+            let cancel = AtomicBool::new(false);
+            if plan_only {
+                let plan = search::understand(provider.as_ref(), user, &state, None, &cancel)?;
+                state = search::transition(&state, &plan);
+                state.turns.push(search::Turn {
+                    user: user.into(),
+                    response: plan.reply.clone(),
+                    titles: Vec::new(),
+                });
+                let result = json!({"scenario":scenario["id"],"user":user,"action":plan.action,"intent":plan.intent,"reply":plan.reply,"seeds":plan.seeds,"seconds":started.elapsed().as_secs_f32()});
+                println!("{result}");
+                report.push(result);
+            } else {
+                let response = search::run(
+                    provider.as_ref(),
+                    &source,
+                    user,
+                    &state,
+                    None,
+                    &cancel,
+                    &mut |_| {},
+                )?;
+                let id = scenario["id"].as_str().unwrap_or_default();
+                if let Some(expected) = scenario["count"].as_u64() {
+                    if response.selections.len() != expected as usize {
+                        failures.push(format!(
+                            "{id}: attesi {expected} film, ottenuti {}",
+                            response.selections.len()
+                        ));
+                    }
+                }
+                for s in &response.selections {
+                    let movie = &s.evidence.details.movie;
+                    if id == "halloween-real" && !seen.insert(movie.id) {
+                        failures.push(format!("{id}: film ripetuto {}", movie.id));
+                    }
+                    if id == "halloween-real"
+                        && s.evidence.details.genres.iter().any(|(g, _)| *g == 27)
+                    {
+                        failures.push(format!("{id}: genere escluso Horror per {}", movie.id));
+                    }
+                    if id == "source"
+                        && (!movie.year.is_some_and(|y| (1993..=1997).contains(&y))
+                            || !s.evidence.details.imdb.is_some_and(|r| r.rating > 8.0))
+                    {
+                        failures.push(format!(
+                            "{id}: anno/fonte IMDb non rispettati per {}",
+                            movie.id
+                        ));
+                    }
+                }
+                let result = json!({"scenario":scenario["id"],"user":user,"intent":response.state.active,"text":response.text,"notice":response.notice,"notes":response.notes,
+                    "films":response.selections.iter().map(|s|json!({"id":s.evidence.details.movie.id,"title":s.evidence.details.movie.title,"year":s.evidence.details.movie.year,
+                        "runtime":s.evidence.details.runtime,"why":s.judgment.why,"assessments":s.judgment.assessments,
+                        "sources":s.evidence.documents.iter().map(|d|json!({"url":d.url,"license":d.license})).collect::<Vec<_>>()})).collect::<Vec<_>>(),"seconds":started.elapsed().as_secs_f32()});
+                println!("{result}");
+                report.push(result);
+                state = response.state;
+            }
         }
     }
+    let path = Config::dir().join("last-search-benchmark.json");
+    std::fs::write(
+        path,
+        serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    if !failures.is_empty() {
+        return Err(failures.join("\n"));
+    }
+    Ok(())
 }

@@ -10,7 +10,7 @@ use crate::tmdb::poster_url;
 use crate::ui::fonts;
 use crate::ui::images::ImageStore;
 
-use super::{fx, lumen, theme};
+use super::{lumen, theme};
 
 const CONTENT_MAX: f32 = 1100.0;
 const RESULT_BREAKPOINT: f32 = 940.0;
@@ -20,7 +20,7 @@ pub(crate) const COMPOSER_DOCK_HEIGHT: f32 = COMPOSER_HEIGHT + 24.0;
 
 /// Limite del messaggio: un incolla lungo non deve diventare una chiamata AI
 /// da migliaia di token.
-pub const MAX_PROMPT_CHARS: usize = 800;
+pub const MAX_PROMPT_CHARS: usize = 12000;
 
 /// Un solo suggerimento per entrambi i composer: la stessa azione si riconosce
 /// ovunque.
@@ -34,7 +34,15 @@ pub enum State {
 }
 
 #[derive(Clone, Default)]
+pub struct CardSource {
+    pub title: String,
+    pub url: String,
+    pub license: String,
+}
+
+#[derive(Clone, Default)]
 pub struct CardMeta {
+    pub sources: Vec<CardSource>,
     pub director: Option<String>,
     pub runtime: Option<u32>,
     pub flatrate: Vec<String>,
@@ -52,6 +60,9 @@ pub struct Card {
 
 #[derive(Clone, Default)]
 pub struct Answer {
+    pub references: Vec<CardSource>,
+    pub research: Option<crate::search::SearchIntent>,
+    pub text_only: bool,
     pub state: State,
     pub intro: String,
     pub understood: String,
@@ -1191,10 +1202,11 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
         lumen::IVORY,
         (avail * 0.7).min(620.0),
     );
-    let (rect, _) = ui.allocate_exact_size(
+    let (rect, response) = ui.allocate_exact_size(
         egui::vec2(avail, galley.size().y + 8.0),
         Sense::hover(),
     );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     let right = rect.right() - 36.0;
     let left = (right - galley.size().x).max(rect.left());
     ui.painter().galley(
@@ -1222,6 +1234,9 @@ fn user_message(ui: &mut egui::Ui, text: &str) {
 /// Gli errori del provider non escono in UI: l'utente vede cosa può fare.
 /// La stringa tecnica resta nel tooltip per chi la cerca.
 pub(crate) fn friendly_error(err: &str) -> &'static str {
+    if err.contains("402") && err.contains("LLM") {
+        return "Il provider AI ha rifiutato la richiesta per un limite di credito. Attendi le chiamate in corso oppure verifica il credito nelle impostazioni del provider.";
+    }
     let e = err.to_lowercase();
     if e.contains("credenzial")
         || e.contains("401")
@@ -1263,7 +1278,8 @@ fn answer_view(
     let meta = match a.state {
         State::Busy => "IN CORSO".to_string(),
         State::Done if a.error.is_some() => "ERRORE".to_string(),
-        State::Done if a.cards.is_empty() => "NESSUN RISULTATO".to_string(),
+        State::Done if a.text_only => "RISPOSTA".to_string(),
+        State::Done if a.cards.is_empty() => "RICERCA DA CONTINUARE".to_string(),
         State::Done => format!("SELEZIONE · {} FILM", a.cards.len()),
     };
     ui.horizontal(|ui| {
@@ -1315,11 +1331,24 @@ fn answer_view(
         ui.add_space(10.0);
     }
 
+    if a.text_only {
+        ui.scope(|ui| {
+            ui.set_max_width(820.0_f32.min(width));
+            ui.add(egui::Label::new(lumen::body(14.0, &a.intro)).wrap());
+        });
+        if !a.references.is_empty() {
+            ui.add_space(8.0);
+            egui::CollapsingHeader::new("Fonti della risposta").id_salt(("answer-sources",index)).show(ui,|ui|{
+                for source in &a.references {
+                    ui.hyperlink_to(&source.title,&source.url);
+                    ui.add(egui::Label::new(lumen::body(10.0,&source.license).color(lumen::MUTED)).wrap());
+                }
+            });
+        }
+        return;
+    }
+
     if !a.understood.is_empty() {
-        ui.label(lumen::label("Criteri interpretati")).on_hover_text(
-            "Questi criteri restano vincolanti. Puoi rimuoverli con un clic o modificarli qui sotto.",
-        );
-        ui.add_space(4.0);
         ui.scope(|ui| {
             ui.set_max_width(900.0_f32.min(width));
             ui.add(
@@ -1328,7 +1357,24 @@ fn answer_view(
         });
         ui.add_space(10.0);
     }
-    if let Some(context) = &a.context {
+    if let Some(research) = &a.research {
+        if reveal_criteria { ui.scroll_to_cursor(Some(egui::Align::TOP)); }
+        egui::CollapsingHeader::new("Criteri della ricerca")
+            .id_salt(("research-criteria", index)).open(reveal_criteria.then_some(true))
+            .show(ui, |ui| {
+                if let Some(count) = research.count { ui.label(lumen::body(12.0, format!("Quantità richiesta: {count} film"))); }
+                for requirement in &research.requirements {
+                    ui.add(egui::Label::new(lumen::body(12.0, &requirement.text)).wrap())
+                        .on_hover_text(format!("Dalla tua richiesta: {}", requirement.origin));
+                }
+                for constraint in &research.constraints {
+                    ui.add(egui::Label::new(lumen::body(12.0, &constraint.origin)).wrap());
+                }
+                ui.add_space(5.0);
+                ui.add(egui::Label::new(lumen::body(12.0, "Per cambiare un criterio, scrivilo nella chat: gli altri restano attivi.").color(lumen::MUTED)).wrap());
+            });
+        ui.add_space(8.0);
+    } else if let Some(context) = &a.context {
         if reveal_criteria { ui.scroll_to_cursor(Some(egui::Align::TOP)); }
         ui.add_enabled_ui(editable, |ui| criteria_editor(ui, tax, context, index, actions));
         ui.add_space(8.0);
@@ -1365,7 +1411,7 @@ fn answer_view(
 
     if a.cards.is_empty() {
         ui.add_space(10.0);
-        ui.label(lumen::display(22.0, "Nessun film con questi criteri"));
+        ui.label(lumen::display(22.0, "Nessuna corrispondenza verificata finora"));
         ui.add_space(6.0);
         let detail = a.limit.as_deref().unwrap_or(
             "Prova a togliere un vincolo: periodo, paese, voto o durata.",
@@ -1421,7 +1467,9 @@ fn answer_view(
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
             ui.label(
-                lumen::mono(10.0, if a.grid_ready {
+                lumen::mono(10.0, if a.research.is_some() {
+                    format!("{} PROPOSTE CON FONTI", a.cards.len())
+                } else if a.grid_ready {
                     format!("{} SU TMDB", theme::thousands(total))
                 } else {
                     format!("{} PROPOSTE VERIFICATE", a.cards.len())
@@ -1600,6 +1648,7 @@ fn hero_card(
                     {
                         actions.similar_to = Some(card.movie.title.clone());
                     }
+                    sources_menu(ui, card);
                 });
             });
         });
@@ -1781,6 +1830,26 @@ fn compact_card(
         actions.similar_to = Some(card.movie.title.clone());
     }
     lumen::focus(ui, &resp, lumen::RADIUS);
+    if card.meta.as_ref().is_some_and(|m| !m.sources.is_empty()) {
+        let max_rect = Rect::from_min_size(egui::pos2(text_x + 110.0, rect.bottom() - 32.0), egui::vec2((width - 200.0).max(65.0), 24.0));
+        let mut source_ui = ui.new_child(egui::UiBuilder::new().id_salt(("card-source-menu",card.movie.id)).max_rect(max_rect));
+        sources_menu(&mut source_ui, card);
+    }
+}
+
+fn sources_menu(ui: &mut egui::Ui, card: &Card) {
+    let Some(meta) = &card.meta else { return; };
+    if meta.sources.is_empty() { return; }
+    ui.push_id(("sources",card.movie.id), |ui| {
+        ui.menu_button(lumen::body(11.0,"Fonti"), |ui| {
+            ui.set_max_width(340.0);
+            ui.label(lumen::body(12.0,"La pertinenza è una valutazione AI basata su queste fonti."));
+            for source in &meta.sources {
+                ui.hyperlink_to(&source.title,&source.url);
+                ui.add(egui::Label::new(lumen::body(10.0,&source.license).color(lumen::MUTED)).wrap());
+            }
+        });
+    });
 }
 
 
@@ -1840,11 +1909,11 @@ fn consiglio(ui: &mut egui::Ui, text: &str, size: f32) {
 fn busy_view(
     ui: &mut egui::Ui,
     a: &Answer,
-    index: usize,
+    _index: usize,
     _now: f64,
     actions: &mut Actions,
 ) {
-    const TAPPE: [&str; 3] = ["INTERPRETO", "CERCO SU TMDB", "SCELGO I FILM"];
+    const TAPPE: [&str; 3] = ["COMPRENDO LA RICHIESTA", "CERCO TITOLI E FONTI", "VERIFICO L’ATTINENZA"];
     let stage = a.stage.clamp(1, 3);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
@@ -1864,13 +1933,7 @@ fn busy_view(
         }
     });
     ui.add_space(9.0);
-    let target = (stage as f32 / 3.0).max(0.08);
-    let anim = ui.ctx().animate_value_with_time(
-        egui::Id::unique(("chat-progress", index)),
-        target,
-        0.4,
-    );
-    fx::progress(ui, 260.0, anim);
+    ui.spinner();
     if !a.intro.is_empty() {
         ui.add_space(10.0);
         ui.horizontal_wrapped(|ui| {
@@ -2207,6 +2270,27 @@ mod layout_tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn i_menu_fonti_non_accorciano_lo_spazio_delle_card_affiancate() {
+        use crate::domain::model::Movie;
+        use crate::ui::{images::ImageStore,layout_test_support::frame,lumen};
+        let images=ImageStore::new();
+        let tax=crate::domain::taxonomy::Taxonomy::load();
+        for width in [320.0,460.0,545.0] {
+            let ctx=egui::Context::default(); lumen::install(&ctx);
+            let cards:Vec<_>=(1..=2).map(|id|super::Card {movie:Movie{id,title:format!("Titolo {id}"),..Default::default()},perche:"Una motivazione specifica che rimane nella colonna assegnata.".into(),consiglio:String::new(),
+                meta:Some(super::CardMeta{sources:vec![super::CardSource{title:"Fonte".into(),url:"https://www.themoviedb.org/movie/1".into(),license:"TMDB".into()}],..Default::default()})}).collect();
+            let render=||frame(&ctx,egui::vec2(width*2.0+10.0,600.0),|ui|ui.horizontal_top(|ui|{
+                ui.spacing_mut().item_spacing.x=10.0;
+                for card in &cards {let layout=super::compact_card_layout(ui,&tax,card,width);super::compact_card(ui,&images,card,&mut super::Actions::default(),width,layout.height,&layout);}
+            }).inner);
+            let _=render(); let output=render();
+            let rects:Vec<_>=output.shapes.iter().filter_map(|s|if let egui::epaint::Shape::Rect(r)=&s.shape {(r.fill==lumen::SURFACE && (r.rect.width()-width).abs()<0.5).then_some(r.rect)} else {None}).collect();
+            assert_eq!(rects.len(),2);
+            assert!(rects[1].left()>=rects[0].right()+9.5,"Card sovrapposte: {rects:?}");
         }
     }
 

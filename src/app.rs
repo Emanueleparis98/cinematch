@@ -127,6 +127,8 @@ enum ViewMode {
 
 /// Tutto cio che serve alla vista per disegnare una risposta di chat.
 struct ChatPayload {
+    references: Vec<chat::CardSource>,
+    research: Option<crate::search::ConversationState>,
     index: usize,
     intro: String,
     cards: Vec<chat::Card>,
@@ -743,6 +745,7 @@ pub struct App {
     chat_cancel: Option<Arc<AtomicBool>>,
     /// Contesto dei seguiti della chat: separato dai filtri della griglia.
     chat_context: Intent,
+    research_state: crate::search::ConversationState,
     /// Dopo un invio la vista torna in fondo, anche se si era scrollato su.
     chat_jump: bool,
 
@@ -885,6 +888,7 @@ impl App {
             new_chat_confirm: false,
             chat_cancel: None,
             chat_context: Intent::default(),
+            research_state: Default::default(),
             chat_jump: false,
             chat_draft: String::new(),
             suggestions: Vec::new(),
@@ -1396,7 +1400,7 @@ impl App {
                     }
                     if let Some(entry) = self.chat.get_mut(index) {
                         if entry.answer.state == chat::State::Busy {
-                            entry.answer.stage = entry.answer.stage.max(stage);
+                            entry.answer.stage = stage;
                         }
                     }
                 }
@@ -1411,6 +1415,9 @@ impl App {
                         self.focus = Some(ViewMode::Chat);
                     }
                     let mut p = *payload;
+                    let research_intent = p.research.as_ref().map(|s| s.active.clone());
+                    let text_only = p.research.is_some() && p.understood.is_empty();
+                    if let Some(state) = p.research.take() { self.research_state = state; }
                     if self.cfg.simkl.hide_watched {
                         let before = p.cards.len();
                         p.cards.retain(|c| {
@@ -1442,6 +1449,9 @@ impl App {
                     let text_refs: Vec<&str> = titles.iter().map(|t| t.as_str()).collect();
                     crate::ui::fonts::ensure_cjk(&self.ctx, &mut self.cjk_loaded, &text_refs);
                     if let Some(entry) = self.chat.get_mut(p.index) {
+                        entry.answer.research = research_intent;
+                        entry.answer.references = p.references;
+                        entry.answer.text_only = text_only;
                         entry.answer.state = chat::State::Done;
                         entry.answer.intro = p.intro;
                         entry.answer.understood = p.understood;
@@ -1945,7 +1955,7 @@ impl App {
         self.chat_jump = true;
         // Spiegazioni e confronti sono comandi locali: non sono nuove
         // ricerche e funzionano anche senza una chiamata AI.
-        if self.handle_meta_command(&text) {
+        if !self.provider.is_llm() && self.handle_meta_command(&text) {
             self.focus = Some(ViewMode::Chat);
             return;
         }
@@ -1955,8 +1965,7 @@ impl App {
             return;
         }
         // «Altri» e simili: stessi criteri, ma senza i film gia mostrati.
-        let action = classify_chat_action(&text, &self.chat_context);
-        let exclude: Vec<u64> = if action == ChatAction::Replace {
+        let exclude: Vec<u64> = if !self.provider.is_llm() && classify_chat_action(&text, &self.chat_context) == ChatAction::Replace {
             self.chat
                 .iter()
                 .flat_map(|e| e.answer.cards.iter().map(|c| c.movie.id))
@@ -1978,6 +1987,7 @@ impl App {
         self.chat_gen += 1;
         self.chat_busy = false;
         self.chat_context = Intent::default();
+        self.research_state = Default::default();
         self.chat_draft.clear();
         self.chat_jump = false;
         self.focus = Some(ViewMode::Chat);
@@ -2037,11 +2047,11 @@ impl App {
         };
         let text = entry.user.clone();
         let exclude: Vec<u64> = entry.answer.cards.iter().map(|c| c.movie.id).collect();
-        let reuse = entry
+        let reuse = if self.provider.is_llm() { None } else { entry
             .answer
             .context
             .clone()
-            .or_else(|| entry.answer.intent.as_ref().map(|(_, it)| it.clone()));
+            .or_else(|| entry.answer.intent.as_ref().map(|(_, it)| it.clone())) };
         if let Some(entry) = self.chat.get_mut(index) {
             entry.answer = chat::Answer::busy();
         }
@@ -2078,8 +2088,8 @@ impl App {
         self.launch_search(true);
     }
 
-    /// Il cuore della chat: interpreta, cerca su TMDB, fa scegliere al
-    /// curatore, completa le schede dei film. Tutto fuori dal thread UI.
+    /// La chat AI delega al coordinatore `search`; il percorso a regole
+    /// resta esplicito e separato. Nessun ripiego AI verso risultati popolari.
     fn spawn_chat_worker(
         &mut self,
         index: usize,
@@ -2104,11 +2114,17 @@ impl App {
         let tax = self.tax.clone();
         let provider = self.provider.clone();
         let history = self.chat_history(index);
+        let research_state = self.research_state.clone();
+        let blocked: HashSet<u64> = if self.cfg.simkl.hide_watched {
+            self.simkl_store.movies.values().filter(|m| m.status == "completed").map(|m|m.tmdb).collect()
+        } else { HashSet::new() };
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
 
         std::thread::spawn(move || {
             let mut payload = ChatPayload {
+                references: Vec::new(),
+                research: None,
                 index,
                 intro: String::new(),
                 cards: Vec::new(),
@@ -2123,6 +2139,52 @@ impl App {
                 intent: None,
                 error: None,
             };
+
+            if provider.is_llm() {
+                let edits = reuse.as_ref().map(|it| crate::search::edits_description(&it.facets));
+                let result = crate::search::TmdbSource::new(&tmdb).map(|s|s.with_blocked(blocked)).and_then(|source| {
+                    crate::search::run(provider.as_ref(), &source, &text, &research_state,
+                        edits.as_deref(), &cancel, &mut |stage| {
+                            let _ = tx.send(Msg::ChatStage { gen, index, stage });
+                            ctx.request_repaint();
+                        })
+                });
+                if cancel.load(Ordering::Relaxed) { return; }
+                match result {
+                    Ok(response) => {
+                        for doc in response.references {
+                            if !payload.references.iter().any(|r|r.url==doc.url) {
+                                payload.references.push(chat::CardSource{title:doc.title,url:doc.url,license:doc.license});
+                            }
+                        }
+                        payload.intro = response.text;
+                        payload.understood = response.understood;
+                        payload.limit = response.notice;
+                        payload.notes = response.notes;
+                        payload.total = response.selections.len() as u32;
+                        payload.research = Some(response.state);
+                        payload.cards = response.selections.into_iter().map(|s| {
+                            let d = s.evidence.details;
+                            let mut sources: Vec<chat::CardSource> = Vec::new();
+                            for doc in s.evidence.documents {
+                                if !sources.iter().any(|s|s.url == doc.url) {
+                                    sources.push(chat::CardSource { title:doc.title, url:doc.url, license:doc.license });
+                                }
+                            }
+                            chat::Card {
+                                movie: d.movie, perche: s.judgment.why, consiglio: s.judgment.caveat,
+                                meta: Some(chat::CardMeta { director: d.director, runtime: d.runtime,
+                                    flatrate: d.flatrate, rent: d.rent, imdb: d.imdb, sources }),
+                            }
+                        }).collect();
+                        payload.context = Intent::default();
+                    }
+                    Err(error) => { payload.error = Some(error); }
+                }
+                let _ = tx.send(Msg::ChatDone { gen, payload: Box::new(payload) });
+                ctx.request_repaint();
+                return;
+            }
 
             // 1) Interpreta il messaggio. Il contesto dei seguiti e locale
             //    alla chat: i filtri della griglia non c'entrano.
@@ -2495,6 +2557,7 @@ impl App {
                     meta: Some(chat::CardMeta {
                         director: d.director.clone(), runtime: d.runtime,
                         flatrate: d.flatrate.clone(), rent: d.rent.clone(), imdb: d.imdb,
+                        sources: Vec::new(),
                     }),
                 })
             }).collect();

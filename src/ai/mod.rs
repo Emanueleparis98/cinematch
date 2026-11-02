@@ -17,6 +17,15 @@ fn untrusted_block(text: &str) -> String {
     format!("<<<{tag}>>>\n{text}\n<<<FINE_{tag}>>>")
 }
 
+fn research_object(raw:&str)->Result<serde_json::Value,String> {
+    let begin=raw.find('{').ok_or("Risposta AI senza oggetto JSON.")?;
+    // Il provider può aggiungere testo o parentesi dopo un oggetto completo.
+    // Deserializziamo un valore completo, senza inventare chiusure mancanti.
+    serde_json::Deserializer::from_str(&raw[begin..]).into_iter::<serde_json::Value>()
+        .next().ok_or_else(||"Risposta AI incompleta.".to_string())?
+        .map_err(|error|format!("Risposta AI non conforme: {error}. Riprova la ricerca."))
+}
+
 fn cancelled(cancel: Option<&AtomicBool>) -> bool {
     cancel.is_some_and(|c| c.load(Ordering::Relaxed))
 }
@@ -276,6 +285,10 @@ pub struct Intent {
 }
 
 pub trait IntentProvider: Send + Sync {
+    /// Protocollo del motore conversazionale. Nessun ripiego semantico a regole.
+    fn research_json(&self, _system: &str, _data: &serde_json::Value, _tokens: u32, _cancel: &AtomicBool) -> Result<serde_json::Value, String> {
+        Err("La ricerca conversazionale richiede un modello AI configurato.".into())
+    }
     fn label(&self) -> String;
     fn is_llm(&self) -> bool {
         false
@@ -1985,6 +1998,10 @@ impl LlmProvider {
         );
         let timeout = if self.cfg.effort.eq_ignore_ascii_case("max") {
             Duration::from_secs(if stream { 120 } else { 90 })
+        } else if max_tokens >= 3000 {
+            // Le verifiche documentali della nuova chat possono avere molte
+            // fonti e risposte strutturate lunghe anche senza thinking.
+            Duration::from_secs(60)
         } else {
             Duration::from_secs(if stream { 40 } else { 20 })
         };
@@ -2014,7 +2031,8 @@ impl LlmProvider {
                 obj.remove("reasoning_effort");
                 obj.remove("reasoning");
                 obj.remove("chat_template_kwargs");
-                obj.remove("max_tokens");
+                // Il tetto resta vincolante anche nel tentativo compatibile:
+                // non affidare un passaggio di ricerca al default del server.
             }
             retried = true;
         }
@@ -2034,11 +2052,7 @@ impl LlmProvider {
             LlmKind::OpenAi => {
                 let resp = self.openai_send(system, user, false, max_tokens, cancel)?;
                 let status = resp.status();
-                let text = match read_text(resp, cancel) {
-                    Ok(t) => t,
-                    Err(e) if cancelled(cancel) => return Err(e),
-                    Err(_) => String::new(),
-                };
+                let text = read_text(resp, cancel)?;
                 if !status.is_success() {
                     return Err(format!(
                         "LLM ha risposto {}: {}",
@@ -2377,6 +2391,20 @@ impl LlmProvider {
 }
 
 impl IntentProvider for LlmProvider {
+    fn research_json(&self, system: &str, data: &serde_json::Value, tokens: u32, cancel: &AtomicBool) -> Result<serde_json::Value, String> {
+        let user = untrusted_block(&data.to_string());
+        // Qui `tokens` è il budget TOTALE del passaggio, ragionamento incluso.
+        // Il vecchio adattatore moltiplica per 3 a sforzo max: compensiamo per
+        // non prenotare decine di migliaia di token per ogni operazione.
+        let allocation = if self.cfg.effort.eq_ignore_ascii_case("max") { tokens / 3 } else { tokens };
+        let raw = self.chat(system, &user, allocation, Some(cancel))?;
+        research_object(&raw).inspect_err(|_error| {
+            if std::env::var_os("CINEMATCH_RESEARCH_DIAGNOSTICS").is_some() {
+                let path=crate::infra::config::Config::dir().join("last-invalid-research-response.txt");
+                let _=std::fs::write(path,&raw);
+            }
+        })
+    }
     fn label(&self) -> String {
         format!(
             "AI ({} · {})",
@@ -2589,6 +2617,15 @@ impl IntentProvider for LlmProvider {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn research_json_reads_complete_objects_without_guessing_missing_brackets() {
+        assert_eq!(super::research_object(r#"{"judgments":[{"id":1}]}],"extra":[]}"#).unwrap()["judgments"][0]["id"],1);
+        assert_eq!(super::research_object(r#"```json
+{"quote":"a brace } inside a string"}
+```"#).unwrap()["quote"],"a brace } inside a string");
+        assert!(super::research_object(r#"{"judgments":[{"id":1}"#).is_err());
+        assert!(super::research_object("   ").is_err());
+    }
     use super::*;
 
     #[test]
