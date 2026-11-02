@@ -1,19 +1,23 @@
 {
   "manifest_version": 3,
   "name": "CineMatch — Correnti del cinema",
-  "version": "1.0.0",
-  "description": "Esplora 74 correnti e percorsi cinematografici. Prepara e inserisci prompt nelle tue chat AI, con invio sotto il tuo controllo.",
+  "version": "1.1.0",
+  "description": "Esplora 74 correnti, prepara prompt per le chat AI e aggiungi locandine, cast e registi da TMDB alle risposte. Invio manuale.",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "storage", "scripting", "clipboardWrite"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.deepseek.com/*",
     "https://claude.ai/*",
-    "https://gemini.google.com/*"
+    "https://gemini.google.com/*",
+    "https://api.themoviedb.org/*",
+    "https://image.tmdb.org/*"
   ],
   "background": {"service_worker": "background.js", "type": "module"},
   "side_panel": {"default_path": "panel.html"},
+  "options_ui": {"page": "options.html", "open_in_tab": true},
+  "content_scripts": [{"matches": ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://claude.ai/*", "https://gemini.google.com/*"], "js": ["references.js", "enrich.js"], "run_at": "document_idle"}],
   "action": {"default_title": "Apri CineMatch", "default_icon": "assets/cinematch.png"},
   "icons": {"16": "assets/cinematch.png", "32": "assets/cinematch.png", "48": "assets/cinematch.png", "128": "assets/cinematch.png"},
-  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self'; img-src 'self'; style-src 'self'; font-src 'self'"}
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://api.themoviedb.org https://image.tmdb.org; img-src 'self' data:; style-src 'self'; font-src 'self'"}
 }

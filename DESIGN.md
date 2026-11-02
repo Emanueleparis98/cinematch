@@ -18,3 +18,9 @@ La nuova sezione eredita l'identità già presente nell'app, senza sostituirla.
   al colore. I periodi indicativi e le note di attribuzione sono parte del contenuto.
 - Il prompt superato da nuovi criteri richiede una rigenerazione prima della copia.
   Errori e stato di copia sono inline. Le fonti si aprono su azione dell'utente.
+- Risposte AI: controlli inline, schede sotto la risposta e stili isolati in Shadow
+  DOM. Locandina accanto a titolo/anno; regia e cast espandibili, foto con proporzioni
+  stabili, alternative esplicite per immagini mancanti. Paginazione progressiva,
+  abbinamenti incerti da scegliere e modulo per cercare/correggere senza modali.
+- Impostazioni TMDB in scheda dedicata: credenziale mascherata, verifica prima del
+  salvataggio, rimozione e scelta della persistenza. Crediti e logo ufficiale TMDB.

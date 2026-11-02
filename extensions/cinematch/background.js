@@ -1,5 +1,44 @@
 import {PROVIDERS,providerForUrl} from "./core.js";
 import {insertIntoComposer} from "./composer.js";
+import {credential,createTmdbClient} from "./tmdb.js";
+
+const storageReady=Promise.all([
+  chrome.storage.local.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"}),
+  chrome.storage.session.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"})
+]);
+async function getCredential(){
+  await storageReady;
+  const session=await chrome.storage.session.get("tmdbCredential");
+  return session.tmdbCredential??(await chrome.storage.local.get("tmdbCredential")).tmdbCredential??null;
+}
+const tmdb=createTmdbClient({getCredential});
+const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
+chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+  if(sender.id!==chrome.runtime.id||!message?.type?.startsWith("tmdb-"))return false;
+  const settings=extensionPage(sender,"options.html");
+  const trusted=settings||extensionPage(sender,"panel.html");
+  const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);
+  if(!trusted&&!chat)return false;
+  (async()=>{
+    await storageReady;
+    if(message.type==="tmdb-status")return {ok:true,configured:Boolean(await getCredential())};
+    if(message.type==="tmdb-options"){await chrome.runtime.openOptionsPage();return {ok:true};}
+    if(message.type==="tmdb-save"&&settings){
+      const value=credential(message.credential);
+      // Validate before replacing a working credential. Never return it to a tab.
+      const candidate=createTmdbClient({getCredential:async()=>value});await candidate.verify();
+      if(message.remember){await chrome.storage.local.set({tmdbCredential:value});await chrome.storage.session.remove("tmdbCredential");}
+      else {await chrome.storage.session.set({tmdbCredential:value});await chrome.storage.local.remove("tmdbCredential");}
+      tmdb.clear();return {ok:true};
+    }
+    if(message.type==="tmdb-remove"&&settings){await chrome.storage.local.remove("tmdbCredential");await chrome.storage.session.remove("tmdbCredential");tmdb.clear();return {ok:true};}
+    if(message.type==="tmdb-search"&&chat)return {ok:true,...await tmdb.search(message.reference)};
+    if(message.type==="tmdb-details"&&chat)return {ok:true,item:await tmdb.details(message.kind,message.id)};
+    if(message.type==="tmdb-image"&&chat)return {ok:true,data:await tmdb.image(message.path,message.size)};
+    return {ok:false,error:"Operazione non disponibile."};
+  })().then(respond).catch(error=>respond({ok:false,error:error instanceof Error?error.message:"TMDB non disponibile. Riprova."}));
+  return true;
+});
 
 chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true}).catch(()=>{});
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{

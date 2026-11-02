@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CineMatch · Immagini TMDB</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script></head>
+<body class="settings-page"><main>
+  <div class="brand">CINE <span>MATCH</span></div>
+  <h1>Locandine, volti e cinema</h1>
+  <p>Collega TMDB per aggiungere locandine e foto di attori e registi alle risposte delle tue chat.</p>
+  <p id="connection" class="notice" role="status">Controllo configurazione…</p>
+  <form id="credential-form">
+    <label for="credential">Chiave API v3 oppure API Read Access Token TMDB</label>
+    <div class="credential-row"><input id="credential" type="password" autocomplete="off" spellcheck="false" required aria-describedby="credential-help"><button id="reveal" type="button" aria-pressed="false">Mostra</button></div>
+    <p id="credential-help" class="muted small">La credenziale resta nel browser. Non viene inserita nei prompt o comunicata ai siti delle chat.</p>
+    <label class="checkbox-label remember"><input id="remember" type="checkbox" checked> Ricorda su questo dispositivo</label>
+    <p class="muted small">Disattiva questa opzione per conservarla soltanto fino al riavvio del browser.</p>
+    <div class="settings-actions"><button id="save" type="submit" class="primary">Verifica e salva</button><button id="remove" type="button">Rimuovi credenziale</button></div>
+    <p id="settings-status" role="status" aria-live="polite"></p>
+  </form>
+  <section><h2>Come vedere le immagini</h2><ol><li>Apri o ricarica la chat dopo l'aggiornamento dell'estensione.</li><li>Sulla risposta premi <strong>Mostra locandine e cast</strong>.</li><li>Se un titolo è ambiguo, scegli la scheda corretta. Puoi anche cercare un film o una persona manualmente.</li></ol>
+    <p>Vengono elaborati solo i titoli nella risposta scelta. TMDB riceve titoli, anni o nomi da cercare; la conversazione intera resta nella chat. Le immagini si caricano su richiesta e non viene costruito un archivio locale.</p>
+  </section>
+  <section class="credits"><h2>Crediti</h2><a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" aria-label="The Movie Database"><img src="assets/tmdb.svg" alt="TMDB" width="120" height="48"></a><p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p><p class="muted small">L'API TMDB è gratuita per uso non commerciale con attribuzione. I limiti delle chat AI rimangono quelli dei rispettivi servizi. <a href="https://developer.themoviedb.org/docs/faq" target="_blank" rel="noopener noreferrer">Condizioni TMDB</a>.</p></section>
+</main></body></html>

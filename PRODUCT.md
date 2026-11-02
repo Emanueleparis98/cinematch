@@ -14,9 +14,13 @@ nell'editor di ChatGPT, DeepSeek, Claude o Gemini dal pannello laterale. L'invio
 è eseguito dall'utente nel servizio esterno. Copia e incolla servono altre chat.
 
 Il pacchetto browser è autonomo, Manifest V3, senza dipendenze runtime esterne.
-Generazione e consultazione sono locali. Non richiede chiavi API e non invia
-messaggi. Non acquisisce database di film, locandine o risposte; non legge le
-conversazioni. Le bozze restano in storage.session nella memoria del browser.
+Generazione e consultazione sono locali. Non richiede API AI e non invia messaggi.
+L'arricchimento facoltativo legge la sola risposta scelta al clic e cerca su TMDB
+titoli, anni e persone; mostra locandine, cast e registi senza modificare il testo.
+Una credenziale TMDB personale è configurata nelle opzioni, isolata dai siti.
+Abbinamenti incerti richiedono una scelta; ricerca manuale e correzione disponibili.
+Non acquisisce un database progressivo. Le bozze restano in storage.session;
+solo la credenziale può essere ricordata in storage.local su scelta dell'utente.
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 

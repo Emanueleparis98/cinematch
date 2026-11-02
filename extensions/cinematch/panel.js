@@ -145,6 +145,7 @@ async function boot() {
   $("open-chat").addEventListener("click",async()=>{try{const tab=await chrome.tabs.create({url:currentProvider().url,windowId});state.targetTabId=tab.id;status("Attendi che la chat sia pronta, poi premi Inserisci nella chat.");}catch{status("Non è stato possibile aprire la chat. Puoi usare Copia.","error");}});
   $("insert").addEventListener("click",()=>insert());$("append").addEventListener("click",()=>insert("append"));$("replace").addEventListener("click",()=>insert("replace"));$("cancel-conflict").addEventListener("click",()=>{resetConflict();status("Bozza mantenuta.");});
   $("expand").addEventListener("click",async()=>{await saveNow();await chrome.tabs.create({url:chrome.runtime.getURL("panel.html?view=full"),windowId});});
+  $("tmdb-settings").addEventListener("click",()=>chrome.runtime.openOptionsPage());
   chrome.tabs.onActivated.addListener(info=>{if(info.windowId===windowId)syncActive();});
   chrome.tabs.onUpdated.addListener((_id,info)=>{if(info.url||info.status==="complete")syncActive();});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveNow();});

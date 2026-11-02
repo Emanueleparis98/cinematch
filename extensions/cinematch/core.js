@@ -52,7 +52,7 @@ export function generatePrompt(request, catalog) {
   const watched = request.watched.map(s => s.trim()).filter(Boolean);
   if (watched.length) text += `\nGIÀ VISTI / GIÀ PROPOSTI — non riproporre questi titoli, nemmeno con un titolo alternativo:\n${watched.join("; ")}\n`;
   if (request.question.trim()) text += `\nLA MIA RICHIESTA\n${request.question.trim()}\n`;
-  text += "\nCOME RISPONDERE\nPer ogni film che proponi indica titolo originale, titolo italiano se noto, anno e regista; spiega l'attinenza specifica e come rispetta i miei criteri. ";
+  text += "\nCOME RISPONDERE\nPer ogni film che proponi usa un'intestazione chiara nel formato Titolo originale (anno) — Regia: Nome del regista; aggiungi il titolo italiano se noto e spiega l'attinenza specifica e come rispetta i miei criteri. ";
   text += request.depth === "concise" ? "Usa spiegazioni brevi e concrete. " : "Aggiungi un'analisi storica e formale più approfondita. ";
   text += "Distingui fatti verificati, attribuzioni discusse e tue inferenze. Se puoi navigare, controlla i riferimenti e cita pagine pertinenti; altrimenti dichiara che non hai verificato online. Non inventare fonti, URL, film, dati o disponibilità sulle piattaforme. Evita spoiler importanti. Se alcuni criteri sono incompatibili, spiegalo prima di proporre alternative.\n";
   return {schema_version:1,prompt:text,warnings:selected.some(m => m.kind !== "movement") ? ["La selezione comprende categorie diverse dai movimenti storici; il prompt le distingue."] : []};
