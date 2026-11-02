@@ -14,7 +14,7 @@ export function validateReference(value){
 }
 function person(p){return {id:p.id,name:p.name??'',role:p.character??p.job??p.known_for_department??'',photo:safeImagePath(p.profile_path)};}
 export function summarizeMovie(data){
-  return {type:'movie',id:data.id,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
+  return {type:'movie',id:data.id,imdbId:/^tt\d{5,12}$/.test(data.imdb_id??'')?data.imdb_id:null,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
 }
 export function chooseMatch(results,ref){
   if(ref.type==='person'){

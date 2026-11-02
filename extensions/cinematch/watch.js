@@ -1,0 +1,119 @@
+import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from './streams.js';
+import {enhanceSelects,refreshSelects} from './controls.js';
+const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
+const prefix='streamAddon:';let addons=[],movie=null,groups=[],generation=0,searchAbort=null,hls=null,selected=null,blockedUrl=null,playGeneration=0,playTimer;
+const video=$('video');video.crossOrigin='anonymous';
+const status=(id,text,error=false)=>{$(id).textContent=text;$(id).classList.toggle('error',error);};
+const allowed=async url=>chrome.permissions.contains({origins:[permissionOrigin(url)]});
+async function grant(url){if(await allowed(url))return true;return chrome.permissions.request({origins:[permissionOrigin(url)]});}
+function tab(name){const isAddons=name==='addons';$('addons-pane').hidden=!isAddons;$('player-pane').hidden=isAddons;$('show-addons').setAttribute('aria-pressed',String(isAddons));$('show-player').setAttribute('aria-pressed',String(!isAddons));history.replaceState(null,'',location.pathname+location.search+(isAddons?'#addons':''));}
+$('show-addons').onclick=()=>tab('addons');$('setup-addons').onclick=()=>{tab('addons');$('addon-url').focus();};$('show-player').onclick=()=>tab('player');
+async function readAddons(){
+  const data=await chrome.storage.local.get(null);addons=Object.entries(data).filter(([key])=>key.startsWith(prefix)).flatMap(([key,value])=>{
+    try{const addon=parseManifest({id:value.id,name:value.name,version:value.version,description:value.description,resources:value.resources.map(r=>({name:'stream',types:r.types,idPrefixes:r.prefixes})),types:['movie']},value.url);return [{...addon,key,enabled:value.enabled!==false}];}catch{return [];}
+  }).sort((a,b)=>a.name.localeCompare(b.name,'it'));renderAddons();
+}
+function renderAddons(){
+  $('addon-count').textContent=String(addons.length);$('installed-count').textContent=`${addons.filter(a=>a.enabled).length} attivi`;$('installed-empty').hidden=addons.length>0;$('installed-list').replaceChildren();
+  for(const addon of addons){
+    const row=el('div',undefined,'installed-addon'),body=el('div'),label=el('label'),check=el('input');check.type='checkbox';check.checked=addon.enabled;check.setAttribute('aria-label',`Attiva ${addon.name}`);
+    check.onchange=async()=>{const {key,...saved}=addon;saved.enabled=check.checked;await chrome.storage.local.set({[key]:saved});};label.append(check,el('span',addon.name));body.append(label,el('p',`${httpUrl(addon.url).host}${addon.version?' · '+addon.version:''}`));
+    const remove=el('button','Rimuovi');remove.type='button';remove.setAttribute('aria-label',`Rimuovi ${addon.name}`);remove.onclick=async()=>{await chrome.storage.local.remove(addon.key);};row.append(body,remove);$('installed-list').append(row);
+  }
+}
+$('addon-form').onsubmit=async event=>{
+  event.preventDefault();const button=event.submitter;
+  try{
+    const url=manifestUrl($('addon-url').value);button.disabled=true;status('addon-status',`Collegamento a ${httpUrl(url).host}…`);
+    if(!await grant(url))throw new Error('Accesso al sito non concesso. Riprova e consenti il collegamento.');
+    if(addons.length>=20&&!addons.some(a=>a.url===url))throw new Error('Hai già 20 addon. Rimuovine uno prima di aggiungerne altri.');
+    const addon=parseManifest(await fetchJson(url),url),digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(url)),key=prefix+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+    await chrome.storage.local.set({[key]:addon});$('addon-url').value='';status('addon-status',`${addon.name} collegato. Torna al player per scegliere una sorgente.`);
+  }catch(error){status('addon-status',error.message,true);}finally{button.disabled=false;}
+};
+function stopVideo(){clearTimeout(playTimer);if(hls){hls.destroy();hls=null;}video.pause();video.removeAttribute('src');video.replaceChildren();video.load();$('retry-play').hidden=true;$('resume-play').hidden=true;$('grant-media').hidden=true;blockedUrl=null;}
+function renderStreams(){
+  const filter=$('source-filter'),previous=filter.value;filter.replaceChildren(new Option('Tutti gli addon','all'));
+  for(const g of groups)filter.append(new Option(g.name,g.key));filter.value=[...filter.options].some(o=>o.value===previous)?previous:'all';refreshSelects();$('source-filter-wrap').hidden=groups.length<2;
+  const visible=groups.filter(g=>filter.value==='all'||filter.value===g.key);$('stream-list').replaceChildren();
+  for(const g of visible){
+    if(g.error){const row=el('div',undefined,'stream-row'),body=el('div');body.append(el('h3',g.name),el('p',g.error));row.append(body);
+      if(g.permission){const retry=el('button','Ricollega');retry.type='button';retry.onclick=async()=>{if(await grant(g.permission))await loadStreams();};row.append(retry);}$('stream-list').append(row);continue;}
+    for(const stream of g.streams){const row=el('div',undefined,'stream-row'),body=el('div');row.classList.toggle('selected',selected===stream);body.append(el('h3',stream.name));if(stream.description)body.append(el('p',stream.description));body.append(el('p',`${g.name} · ${{hls:'HLS',video:'HTTP',external:'Sito esterno',torrent:'Torrent',headers:'Proxy richiesto',dash:'DASH',unsupported:'Non supportato'}[stream.kind]}`,'stream-addon'));row.append(body);
+      if(stream.playable){const play=el('button',selected===stream?'Sorgente attiva':'Riproduci','primary');play.type='button';play.setAttribute('aria-label',`Riproduci ${stream.name} da ${g.name}`);play.onclick=()=>playStream(stream);row.append(play);}
+      else if(stream.kind==='external'){const link=el('a','Apri sul sito');link.href=stream.externalUrl;link.target='_blank';link.rel='noopener noreferrer';row.append(link);}
+      else row.append(el('span',stream.reason,'unavailable'));$('stream-list').append(row);
+    }
+  }
+  const total=groups.reduce((n,g)=>n+g.streams.length,0),playable=groups.reduce((n,g)=>n+g.streams.filter(s=>s.playable).length,0);$('no-sources').hidden=total>0;
+  if(total)status('sources-status',`${total} sorgenti · ${playable} riproducibili nel browser`);
+  else if(movie&&addons.some(a=>a.enabled))status('sources-status','Nessun flusso trovato. Prova un altro addon o importa una lista JSON.');
+  else status('sources-status',movie?'Aggiungi un addon o importa una lista JSON per questo film.':'Apri una locandina nella chat oppure importa una lista JSON.');
+  $('setup-addons').textContent=addons.length?'Gestisci addon':'Aggiungi il primo addon';
+}
+async function loadStreams(){
+  const current=++generation;searchAbort?.abort();searchAbort=new AbortController();const signal=searchAbort.signal;
+  groups=groups.filter(g=>g.imported);renderStreams();if(!movie)return;
+  const queue=addons.filter(a=>a.enabled);if(queue.length)status('sources-status','Ricerca dei flussi negli addon…');
+  async function next(){while(queue.length){const addon=queue.shift();let group={key:addon.key,name:addon.name,streams:[]};
+    try{const url=resourceUrl(addon,movie);if(!url){group.error='Identificativo del film non supportato da questo addon.';}else if(!await allowed(url)){group.error='Il collegamento al sito deve essere autorizzato di nuovo.';group.permission=url;}else{group.streams=parseStreams(await fetchJson(url,{signal}));if(!group.streams.length)group.error='Nessun flusso disponibile per questo film.';}}
+    catch(error){group.error=error.message;}if(current!==generation)return;groups.push(group);renderStreams();
+  }}
+  await Promise.all([next(),next(),next()]);if(current===generation)renderStreams();
+}
+$('source-filter').onchange=renderStreams;$('refresh-streams').onclick=loadStreams;
+async function playStream(stream){
+  const current=++playGeneration;selected=stream;stopVideo();renderStreams();status('playback-status','Connessione alla sorgente…');
+  try{
+    if(!await grant(stream.url))throw new Error('Accesso alla sorgente non concesso. Premi Riprova per consentirlo.');
+    if(current!==playGeneration)return;
+    let isHls=stream.kind==='hls';
+    // Some addons return extensionless proxy URLs; inspect only their headers.
+    if(!isHls&&!/\.(?:mp4|webm|mkv|mov|m4v)(?:\?|$)/i.test(stream.url)){
+      const response=await fetch(stream.url,{method:'HEAD',credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(4000)}).catch(()=>null);
+      const mime=response?.headers.get('content-type')??'';isHls=/mpegurl/i.test(mime);
+      if(/dash\+xml/i.test(mime))throw new Error('Questo URL restituisce DASH, non supportato dal player. Scegli una sorgente MP4 o HLS.');
+    }
+    if(current!==playGeneration)return;
+    playTimer=setTimeout(()=>{if(current!==playGeneration)return;stopVideo();playbackError('La sorgente non risponde. Riprova o scegli un altro flusso.');},25000);
+    document.querySelector('.screen').classList.add('active');
+    for(const sub of stream.subtitles){if(/\.vtt(?:\?|$)/i.test(sub.url)){const track=el('track');track.kind='subtitles';track.label=sub.lang;track.srclang=/^[a-z]{2,3}(?:-[a-z]{2})?$/i.test(sub.lang)?sub.lang:'und';track.src=sub.url;video.append(track);}}
+    if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){
+      if(!globalThis.Hls?.isSupported())throw new Error('HLS non è supportato da questo browser. Scegli un altro flusso.');
+      hls=new Hls({enableWorker:false,maxBufferLength:30,backBufferLength:15,xhrSetup:xhr=>{xhr.withCredentials=false;}});
+      hls.on(Hls.Events.ERROR,async(_,data)=>{
+        if(current!==playGeneration)return;
+        const failed=data.context?.url??data.response?.url??data.url;
+        if(failed){try{if(!await allowed(failed)){if(current!==playGeneration)return;clearTimeout(playTimer);blockedUrl=httpUrl(failed).href;$('grant-media').textContent=`Consenti ${httpUrl(failed).host}`;$('grant-media').hidden=false;status('playback-status','Questo flusso usa un altro server: autorizzalo per continuare.',true);hls?.stopLoad();return;}}catch{}}
+        if(data.fatal){hls?.stopLoad();playbackError('Flusso HLS non riproducibile. Riprova o scegli un’altra sorgente.');}
+      });
+      hls.attachMedia(video);hls.loadSource(stream.url);
+    }else video.src=stream.url;
+    await attemptPlay(current);
+  }catch(error){if(current===playGeneration)playbackError(error.message);}
+}
+function playbackError(message){clearTimeout(playTimer);status('playback-status',message,true);$('retry-play').hidden=false;}
+async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration)return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')playbackError('Il server o il codec potrebbero non essere compatibili. Scegli un altro flusso o riprova.');}}
+$('retry-play').onclick=()=>selected&&playStream(selected);$('resume-play').onclick=()=>attemptPlay();$('grant-media').onclick=async()=>{if(blockedUrl&&await grant(blockedUrl))await playStream(selected);};
+video.addEventListener('playing',()=>{clearTimeout(playTimer);status('playback-status',selected?`In riproduzione · ${selected.name}`:'In riproduzione');$('retry-play').hidden=true;$('resume-play').hidden=true;});
+video.addEventListener('waiting',()=>{if(selected)status('playback-status','Caricamento del video…');});
+video.addEventListener('pause',()=>{if(selected&&!video.ended&&!video.error)status('playback-status','In pausa');});
+video.addEventListener('ended',()=>status('playback-status','Riproduzione terminata.'));
+video.addEventListener('error',()=>{if(selected)playbackError('Sorgente non riproducibile: controlla disponibilità e codec, oppure scegli un altro flusso.');});
+async function importStreams(data,name){const streams=parseStreams(data);if(!streams.length)throw new Error('La lista non contiene flussi riconoscibili.');groups=groups.filter(g=>g.key!=='import');groups.push({key:'import',name,streams,imported:true});renderStreams();status('import-status',`${streams.length} flussi importati per questa sessione. La lista non viene salvata.`);}
+$('stream-file').onchange=async()=>{const file=$('stream-file').files[0];if(!file)return;try{if(file.size>MAX_JSON)throw new Error('File troppo grande: massimo 2 MB.');let data;try{data=JSON.parse(await file.text());}catch{throw new Error('Il file non contiene JSON valido.');}await importStreams(data,file.name);}catch(error){status('import-status',error.message,true);}finally{$('stream-file').value='';}};
+$('json-url-form').onsubmit=async event=>{event.preventDefault();const button=event.submitter;try{const url=httpUrl($('json-url').value).href;button.disabled=true;if(!await grant(url))throw new Error('Accesso al sito non concesso.');await importStreams(await fetchJson(url),'Lista JSON');$('json-url').value='';}catch(error){status('import-status',error.message,true);}finally{button.disabled=false;}};
+chrome.storage.onChanged.addListener(async(changes,area)=>{if(area==='local'&&Object.keys(changes).some(k=>k.startsWith(prefix))){await readAddons();await loadStreams();}});
+window.addEventListener('pagehide',()=>{playGeneration++;searchAbort?.abort();stopVideo();});
+async function boot(){
+  enhanceSelects();tab(location.hash==='#addons'?'addons':'player');await readAddons();
+  const id=Number(new URL(location.href).searchParams.get('movie'));
+  if(Number.isSafeInteger(id)&&id>0){
+    status('film-meta','Caricamento del film da TMDB…');
+    const result=await chrome.runtime.sendMessage({type:'watch-movie',id});
+    if(result?.ok){movie=result.item;$('film-title').textContent=movie.title;document.title=`${movie.title} · CineMatch`;status('film-meta',[movie.year,movie.directors.map(p=>p.name).join(', ')].filter(Boolean).join(' · '));$('film-source').href=`https://www.themoviedb.org/movie/${id}`;$('film-source').hidden=false;}
+    else status('film-meta',result?.error??'Film non disponibile. Riapri la locandina o controlla TMDB nelle opzioni.',true);
+  }
+  await loadStreams();
+}
+boot().catch(()=>{status('sources-status','Impossibile caricare il player. Ricarica la scheda per riprovare.',true);});

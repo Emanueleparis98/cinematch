@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 2.1.0
+# CineMatch — estensione browser 3.0.0
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-2.1.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.0.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -49,8 +49,8 @@ in grassetto e descrizioni nello stesso paragrafo, separati da un ritorno a capo
 Le immagini seguono tipografia e colori della pagina della chat; il tema delle
 schermate proprie dell'estensione rimane sempre scuro.
 Non vengono inseriti pannelli, titoli duplicati, pulsanti, impostazioni, moduli,
-selettori, riquadri di errore o richieste di correzione. Le immagini sono link alle
-schede TMDB; il testo originale dell'AI viene mantenuto.
+selettori, riquadri di errore o richieste di correzione. La locandina apre il player
+CineMatch; foto delle persone e attribuzione aprono TMDB. Il testo dell’AI rimane invariato.
 
 Emoji, numerazioni e sottotitoli vengono ripuliti per la ricerca: ad esempio
 `🌊 2. Flow - Un mondo da salvare (2024)`. Quando necessario vengono consultati
@@ -65,6 +65,18 @@ vicino all'area visibile e le altre arrivano scorrendo. I ritratti su schermi
 stretti scorrono orizzontalmente. Per un film vengono mostrati regia e fino a
 quattro interpreti con foto, senza un pannello di gestione del cast.
 
+## Addon e player
+
+L’icona video **Addon e player** nell’intestazione apre la nuova sezione.
+Collega un manifest compatibile con Stremio/Nuvio, poi clicca la locandina di un
+film nella risposta AI. Scegli il flusso nella scheda CineMatch per riprodurlo.
+Puoi importare file o indirizzi JSON anche senza addon. Video HTTP e HLS sono
+integrati; torrent, DASH, DRM e header senza proxy non vengono convertiti.
+
+I sette configuratori indicati sono disponibili in una sezione espandibile:
+completa la configurazione sui loro siti e incolla il manifest personale.
+Nessun addon è preinstallato. [Guida e collaudo](../../docs/estensione-3.0.0-player.md).
+
 ## Costi, dati e permessi
 
 La consultazione della guida e la generazione sono locali. Nessuna API AI,
@@ -77,20 +89,25 @@ limiti: https://developer.themoviedb.org/docs/faq. Logo ufficiale e dichiarazion
 sono nei crediti della pagina di connessione. Le immagini sono caricate al momento,
 non incluse nello ZIP. Font Manrope e relativa licenza sono locali.
 
-Accesso esclusivamente a quattro siti AI (`chatgpt.com`, `chat.deepseek.com`,
+Accesso iniziale a quattro siti AI (`chatgpt.com`, `chat.deepseek.com`,
 `claude.ai`, `gemini.google.com`) e ai due host TMDB (`api.themoviedb.org`,
-`image.tmdb.org`). Nessun permesso generale ai siti, cookie o cronologia.
+`image.tmdb.org`). I siti di addon e sorgenti video richiedono autorizzazioni
+opzionali per singolo host, soltanto quando li colleghi o avvii un flusso.
+Nessuna autorizzazione generale viene concessa in fase di installazione.
+Non richiede accesso a cookie o cronologia.
 Le risposte AI vengono analizzate localmente; TMDB riceve titoli, anni o nomi,
 richieste di schede e immagini, non il testo completo della conversazione.
 I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
 `sidePanel` apre il pannello, `scripting` inserisce il prompt nei quattro editor,
 `clipboardWrite` copia il testo, `storage` conserva le bozze nella sessione.
-La sola credenziale può essere ricordata in `storage.local` scegliendo **Ricorda
+La credenziale può essere ricordata in `storage.local` scegliendo **Ricorda
 su questo dispositivo**, oppure in `storage.session` fino al riavvio.
 Entrambi gli storage hanno accesso TRUSTED_CONTEXTS: gli script inseriti nelle
 pagine non possono leggere la chiave. Nessun uso di `storage.sync`. La chiave
 personale non viene inclusa nei sorgenti, nel pacchetto o negli URL delle chat.
+Anche i manifest personali degli addon restano in storage.local, accessibile
+soltanto alle pagine dell’estensione. Le liste importate e i flussi non vengono salvati.
 
 Richieste concorrenti limitate a tre, timeout e al massimo una riprova automatica
 per guasti transitori. Nessun retry per ambiguità o chiave non valida. Le schede

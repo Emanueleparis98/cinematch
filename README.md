@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 2.1.0
+# CineMatch — estensione browser 3.0.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-2.1.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.0.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -36,9 +36,20 @@ Emoji, numerazioni e sottotitoli tradotti vengono gestiti automaticamente.
 Vengono analizzate localmente le risposte dell'AI, non i messaggi dell'utente.
 TMDB riceve titoli, anni o nomi, non la conversazione. Nessun invio automatico
 di messaggi e nessuna API AI. Quattro host AI e i due host ufficiali TMDB autorizzati;
-nessuna cronologia o accesso generale ai siti. La chiave non viene esposta alle chat.
+nessuna cronologia o accesso generale iniziale ai siti. Addon e sorgenti video
+richiedono permessi opzionali per singolo host. La chiave non viene esposta alle chat.
 La bozza è conservata in memoria per la sessione del browser, senza archivio
 progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
+
+## Addon e player integrato
+
+Apri **Addon e player** dall’icona video nell’intestazione. Collega i tuoi
+manifest compatibili con Stremio/Nuvio, poi clicca una locandina nella chat:
+scegli una sorgente e avvia il film in una scheda CineMatch. Sono supportati
+video HTTP e HLS, con pausa, seek e schermo intero. Puoi importare anche liste JSON.
+Torrent, DRM, DASH e header che richiedono un proxy non vengono convertiti dal browser.
+
+[Uso, compatibilità, privacy e collaudo del player](docs/estensione-3.0.0-player.md).
 
 ## Sviluppo dell'estensione
 
@@ -49,6 +60,7 @@ pnpm test
 pnpm exec playwright install chromium
 pnpm test:browser
 pnpm test:images
+pnpm test:player
 ```
 
 Python usa solo la libreria standard per assemblare `dist/CineMatch-Chrome` e lo

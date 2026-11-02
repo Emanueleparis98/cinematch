@@ -32,6 +32,17 @@ alla riga del titolo, prima della descrizione anche nei paragrafi con titolo inl
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 
+Dal clic sulla locandina si passa ora al player in una scheda dell’estensione,
+con il film risolto tramite TMDB/IMDb e le sorgenti degli addon scelti dall’utente.
+La sezione Addon collega manifest compatibili con Stremio/Nuvio, senza copiare
+il codice GPL del player nativo Nuvio. HTTP e HLS sono riprodotti nel browser;
+torrent, DASH, DRM e header senza proxy sono dichiarati non compatibili.
+Liste JSON possono essere importate solo per la sessione. I soli dati persistenti
+nuovi sono i manifest e le preferenze di attivazione, non i film o i flussi.
+I permessi opzionali vengono richiesti per gli host scelti. Nessun cookie,
+testo della chat o credenziale TMDB viene inviato agli addon. Il tema scuro,
+Manrope, i token e i controlli del sistema esistente restano invariati.
+
 La qualità e gli eventuali limiti della risposta dipendono dal servizio esterno.
 Le schede includono note sui casi discussi; nessuna percentuale di infallibilità
 o promessa di completezza universale.
