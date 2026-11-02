@@ -2,7 +2,18 @@
  * world, never in the AI site's JavaScript world. No network or DOM access. */
 (() => {
   const normalize = text => String(text).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('it').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  const trimTitle = text => text.replace(/[*_`]/g, '').replace(/^(?:\s*(?:#{1,6}\s*|\d+[.)]\s*|[-•]\s*))+/,'').replace(/^titolo(?: originale| italiano)?\s*:\s*/i, '').replace(/^["“«]+|["”»]+$/g, '').replace(/[\s:—–|,]+$/g, '').trim();
+  const trimTitle = value => {
+    let text=value.replace(/[*_`]/g,'').trim();
+    // Decoration may precede the list number: "🌊 2. Flow". Do not strip
+    // leading digits from real titles such as "2001: Odissea nello spazio".
+    for(let i=0;i<6;i++){
+      const before=text;
+      text=text.replace(/^\s*(?:#{1,6}\s*|\d{1,3}[.)]\s+|[-•–—]\s+)/,'')
+        .replace(/^(?:\s|\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u200B\uFE0F\uFEFF\u200D])+/u,'');
+      if(text===before)break;
+    }
+    return text.replace(/^titolo(?: originale| italiano)?\s*:\s*/i,'').replace(/^["“«]+|["”»]+$/g,'').replace(/[\s:—–|,]+$/g,'').trim();
+  };
   function extract(text) {
     if (typeof text !== 'string' || text.length > 200000) throw new Error('Risposta troppo lunga: cerca un titolo manualmente.');
     const lines = text.split(/\r?\n/).map(line => line.replace(/\[(\d+)\]/g, '').trim()).filter(Boolean);
@@ -26,7 +37,7 @@
       }
       title=trimTitle(title);alias=trimTitle(alias);
       if(title&&title.length<=150&&title.split(/\s+/).length<=22&&!/^(?:nel|tra il|dal|durante|la corrente|il movimento|regia|regista|anno|durata)\b/i.test(title)){
-        const variants=[...new Set([title,...title.split(/\s+\/\s+/),alias].filter(Boolean))];
+        const variants=[...new Set([title,...title.split(/\s+\/\s+/),alias,...title.split(/\s+[–—-]\s+/).slice(0,1)].filter(Boolean))];
         const director=(line+'\n'+(lines[i+1]??'')).match(/(?:regia|regista|director|diretto da)\s*:?\s*([^\n;|]+?)(?=\s+[—–]\s|\s*\*\*|$|\n)/i)?.[1]?.trim().replace(/[.]+$/,'')??'';
         add({type:'movie',title:variants[0],variants,year,director});
       }
@@ -35,5 +46,5 @@
     }
     return refs.filter(ref=>ref.type!=='person'||!refs.some(movie=>movie.type==='movie'&&normalize(movie.director)===normalize(ref.title)));
   }
-  globalThis.CineMatchReferences=Object.freeze({extract,normalize});
+  globalThis.CineMatchReferences=Object.freeze({extract,normalize,trimTitle});
 })();

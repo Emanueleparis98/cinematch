@@ -1,141 +1,107 @@
-# CineMatch — estensione browser 1.2.0
+# CineMatch — estensione browser 2.0.0
 
-74 voci sulle correnti del cinema e un generatore locale di richieste per le chat AI.
-Non richiede l'app Windows, un eseguibile o un server. Consultazione e generazione
-non richiedono API; le immagini facoltative usano una credenziale TMDB personale.
+74 voci sulle correnti del cinema, generatore locale di richieste e immagini
+automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
-## Installazione in Chrome
+## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-1.2.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-2.0.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
-3. Seleziona la cartella estratta che contiene `manifest.json`. Dal menu Estensioni
-   di Chrome fissa CineMatch alla barra e premi la sua icona per aprire il pannello.
+3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
+   Estensioni, poi premi l'icona per aprire il pannello.
 
 Nel repository la cartella già pronta è `dist/CineMatch-Chrome` dopo la build.
-Non selezionare `extensions/cinematch`: è il sorgente, senza dati e font assemblati.
-Non cancellare/spostare la cartella caricata finché usi l'estensione.
+Il sorgente `extensions/cinematch` non include i dati assemblati. Mantieni la
+cartella caricata nella stessa posizione. Chrome 116+; in Edge con sidePanel usa
+`edge://extensions`. Firefox e Safari non sono supportati da questo pacchetto.
+Distribuzione manuale, non pubblicata sullo store e senza aggiornamento automatico.
+Guida Chrome: https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world.
 
-Chrome 116 o successivo. In Edge usa `edge://extensions` e **Carica decompressa**.
-Altri browser Chromium devono supportare l'API `sidePanel`; Firefox e Safari
-non sono supportati da questo pacchetto. Questa distribuzione si carica manualmente:
-non è una pubblicazione sul Chrome Web Store e non si aggiorna automaticamente.
+## Esplorare e preparare una richiesta
 
-Guida ufficiale: https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world
+In **Esplora**, cerca per corrente, sinonimo, autore o opera. I filtri per
+categoria, periodo e area sono espandibili. Apri una voce per caratteristiche,
+contesto, esempi, limiti interpretativi e fonti. Le caselle permettono selezioni
+multiple; **Prepara per questa voce** prepara una sola selezione.
 
-## Uso
+In **La tua richiesta**, scrivi cosa desideri e scegli obiettivo, quantità libera
+o esatta, preferenze, esclusioni e già visti. Genera e rileggi il prompt, poi usa
+**Inserisci nella chat** o **Copia**. L'invio resta all'utente. Una bozza esistente
+richiede la scelta di aggiungere o sostituire; non viene sovrascritta in silenzio.
+Ctrl+F cerca nelle correnti; Ctrl+Invio genera la richiesta. L'icona in alto apre
+una vista ampia in una scheda del browser.
 
-1. Cerca una corrente, un autore o un'opera. I filtri sono sotto **Filtri e ordinamento**.
-2. Apri la scheda per contesto, caratteristiche, esempi e fonti. Premi
-   **Prepara per questa voce**; per selezioni multiple usa le caselle dell'elenco.
-3. In **Il tuo prompt** scegli obiettivo, quantità automatica o esatta, criteri,
-   esclusioni e titoli già visti. Il generatore non impone cinque film.
-4. Premi **Genera il prompt**. Puoi leggere e modificare tutto il testo.
-5. Apri la chat scelta e attendi che l'editor sia disponibile. Premi
-   **Inserisci nella chat**, poi rileggi e invia tu il messaggio.
+## Immagini come parte della risposta
 
-Inserimento previsto per **ChatGPT, DeepSeek, Claude e Gemini** nei rispettivi siti.
-Se c'è già una bozza, scegli se aggiungere il prompt in fondo, sostituirla o
-mantenerla. Se la bozza cambia dopo l'avviso, la scelta va confermata di nuovo.
-L'estensione non preme Invio e non invia messaggi automaticamente.
+Collega TMDB una sola volta dal pulsante **TMDB** nell'intestazione. Sono accettate
+una chiave API v3 oppure un API Read Access Token. La connessione già salvata
+nelle versioni precedenti viene mantenuta: non serve reinserire la credenziale.
 
-**Copia** funziona anche per altre chat. Non servono collegamenti all'account:
-accedi normalmente sul sito. Se vuoi più spazio, usa l'icona in alto per aprire
-CineMatch in una scheda; l'inserimento riporta in primo piano la chat selezionata.
-Ctrl+F cerca nelle correnti; Ctrl+Invio genera il prompt nella sezione dedicata.
+Locandine e foto di registi/interpreti vengono aggiunte automaticamente dopo i
+titoli riconosciuti. Seguono tipografia e colori della chat, chiara o scura.
+Non vengono inseriti pannelli, titoli duplicati, pulsanti, impostazioni, moduli,
+selettori, riquadri di errore o richieste di correzione. Le immagini sono link alle
+schede TMDB; il testo originale dell'AI viene mantenuto.
 
-Se cambi i criteri, rigenera prima di copiare/inserire per evitare richieste superate.
-Le risposte dipendono dal servizio AI: il plugin non garantisce risposte esatte,
-accesso illimitato o assenza dei limiti previsti dai siti.
+Emoji, numerazioni e sottotitoli vengono ripuliti per la ricerca: ad esempio
+`🌊 2. Flow - Un mondo da salvare (2024)`. Quando necessario vengono consultati
+i titoli alternativi verificati di TMDB. Un semplice risultato simile non basta:
+titolo e anno devono corrispondere senza ambiguità; un regista esplicito deve
+coincidere. Se non c'è sufficiente certezza, la risposta rimane senza immagini.
+Le foto assenti vengono omesse, senza icone o box che interrompano la lettura.
 
-## Privacy, permessi e spazio
+La modalità è sempre automatica; i vecchi flag di disattivazione sono ignorati.
+Nessun limite di cinque film o di dodici anteprime. Le immagini si caricano
+vicino all'area visibile e le altre arrivano scorrendo. I ritratti su schermi
+stretti scorrono orizzontalmente. Per un film vengono mostrati regia e fino a
+quattro interpreti con foto, senza un pannello di gestione del cast.
 
-- Consultazione e generazione funzionano offline; nessuna richiesta a servizi AI,
-  telemetria o acquisizione progressiva di film. Dati, font e icona sono nel pacchetto.
-- L'accesso alle chat riguarda solo `https://chatgpt.com/*`,
-  `https://chat.deepseek.com/*`, `https://claude.ai/*`, `https://gemini.google.com/*`.
-  Chrome mostrerà il relativo permesso di accesso. L'inserimento modifica solo
-  l'editor. Con immagini automatiche attive, le risposte dell'AI vengono analizzate
-  localmente mentre arrivano per riconoscere riferimenti a film o persone.
-  Nessuna lettura di messaggi utente, cookie, credenziali del sito o cronologia.
-- Gli altri due host autorizzati sono `https://api.themoviedb.org/*` e
-  `https://image.tmdb.org/*`. Ricevono esclusivamente ricerche di titoli/anni/nomi,
-  richieste di schede e immagini, non il testo integrale della risposta o della chat.
-- `sidePanel` apre il pannello; `scripting` permette l'inserimento nei quattro siti;
-  `clipboardWrite` copia il prompt; `storage` conserva la bozza in
-  `chrome.storage.session`, in memoria per la sessione del browser.
-  La credenziale TMDB può essere conservata in `storage.local` se scegli
-  **Ricorda su questo dispositivo**, oppure in `storage.session`. Nessun uso di
-  `storage.sync` o database di film. L'accesso allo storage è limitato ai contesti
-  fidati dell'estensione: gli script inseriti nei siti non possono leggere la chiave.
-  In `storage.local` resta anche la preferenza per attivare/disattivare le immagini.
-- La bozza sopravvive alla chiusura del pannello nella stessa finestra. Il riavvio
-  del browser, la disattivazione o il ricaricamento dell'estensione la cancellano.
-  Non è un archivio di richieste. Una scheda CineMatch già aperta tiene il proprio
-  stato fino alla chiusura: evita di modificare la stessa bozza in più viste insieme.
-- **Apri chat** non mette il prompt nell'URL. Soltanto il testo inserito/copiato e
-  successivamente inviato da te è trattato dal sito secondo le sue condizioni.
-  Le fonti si aprono su tua azione. Il pacchetto occupa meno di 400 KB estratto.
+## Costi, dati e permessi
 
-## Locandine, cast e registi nelle risposte
+La consultazione della guida e la generazione sono locali. Nessuna API AI,
+telemetria, invio automatico o archivio progressivo di film. Servono Internet
+per immagini/fonti/chat e gli account eventualmente richiesti dai siti.
+Le condizioni e i limiti delle chat restano quelli dei rispettivi servizi.
 
-1. Apri **Immagini TMDB** dal pannello (oppure le opzioni dell'estensione).
-2. Inserisci la chiave API v3 o l'API Read Access Token; premi **Verifica e salva**.
-   Nessuna credenziale personale è inclusa nello ZIP o nel repository.
-3. Ricarica le schede delle chat dopo l'aggiornamento dell'estensione.
-4. Le immagini appaiono **automaticamente sotto il titolo di ciascun film**
-   mentre arriva la risposta, senza pulsanti da premere. Il formato `Titolo (anno)`
-   è riconosciuto localmente, anche con intestazioni numerate come
-   `8. La terrazza (1980) — Regia: Ettore Scola`.
-5. Locandina, regista e primi attori sono già visibili. **Cast completo** espande
-   gli altri interpreti. Persone e film sono collegati alle schede TMDB.
+TMDB è gratuito per uso non commerciale con attribuzione, soggetto ai suoi
+limiti: https://developer.themoviedb.org/docs/faq. Logo ufficiale e dichiarazione
+sono nei crediti della pagina di connessione. Le immagini sono caricate al momento,
+non incluse nello ZIP. Font Manrope e relativa licenza sono locali.
 
-Le schede sono aggiunte direttamente dopo l'intestazione del film, con stili isolati; il testo originale
-non viene riscritto. Anno e titolo devono corrispondere esattamente e senza
-ambiguità per un abbinamento automatico. Un regista dichiarato deve coincidere;
-altrimenti scegli la scheda. **Cambia abbinamento** permette una correzione.
-Se la risposta non ha titoli riconoscibili, usa la ricerca manuale.
+Accesso esclusivamente a quattro siti AI (`chatgpt.com`, `chat.deepseek.com`,
+`claude.ai`, `gemini.google.com`) e ai due host TMDB (`api.themoviedb.org`,
+`image.tmdb.org`). Nessun permesso generale ai siti, cookie o cronologia.
+Le risposte AI vengono analizzate localmente; TMDB riceve titoli, anni o nomi,
+richieste di schede e immagini, non il testo completo della conversazione.
+I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
-La casella **Mostra automaticamente le immagini nelle risposte** nelle opzioni è
-attiva per impostazione predefinita, anche aggiornando dalla 1.1.0. Puoi disattivarla
-senza cambiare la credenziale. Il salvataggio della chiave e il cambio di preferenza
-aggiornano anche le chat già aperte; dopo l'aggiornamento del codice serve comunque
-ricaricare le pagine. Nessuna richiesta AI o costo in token API.
-TMDB è gratuito per uso non commerciale con attribuzione;
-restano i suoi limiti di servizio. L'estensione mostra logo e dichiarazione TMDB
-nei crediti delle opzioni: https://developer.themoviedb.org/docs/faq.
+`sidePanel` apre il pannello, `scripting` inserisce il prompt nei quattro editor,
+`clipboardWrite` copia il testo, `storage` conserva le bozze nella sessione.
+La sola credenziale può essere ricordata in `storage.local` scegliendo **Ricorda
+su questo dispositivo**, oppure in `storage.session` fino al riavvio.
+Entrambi gli storage hanno accesso TRUSTED_CONTEXTS: gli script inseriti nelle
+pagine non possono leggere la chiave. Nessun uso di `storage.sync`. La chiave
+personale non viene inclusa nei sorgenti, nel pacchetto o negli URL delle chat.
 
-Richieste concorrenti limitate a tre, con timeout e riprova manuale. Non c'è un
-numero massimo applicativo di film: le schede vicine all'area visibile si caricano
-da sole e le altre vengono caricate scorrendo. Il cast completo è paginato a
-12 persone con **Mostra altre persone**. Un riferimento deve restare stabile
-per circa 700 ms prima della ricerca: le aggiunte di testo durante lo streaming
-non ripetono le ricerche già eseguite. Le risposte invariate non vengono rianalizzate
-per ogni cambiamento del resto della pagina. Le schede hanno una piccola
-cache solo nella memoria del service worker, con scadenza di cinque minuti e
-massimo 100 richieste; niente archivio progressivo. Immagini e risposte TMDB
-usano `no-store`; restano in memoria nella scheda aperta e possono essere trattate
-dal normale funzionamento interno del browser.
+Richieste concorrenti limitate a tre, timeout e al massimo una riprova automatica
+per guasti transitori. Nessun retry per ambiguità o chiave non valida. Le schede
+hanno una cache in memoria di cinque minuti, massimo 100 richieste. Le immagini
+condivise nella scheda hanno una cache di massimo 64 elementi e sei milioni di
+caratteri, mai su disco. Immagini e API usano no-store. Un riferimento deve
+stabilizzarsi per circa 650 ms; lo streaming non ripete le ricerche già concluse.
 
-## Compatibilità e limiti verificati
+## Verifica e aggiornamento
 
-I quattro adattatori sono provati con Chromium isolato e pagine di test che
-riproducono textarea, ProseMirror/Tiptap e Quill, tramite le vere API dell'estensione.
-Non sono stati usati account reali né inviate richieste AI nei test. I siti possono
-cambiare editor o contenitori delle risposte: in caso di mancato riconoscimento
-usa **Copia** per il prompt. Il testo della risposta rimane sempre leggibile.
-Il collaudo delle immagini include anche vere richieste TMDB con fotografie e
-locandine reali nelle pagine di prova dei quattro siti, senza account AI.
-L'inserimento diretto accetta fino a 200.000 caratteri; copia e modifica non hanno
-un limite applicativo di quantità di film. Restano i limiti propri della chat.
+Test con Chromium isolato, veri script/API dell'estensione e pagine controllate
+dei quattro provider; inclusi anche TMDB e immagini reali, con Flow. Nessun account
+AI personale o invio di messaggi è stato usato. I siti possono cambiare DOM e non
+ogni formato di risposta è riconoscibile; in questi casi il testo resta leggibile.
+Edge non eseguito direttamente. L'inserimento diretto del prompt accetta fino a
+200.000 caratteri; restano i limiti propri della chat.
 
-Il codice sorgente si trova in `extensions/cinematch` nel repository CineMatch.
-La raccolta canonica resta `plugins/cinema-currents/assets/movements.json`:
-74 voci, categorie distinte e copertura editoriale ampliabile, non universale.
-
-## Aggiornamento e rimozione
-
-Per aggiornare, estrai la nuova versione nella stessa cartella e premi **Ricarica**
-nella pagina delle estensioni. Per rimuovere usa **Rimuovi** nella stessa pagina;
-poi puoi cancellare la cartella. L'estensione non modifica l'app Windows già installata.
-Puoi rimuovere la sola credenziale dalle impostazioni TMDB in ogni momento.
+Per aggiornare usa la stessa cartella e premi **Ricarica** in chrome://extensions,
+poi ricarica le schede delle chat. La credenziale già salvata viene mantenuta.
+Per rimuovere usa **Rimuovi** nella pagina delle estensioni; la credenziale può
+essere rimossa separatamente dalla pagina di connessione. L'app Windows precedente
+non viene modificata o richiesta.

@@ -16,14 +16,17 @@ nell'editor di ChatGPT, DeepSeek, Claude o Gemini dal pannello laterale. L'invio
 Il pacchetto browser è autonomo, Manifest V3, senza dipendenze runtime esterne.
 Generazione e consultazione sono locali. Non richiede API AI e non invia messaggi.
 L'arricchimento automatico analizza localmente le risposte dell'AI e cerca su TMDB
-titoli, anni e persone; aggiunge schede sotto ciascun titolo durante lo streaming.
-Locandina, regista e primi interpreti sono visibili senza click; il cast completo
-è espandibile. Nessuna riscrittura del testo o analisi dei messaggi dell'utente.
+titoli, anni e persone; aggiunge immagini sotto ciascun titolo durante lo streaming.
+Locandina, regista e primi interpreti sono visibili senza click, con colori e
+caratteri ereditati dalla chat. Nessun pannello, titolo duplicato, modulo, pulsante
+o impostazione viene inserito nella risposta. Il testo originale non è riscritto.
 Una credenziale TMDB personale è configurata nelle opzioni, isolata dai siti.
-Abbinamenti incerti richiedono una scelta; ricerca manuale e correzione disponibili.
+Abbinamenti incerti e immagini non disponibili vengono omessi senza interfacce
+di errore. Il riconoscimento gestisce emoji, numerazioni e sottotitoli tradotti.
 Non acquisisce un database progressivo. Le bozze restano in storage.session;
-la credenziale può essere ricordata in storage.local su scelta dell'utente, insieme
-alla preferenza per le immagini automatiche (attive per impostazione predefinita).
+la credenziale può essere ricordata in storage.local su scelta dell'utente.
+Le immagini sono sempre automatiche; le vecchie preferenze di disattivazione
+non vengono usate. Il pannello adotta una nuova identità chiara con accento cobalto.
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 

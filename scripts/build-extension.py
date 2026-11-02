@@ -20,9 +20,10 @@ for source in sorted(SOURCE.rglob("*")):
     if source.is_file():
         copy(source, source.relative_to(SOURCE))
 copy(ROOT / "plugins/cinema-currents/assets/movements.json", Path("data/movements.json"))
-copy(ROOT / "assets/cinematch.png", Path("assets/cinematch.png"))
-for name in ["Fraunces-SemiBold.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-SemiBold.ttf", "OFL-Fraunces.txt", "OFL-InstrumentSans.txt"]:
-    copy(ROOT / "assets/fonts" / name, Path("assets") / name)
+if not (SOURCE / "assets/cinematch.png").is_file():
+    copy(ROOT / "assets/cinematch.png", Path("assets/cinematch.png"))
+# Manrope and its license live alongside the extension sources and are already
+# copied above. Legacy desktop fonts remain in the repository, not in this ZIP.
 manifest = json.loads((DEST / "manifest.json").read_text(encoding="utf-8"))
 archive = ROOT / "dist" / f"CineMatch-Chrome-{manifest['version']}.zip"
 with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as package:

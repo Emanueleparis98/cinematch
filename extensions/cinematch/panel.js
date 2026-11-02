@@ -63,14 +63,14 @@ function showDetail(id) {
 }
 function renderSelection() {
   const container=$("selected");container.replaceChildren();
-  for(const id of state.request.movements){const m=catalog.find(m=>m.id===id);if(m){const chip=button(m.label,()=>{state.request.movements=state.request.movements.filter(x=>x!==id);selectionChanged();});chip.setAttribute("aria-label",`Rimuovi ${m.label}`);const close=element("span","","×");close.setAttribute("aria-hidden","true");chip.append(close);container.append(chip);}}
+  for(const id of state.request.movements){const m=catalog.find(m=>m.id===id);if(m){const chip=button(m.label,()=>{state.request.movements=state.request.movements.filter(x=>x!==id);selectionChanged();});chip.setAttribute("aria-label",`Rimuovi ${m.label}`);const ns="http://www.w3.org/2000/svg",close=document.createElementNS(ns,"svg"),path=document.createElementNS(ns,"path");close.setAttribute("viewBox","0 0 16 16");close.setAttribute("aria-hidden","true");path.setAttribute("d","M4 4l8 8M12 4l-8 8");close.append(path);chip.append(close);container.append(chip);}}
   if(!state.request.movements.length)container.append(element("p","notice","Scegli almeno una voce nell’elenco delle correnti."));
   actionState();
 }
 function generate() {
   try {
     const result=generatePrompt(state.request,catalog);state.prompt=result.prompt;state.generatedSig=signature(state.request);$("prompt-preview").value=state.prompt;
-    resetConflict();actionState();status("Prompt pronto. Puoi modificarlo, copiarlo o inserirlo nella chat.","success");save();
+    resetConflict();actionState();status("Richiesta pronta per la tua chat.","success");save();
     const main=document.querySelector("main"),preview=$("preview-section");
     main.scrollTo({top:main.scrollTop+preview.getBoundingClientRect().top-main.getBoundingClientRect().top,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});
   }catch(error){status(error.message,"error");}
@@ -78,8 +78,8 @@ function generate() {
 async function syncActive() {
   try {
     const [tab]=await chrome.tabs.query({active:true,windowId});const provider=providerForUrl(tab?.url);
-    if(provider){state.provider=provider.id;state.targetTabId=tab.id;$("provider").value=provider.id;$("chat-state").textContent=`${provider.name} è aperta. Il prompt verrà inserito nell’editor, senza inviarlo.`;$("chat-state").classList.add("ready");save();}
-    else {$("chat-state").textContent="Apri la chat scelta, poi premi Inserisci nella chat. Puoi anche usare Copia.";$("chat-state").classList.remove("ready");}
+    if(provider){state.provider=provider.id;state.targetTabId=tab.id;$("provider").value=provider.id;$("chat-state").textContent=`${provider.name} è pronta per la richiesta.`;$("chat-state").classList.add("ready");save();}
+    else {$("chat-state").textContent="Apri la chat per inserire la richiesta.";$("chat-state").classList.remove("ready");}
   }catch{$("chat-state").textContent="Puoi copiare il prompt o aprire la chat scelta.";}
 }
 const insertionMessages={
@@ -146,6 +146,7 @@ async function boot() {
   $("insert").addEventListener("click",()=>insert());$("append").addEventListener("click",()=>insert("append"));$("replace").addEventListener("click",()=>insert("replace"));$("cancel-conflict").addEventListener("click",()=>{resetConflict();status("Bozza mantenuta.");});
   $("expand").addEventListener("click",async()=>{await saveNow();await chrome.tabs.create({url:chrome.runtime.getURL("panel.html?view=full"),windowId});});
   $("tmdb-settings").addEventListener("click",()=>chrome.runtime.openOptionsPage());
+  chrome.runtime.sendMessage({type:"tmdb-status"}).then(result=>{$("tmdb-settings").classList.toggle("connected",Boolean(result?.configured));$("tmdb-settings").title=result?.configured?"TMDB collegato · immagini automatiche":"Collega TMDB per le immagini";}).catch(()=>{});
   chrome.tabs.onActivated.addListener(info=>{if(info.windowId===windowId)syncActive();});
   chrome.tabs.onUpdated.addListener((_id,info)=>{if(info.url||info.status==="complete")syncActive();});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveNow();});

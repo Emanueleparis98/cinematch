@@ -25,12 +25,13 @@ try{
   await panel.goto(`chrome-extension://${id}/panel.html`);await panel.locator('.movement-row').first().waitFor();
   await check('real MV3 extension loads all local reference entries',async()=>{assert.equal(await panel.locator('.movement-row').count(),74);assert.equal(await panel.locator('#boot-error').isVisible(),false);});
   await check('local fonts load with no remote font service',async()=>{
-    await panel.evaluate(async()=>{await document.fonts.load('14px Instrument');await document.fonts.load('600 28px Fraunces');await document.fonts.ready;});assert.equal(await panel.evaluate(()=>document.fonts.check('14px Instrument')),true);assert.equal(await panel.evaluate(()=>document.fonts.check('600 28px Fraunces')),true);
+    await panel.evaluate(async()=>{await document.fonts.load('14px Manrope');await document.fonts.load('800 30px Manrope');await document.fonts.ready;});assert.equal(await panel.evaluate(()=>document.fonts.check('14px Manrope')),true);
   });
   await check('search, detail and sources work',async()=>{
     await panel.locator('#search').fill('neorealismo');assert.ok(await panel.locator('.movement-row').count()>=1);
     await panel.getByRole('button',{name:'Neorealismo italiano',exact:true}).click();
     assert.ok(await panel.locator('#detail a').count()>0);await panel.getByRole('button',{name:'Prepara per questa voce',exact:true}).click();
+    await mkdir('test-results',{recursive:true});await panel.evaluate(()=>document.querySelector('main').scrollTop=0);await panel.screenshot({path:'test-results/redesign-compose-420.png'});
   });
   await check('prompt generation respects requested quantity and detects stale edits',async()=>{
     await panel.locator('#exact-count').check();await panel.locator('#count').fill('12');await panel.locator('#question').fill('Una visione accessibile in coppia, senza violenza esplicita.');

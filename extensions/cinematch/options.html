@@ -1,11 +1,10 @@
 <!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CineMatch · Immagini TMDB</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script></head>
 <body class="settings-page"><main>
-  <div class="brand">CINE <span>MATCH</span></div>
-  <h1>Locandine, volti e cinema</h1>
-  <p>Collega TMDB per aggiungere locandine e foto di attori e registi alle risposte delle tue chat.</p>
+  <div class="brand">CineMatch</div>
+  <h1>Il cinema prende forma.</h1>
+  <p>Una sola connessione a TMDB. Poi locandine e volti accompagnano le risposte, da soli.</p>
   <p id="connection" class="notice" role="status">Controllo configurazione…</p>
-  <section><label class="checkbox-label"><input id="automatic" type="checkbox" checked> Mostra automaticamente le immagini nelle risposte</label><p class="muted small">Locandina, regista e primi attori appaiono sotto ciascun titolo mentre la chat risponde. Puoi disattivare questa funzione in qualsiasi momento.</p></section>
   <form id="credential-form">
     <label for="credential">Chiave API v3 oppure API Read Access Token TMDB</label>
     <div class="credential-row"><input id="credential" type="password" autocomplete="off" spellcheck="false" required aria-describedby="credential-help"><button id="reveal" type="button" aria-pressed="false">Mostra</button></div>
@@ -15,7 +14,7 @@
     <div class="settings-actions"><button id="save" type="submit" class="primary">Verifica e salva</button><button id="remove" type="button">Rimuovi credenziale</button></div>
     <p id="settings-status" role="status" aria-live="polite"></p>
   </form>
-  <section><h2>Le immagini arrivano da sole</h2><ol><li>Configura TMDB una volta e ricarica le chat dopo l'aggiornamento dell'estensione.</li><li>Quando la risposta contiene un film nel formato Titolo (anno), la scheda appare automaticamente sotto quel titolo.</li><li>Se un abbinamento è incerto, scegli la scheda corretta. Il cast completo e la correzione restano espandibili.</li></ol>
+  <section><h2>Da qui, tutto automatico.</h2><p>La credenziale viene verificata e conservata nel browser. Le immagini appaiono sotto i titoli riconosciuti: nessun pulsante, modulo o impostazione dentro la risposta. Gli abbinamenti incerti vengono omessi.</p>
     <p>Il riconoscimento riguarda le risposte dell'AI, non i messaggi dell'utente. TMDB riceve titoli, anni o nomi da cercare; il testo intero della conversazione resta nella chat. Le schede vicine all'area visibile si caricano automaticamente, senza costruire un archivio locale.</p>
   </section>
   <section class="credits"><h2>Crediti</h2><a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" aria-label="The Movie Database"><img src="assets/tmdb.svg" alt="TMDB" width="120" height="48"></a><p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p><p class="muted small">L'API TMDB è gratuita per uso non commerciale con attribuzione. I limiti delle chat AI rimangono quelli dei rispettivi servizi. <a href="https://developer.themoviedb.org/docs/faq" target="_blank" rel="noopener noreferrer">Condizioni TMDB</a>.</p></section>

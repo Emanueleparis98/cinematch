@@ -17,6 +17,10 @@ test('parser deduplicates titles and avoids unsupported prose and huge input',()
 test('explicit person labels are recognized',()=>{assert.equal(extract('Regista: Vittorio De Sica')[0].type,'person');});
 test('director metadata does not duplicate a movie as an extra person card',()=>{const refs=extract('Ladri di biciclette (1948)\nRegista: Vittorio De Sica');assert.equal(refs.length,1);assert.equal(refs[0].director,'Vittorio De Sica');});
 test('numbered headings from the real La terrazza screenshot strip both heading and ordinal',()=>{const [ref]=extract('# 8. La terrazza (1980) — Regia: Ettore Scola');assert.equal(ref.title,'La terrazza');assert.equal(ref.director,'Ettore Scola');assert.equal(ref.year,1980);});
+test('Flow screenshot decoration is removed before searching, subtitle supplies a safe variant',()=>{const [ref]=extract('# 🌊 2. Flow - Un mondo da salvare (2024)');assert.equal(ref.title,'Flow - Un mondo da salvare');assert.ok(ref.variants.includes('Flow'));assert.equal(ref.year,2024);});
+test('emoji cleanup preserves real numeric and international film names',()=>{
+  const [numeric,japanese]=extract('# 🎥 3. 2001: Odissea nello spazio (1968)\n# 🇯🇵 4. 七人の侍 (1954)');assert.equal(numeric.title,'2001: Odissea nello spazio');assert.equal(japanese.title,'七人の侍');
+});
 test('a unique exact person name matches automatically; homonyms need a choice',()=>{const ref={type:'person',variants:['Vittorio De Sica']};assert.equal(chooseMatch([{id:1,name:'Vittorio De Sica'}],ref).id,1);assert.equal(chooseMatch([{id:1,name:'Vittorio De Sica'},{id:2,name:'Vittorio De Sica'}],ref),null);});
 test('invalid credentials are rejected without echoing them',()=>{
   assert.equal(credential(' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '),'a'.repeat(32));assert.equal(credential('Bearer eyJtest.payload.signature'),'eyJtest.payload.signature');assert.throws(()=>credential('secret-invalid'),e=>!e.message.includes('secret-invalid'));
@@ -43,6 +47,10 @@ test('ambiguous matches and conflicting director require manual choice',async()=
 test('alternate original title is tried after a fuzzy translated-title result',async()=>{
   const calls=[];const api=client(async url=>{const query=new URL(url).searchParams.get('query');calls.push(query);return response(url.includes('/search/')?{results:query==='Wrong translation'?[{...movie,title:'Other film',original_title:'Other film',id:6}]:[movie]}:movie);});
   assert.equal((await api.search({...ref,title:'Wrong translation',variants:['Wrong translation','Ladri di biciclette']})).matched.id,5156);assert.ok(calls.includes('Ladri di biciclette'));
+});
+test('verified alternative titles resolve translated names without guessing',async()=>{
+  const film={...movie,id:823219,title:'Straume',original_title:'Straume',release_date:'2024-01-01',alternative_titles:{titles:[{title:'Flow'}]}};
+  const api=client(async url=>response(url.includes('/search/')?{results:[film]}:film));assert.equal((await api.search({type:'movie',title:'Flow',variants:['Flow'],year:2024,director:''})).matched.id,823219);
 });
 test('errors are recoverable and never expose credentials or URLs',async()=>{
   for(const status of [401,403,404,429,500]){const api=client(async()=>response({},status));await assert.rejects(api.search(ref),e=>!e.message.includes('a'.repeat(32))&&!e.message.includes('https:'));}

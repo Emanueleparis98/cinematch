@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T21:30:13.670Z",
+  "title": "Design System: CineMatch Browser",
+  "extensions": {
+    "colorMeta": {
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Cobalt",
+        "canonical": "#2457ed",
+        "tonalRamp": [
+          "oklch(15% 0.0665 264.71)",
+          "oklch(26% 0.1140 264.71)",
+          "oklch(38% 0.1615 264.71)",
+          "oklch(49% 0.1900 264.71)",
+          "oklch(61% 0.1900 264.71)",
+          "oklch(72% 0.1520 264.71)",
+          "oklch(84% 0.0950 264.71)",
+          "oklch(95% 0.0285 264.71)"
+        ]
+      },
+      "cobalt-hover": {
+        "role": "primary",
+        "displayName": "Cobalt Hover",
+        "canonical": "#1945cc",
+        "tonalRamp": [
+          "oklch(15% 0.0665 264.70)",
+          "oklch(26% 0.1140 264.70)",
+          "oklch(38% 0.1615 264.70)",
+          "oklch(49% 0.1900 264.70)",
+          "oklch(61% 0.1900 264.70)",
+          "oklch(72% 0.1520 264.70)",
+          "oklch(84% 0.0950 264.70)",
+          "oklch(95% 0.0285 264.70)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus",
+        "canonical": "#2b60d4",
+        "tonalRamp": [
+          "oklch(15% 0.0657 263.03)",
+          "oklch(26% 0.1127 263.03)",
+          "oklch(38% 0.1597 263.03)",
+          "oklch(49% 0.1878 263.03)",
+          "oklch(61% 0.1878 263.03)",
+          "oklch(72% 0.1503 263.03)",
+          "oklch(84% 0.0939 263.03)",
+          "oklch(95% 0.0282 263.03)"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#172033",
+        "tonalRamp": [
+          "oklch(15% 0.0136 264.35)",
+          "oklch(26% 0.0233 264.35)",
+          "oklch(38% 0.0330 264.35)",
+          "oklch(49% 0.0388 264.35)",
+          "oklch(61% 0.0388 264.35)",
+          "oklch(72% 0.0310 264.35)",
+          "oklch(84% 0.0194 264.35)",
+          "oklch(95% 0.0058 264.35)"
+        ]
+      },
+      "cool-paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#f6f8fc",
+        "tonalRamp": [
+          "oklch(15% 0.0020 264.53)",
+          "oklch(26% 0.0034 264.53)",
+          "oklch(38% 0.0049 264.53)",
+          "oklch(49% 0.0057 264.53)",
+          "oklch(61% 0.0057 264.53)",
+          "oklch(72% 0.0046 264.53)",
+          "oklch(84% 0.0029 264.53)",
+          "oklch(95% 0.0009 264.53)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#fff",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(38% 0.0000 0.00)",
+          "oklch(49% 0.0000 0.00)",
+          "oklch(61% 0.0000 0.00)",
+          "oklch(72% 0.0000 0.00)",
+          "oklch(84% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised",
+        "canonical": "#edf2fb",
+        "tonalRamp": [
+          "oklch(15% 0.0046 262.38)",
+          "oklch(26% 0.0079 262.38)",
+          "oklch(38% 0.0112 262.38)",
+          "oklch(49% 0.0132 262.38)",
+          "oklch(61% 0.0132 262.38)",
+          "oklch(72% 0.0106 262.38)",
+          "oklch(84% 0.0066 262.38)",
+          "oklch(95% 0.0020 262.38)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#dce3ee",
+        "tonalRamp": [
+          "oklch(15% 0.0059 259.42)",
+          "oklch(26% 0.0101 259.42)",
+          "oklch(38% 0.0143 259.42)",
+          "oklch(49% 0.0168 259.42)",
+          "oklch(61% 0.0168 259.42)",
+          "oklch(72% 0.0134 259.42)",
+          "oklch(84% 0.0084 259.42)",
+          "oklch(95% 0.0025 259.42)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#5c687c",
+        "tonalRamp": [
+          "oklch(15% 0.0123 260.62)",
+          "oklch(26% 0.0210 260.62)",
+          "oklch(38% 0.0298 260.62)",
+          "oklch(49% 0.0350 260.62)",
+          "oklch(61% 0.0350 260.62)",
+          "oklch(72% 0.0280 260.62)",
+          "oklch(84% 0.0175 260.62)",
+          "oklch(95% 0.0053 260.62)"
+        ]
+      },
+      "good": {
+        "role": "neutral",
+        "displayName": "Good",
+        "canonical": "#117453",
+        "tonalRamp": [
+          "oklch(15% 0.0352 164.20)",
+          "oklch(26% 0.0604 164.20)",
+          "oklch(38% 0.0855 164.20)",
+          "oklch(49% 0.1006 164.20)",
+          "oklch(61% 0.1006 164.20)",
+          "oklch(72% 0.0805 164.20)",
+          "oklch(84% 0.0503 164.20)",
+          "oklch(95% 0.0151 164.20)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Danger",
+        "canonical": "#b02b43",
+        "tonalRamp": [
+          "oklch(15% 0.0589 15.82)",
+          "oklch(26% 0.1010 15.82)",
+          "oklch(38% 0.1431 15.82)",
+          "oklch(49% 0.1684 15.82)",
+          "oklch(61% 0.1684 15.82)",
+          "oklch(72% 0.1347 15.82)",
+          "oklch(84% 0.0842 15.82)",
+          "oklch(95% 0.0253 15.82)"
+        ]
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "Selected",
+        "canonical": "#eaf0ff",
+        "tonalRamp": [
+          "oklch(15% 0.0074 268.43)",
+          "oklch(26% 0.0127 268.43)",
+          "oklch(38% 0.0180 268.43)",
+          "oklch(49% 0.0212 268.43)",
+          "oklch(61% 0.0212 268.43)",
+          "oklch(72% 0.0169 268.43)",
+          "oklch(84% 0.0106 268.43)",
+          "oklch(95% 0.0032 268.43)"
+        ]
+      },
+      "chip-bg": {
+        "role": "neutral",
+        "displayName": "Chip Bg",
+        "canonical": "#e6edff",
+        "tonalRamp": [
+          "oklch(15% 0.0089 268.85)",
+          "oklch(26% 0.0153 268.85)",
+          "oklch(38% 0.0216 268.85)",
+          "oklch(49% 0.0254 268.85)",
+          "oklch(61% 0.0254 268.85)",
+          "oklch(72% 0.0203 268.85)",
+          "oklch(84% 0.0127 268.85)",
+          "oklch(95% 0.0038 268.85)"
+        ]
+      },
+      "chip-text": {
+        "role": "neutral",
+        "displayName": "Chip Text",
+        "canonical": "#214bbf",
+        "tonalRamp": [
+          "oklch(15% 0.0658 264.65)",
+          "oklch(26% 0.1128 264.65)",
+          "oklch(38% 0.1598 264.65)",
+          "oklch(49% 0.1880 264.65)",
+          "oklch(61% 0.1880 264.65)",
+          "oklch(72% 0.1504 264.65)",
+          "oklch(84% 0.0940 264.65)",
+          "oklch(95% 0.0282 264.65)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Panel headline",
+        "purpose": "Introduces an extension view; reduces to 27px at the narrow breakpoint."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Editorial and connection-page sections."
+      },
+      "body": {
+        "displayName": "Extension body",
+        "purpose": "Default extension-owned reading and control text."
+      },
+      "label": {
+        "displayName": "Form label",
+        "purpose": "Persistent compact field labels."
+      },
+      "caption": {
+        "displayName": "Native chat caption",
+        "purpose": "Names below portraits, inheriting the external chat font."
+      }
+    },
+    "shadows": [
+      {
+        "name": "selected-tab",
+        "value": "0 2px 5px #2436500b",
+        "purpose": "Subtle separation from the navigation track."
+      },
+      {
+        "name": "action-dock",
+        "value": "0 -5px 20px #24365004",
+        "purpose": "Very faint separation above scrolling content."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-state",
+        "value": "160ms ease",
+        "purpose": "Background, border and text changes; removed for reduced motion."
+      },
+      {
+        "name": "media-arrive",
+        "value": "180ms cubic-bezier(.22,1,.36,1)",
+        "purpose": "Opacity .4 to 1 and translateY(3px) to none; removed for reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "panel-narrow-max",
+        "value": "340px"
+      },
+      {
+        "name": "settings-narrow-max",
+        "value": "360px"
+      },
+      {
+        "name": "inline-container-max",
+        "value": "430px"
+      },
+      {
+        "name": "expanded-list-min",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Generate or save with one clear primary action.",
+      "html": "<button class=\"ds-primary\">Genera il prompt</button>",
+      "css": ".ds-primary{border:1px solid var(--line,#dce3ee);border-radius:11px;padding:10px 14px;font-size:14px;font-weight:650;cursor:pointer;transition:background 160ms ease,border-color 160ms ease,color 160ms ease;font-family:Manrope,Arial,sans-serif;background:var(--accent,#2457ed);border-color:var(--accent,#2457ed);color:#fff;font-weight:750}.ds-primary:hover{background:#1945cc;border-color:#1945cc}.ds-primary:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}.ds-primary:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting copy, insert and credential actions.",
+      "html": "<button class=\"ds-secondary\">Copia</button>",
+      "css": ".ds-secondary{border:1px solid var(--line,#dce3ee);border-radius:11px;padding:10px 14px;font-size:14px;font-weight:650;cursor:pointer;transition:background 160ms ease,border-color 160ms ease,color 160ms ease;font-family:Manrope,Arial,sans-serif;background:#fff;color:var(--text,#172033)}.ds-secondary:hover{background:var(--raised,#edf2fb);border-color:#b5c4dc}.ds-secondary:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Quiet supporting action alongside form controls.",
+      "html": "<button class=\"ds-text\">Azzera filtri</button>",
+      "css": ".ds-text{border:1px solid var(--line,#dce3ee);border-radius:11px;padding:10px 14px;font-size:14px;font-weight:650;cursor:pointer;transition:background 160ms ease,border-color 160ms ease,color 160ms ease;font-family:Manrope,Arial,sans-serif;background:transparent;border-color:transparent;padding:5px 3px;font-size:11px;color:var(--accent,#2457ed)}.ds-text:hover{background:var(--raised,#edf2fb);border-color:#b5c4dc}.ds-text:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-text{transition:none}}"
+    },
+    {
+      "name": "Labeled Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A visible label and a readable white field.",
+      "html": "<label class=\"ds-label\">La tua richiesta<input class=\"ds-field\" placeholder=\"Che cosa ti incuriosisce?\"></label>",
+      "css": ".ds-label{display:block;font-size:11px;font-weight:750;color:var(--muted,#5c687c);font-family:Manrope,Arial,sans-serif;}.ds-field{display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid var(--line,#dce3ee);border-radius:11px;background:#fff;color:var(--text,#172033);font-size:13px;font-weight:450;caret-color:var(--accent,#2457ed);font-family:Manrope,Arial,sans-serif;}.ds-field::placeholder{color:#68768b;opacity:1}.ds-field:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}"
+    },
+    {
+      "name": "Segmented Navigation",
+      "kind": "nav",
+      "refersTo": "tab-selected",
+      "description": "Two equal-weight sections with one selected view.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Sezioni\"><button class=\"ds-tab\" aria-current=\"page\">Esplora</button><button class=\"ds-tab\">La tua richiesta</button></nav>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:5px;background:#edf1f8;border:1px solid #e5eaf3;border-radius:13px;font-family:Manrope,Arial,sans-serif;}.ds-tab{flex:1;border:1px solid transparent;border-radius:9px;padding:9px 6px;background:transparent;color:var(--muted,#5c687c);font:750 12px Manrope,Arial,sans-serif;cursor:pointer;transition:background 160ms ease}.ds-tab[aria-current]{background:#fff;color:var(--accent,#2457ed);box-shadow:0 2px 5px #2436500b}.ds-tab:hover{background:var(--raised,#edf2fb);border-color:#b5c4dc}.ds-tab:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-tab{transition:none}}"
+    },
+    {
+      "name": "Selection Chip",
+      "kind": "chip",
+      "refersTo": "selection-chip",
+      "description": "A removable selected movement.",
+      "html": "<button class=\"ds-chip\">Neorealismo italiano<svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><path d=\"M3 3l6 6M9 3L3 9\"/></svg></button>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:7px;font:650 11px Manrope,Arial,sans-serif;padding:6px 9px;border:1px solid transparent;border-radius:8px;background:#e6edff;color:#214bbf;cursor:pointer;transition:background 160ms ease,border-color 160ms ease}.ds-chip svg{fill:none;stroke:currentColor;stroke-width:1.8}.ds-chip:hover{background:var(--raised,#edf2fb);border-color:#b5c4dc}.ds-chip:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-chip{transition:none}}"
+    },
+    {
+      "name": "Selected Editorial Row",
+      "kind": "custom",
+      "refersTo": "movement-row-selected",
+      "description": "Checkbox selection with title and chronological metadata.",
+      "html": "<div class=\"ds-row\"><input class=\"ds-check\" aria-label=\"Seleziona Neorealismo italiano\" type=\"checkbox\" checked><div><button class=\"ds-row-title\">Neorealismo italiano</button><span class=\"ds-row-meta\">Movimento · 1943–1952 · Italia</span></div></div>",
+      "css": ".ds-row{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;padding:16px 10px;background:#eaf0ff;border-radius:10px;color:var(--text,#172033);font-family:Manrope,Arial,sans-serif;}.ds-check{accent-color:var(--accent,#2457ed);width:18px;height:18px;margin:2px 0 0}.ds-row-title{display:block;border:0;border-radius:0;background:none;text-align:left;padding:0;font:750 14px/1.5 Manrope,Arial,sans-serif;color:inherit;cursor:pointer}.ds-row-title:hover{color:var(--accent,#2457ed)}.ds-row-title:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}.ds-check:focus-visible{outline:3px solid var(--focus,#2b60d4);outline-offset:2px}.ds-row-meta{display:block;font-size:11px;line-height:1.7;margin-top:5px;color:var(--muted,#5c687c)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Contemporary Film Journal",
+    "overview": "A contemporary independent film journal: cool paper, graphite text and a restrained cobalt accent make the browser extension feel clear, precise and inviting. Manrope gives the compact navigation and editorial reading one consistent voice.\n\nThis system governs the browser panel, its expanded tab and the TMDB connection page. Inline media belong visually to the host chat and inherit its font and colors. The native Windows app and Rust CLI retain their legacy LUMEN styling outside this redesign; they are not a source of browser tokens.",
+    "keyCharacteristics": [
+      "Cool white and graphite with cobalt reserved for actions and selection.",
+      "Flat chronological rows, clear dividers and compact task controls.",
+      "Locally hosted Manrope for extension-owned surfaces.",
+      "Transparent, unboxed media that inherit the host chat."
+    ],
+    "rules": [
+      {
+        "name": "The Action Accent Rule",
+        "body": "Use cobalt for primary actions, links, selection and focus. Reading surfaces remain cool and neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Native Answer Rule",
+        "body": "Inline media inherit the chat font and colors. Leave the original answer text and heading intact, with no enclosing card or duplicate title.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Reading Rule",
+        "body": "Separate editorial rows with spacing and fine rules. Reserve the existing soft shadows for the selected tab and the action dock.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the browser tokens and locally hosted Manrope on extension-owned pages.",
+      "Do let names wrap at spaces in caption columns wider than their portraits.",
+      "Do keep keyboard focus visible and respect reduced-motion preferences.",
+      "Do preserve native chat typography and omit unavailable or uncertain media quietly."
+    ],
+    "donts": [
+      "Don't revive the legacy LUMEN palette or serif typography in browser surfaces.",
+      "Don't inject controls, configuration forms or duplicate film headings into AI answers.",
+      "Don't force person names to break inside words to match portrait width.",
+      "Don't treat the panel’s light palette as a theme for the external chat."
+    ]
+  }
+}

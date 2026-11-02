@@ -14,7 +14,7 @@ async function getCredential(){
 const tmdb=createTmdbClient({getCredential});
 async function tmdbStatus(){
   await storageReady;
-  return {ok:true,configured:Boolean(await getCredential()),automatic:(await chrome.storage.local.get('tmdbAutomatic')).tmdbAutomatic!==false};
+  return {ok:true,configured:Boolean(await getCredential()),automatic:true};
 }
 async function notifyChats(){
   const status=await tmdbStatus();
@@ -39,10 +39,6 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       if(message.remember){await chrome.storage.local.set({tmdbCredential:value});await chrome.storage.session.remove("tmdbCredential");}
       else {await chrome.storage.session.set({tmdbCredential:value});await chrome.storage.local.remove("tmdbCredential");}
       tmdb.clear();await notifyChats();return {ok:true};
-    }
-    if(message.type==="tmdb-automatic"&&settings){
-      if(typeof message.enabled!=="boolean")return {ok:false,error:"Impostazione non valida."};
-      await chrome.storage.local.set({tmdbAutomatic:message.enabled});await notifyChats();return {ok:true};
     }
     if(message.type==="tmdb-remove"&&settings){await chrome.storage.local.remove("tmdbCredential");await chrome.storage.session.remove("tmdbCredential");tmdb.clear();await notifyChats();return {ok:true};}
     if(message.type==="tmdb-search"&&chat)return {ok:true,...await tmdb.search(message.reference)};

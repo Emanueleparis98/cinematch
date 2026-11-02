@@ -14,7 +14,7 @@ export function validateReference(value){
 }
 function person(p){return {id:p.id,name:p.name??'',role:p.character??p.job??p.known_for_department??'',photo:safeImagePath(p.profile_path)};}
 export function summarizeMovie(data){
-  return {type:'movie',id:data.id,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person)};
+  return {type:'movie',id:data.id,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
 }
 export function chooseMatch(results,ref){
   if(ref.type==='person'){
@@ -46,7 +46,7 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
   }
   async function details(type,id){
     if(!['movie','person'].includes(type)||!Number.isSafeInteger(id)||id<1)throw new Error('Scheda non valida.');
-    const data=await request(`/${type}/${id}`,{language:'it-IT',...(type==='movie'?{append_to_response:'credits'}:{})});
+    const data=await request(`/${type}/${id}`,{language:'it-IT',...(type==='movie'?{append_to_response:'credits,alternative_titles'}:{})});
     if(type==='movie')return summarizeMovie(data);
     return {type:'person',...person(data),biography:(data.biography??'').slice(0,600),birthday:data.birthday??'',place:data.place_of_birth??''};
   }
@@ -59,6 +59,16 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
     }
     const exact=chooseMatch(results,ref);
     if(exact){const item=await details(ref.type,exact.id);if(ref.type==='person'||!ref.director||item.directors.some(p=>normalize(p.name)===normalize(ref.director)))return {matched:item,candidates:[]};}
+    // A translated heading can differ from the locale returned by search.
+    // Consult real alternative titles, never pick a merely similar first result.
+    if(ref.type==='movie'&&ref.year&&!exact){
+      const sameYear=results.filter(r=>Number(r.release_date?.slice(0,4))===ref.year);
+      if(sameYear.length<=4){
+        const names=ref.variants.map(normalize),verified=[];
+        for(const candidate of sameYear){const item=await details('movie',candidate.id);if(item.aliases.some(title=>names.includes(normalize(title)))&&(!ref.director||item.directors.some(p=>normalize(p.name)===normalize(ref.director))))verified.push(item);}
+        if(verified.length===1)return {matched:verified[0],candidates:[]};
+      }
+    }
     return {matched:null,candidates:results.map(r=>ref.type==='movie'?{id:r.id,type:'movie',title:r.title??r.original_title??'',originalTitle:r.original_title??'',year:r.release_date?.slice(0,4)??'',poster:safeImagePath(r.poster_path)}:{id:r.id,type:'person',title:r.name??'',year:r.known_for_department??'',poster:safeImagePath(r.profile_path)}),hasMore:results.length>=20};
   }
   async function image(path,size){

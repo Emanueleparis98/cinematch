@@ -11,3 +11,5 @@ node_modules/
 .extension-browser/
 .extension-test-profile*/
 test-results/
+.impeccable/review/*
+!.impeccable/review/finish-verdict.md

@@ -1,7 +1,6 @@
 const $=id=>document.getElementById(id);
 const send=message=>chrome.runtime.sendMessage(message);
-async function refresh(){const result=await send({type:'tmdb-status'});$('connection').textContent=result?.configured?'TMDB è configurato. Le immagini possono apparire automaticamente nelle chat.':'Inserisci la credenziale per attivare le immagini.';$('remove').disabled=!result?.configured;$('automatic').checked=result?.automatic!==false;}
-$('automatic').addEventListener('change',async()=>{const result=await send({type:'tmdb-automatic',enabled:$('automatic').checked});$('settings-status').textContent=result?.ok?($('automatic').checked?'Immagini automatiche attive. Le chat aperte si aggiornano da sole.':'Immagini automatiche disattivate.'):result?.error??'Modifica non riuscita. Riprova.';await refresh();});
+async function refresh(){const result=await send({type:'tmdb-status'});$('connection').textContent=result?.configured?'TMDB è configurato. Le immagini sono automatiche.':'Collega TMDB per attivare le immagini.';$('remove').disabled=!result?.configured;}
 $('reveal').addEventListener('click',()=>{const show=$('credential').type==='password';$('credential').type=show?'text':'password';$('reveal').textContent=show?'Nascondi':'Mostra';$('reveal').setAttribute('aria-pressed',String(show));});
 $('credential-form').addEventListener('submit',async event=>{
   event.preventDefault();$('save').disabled=true;$('remove').disabled=true;$('settings-status').className='';$('settings-status').textContent='Verifico la connessione a TMDB…';
