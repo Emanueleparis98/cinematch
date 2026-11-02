@@ -132,7 +132,8 @@ pub(crate) fn discover_params(
     today: &str,
 ) -> Result<Vec<(String, String)>, String> {
     let mut p: Vec<(String, String)> = vec![
-        ("include_adult".into(), "false".into()),
+        ("include_adult".into(), q.include_adult.to_string()),
+        ("include_video".into(), q.include_video.to_string()),
         ("sort_by".into(), q.sort.as_tmdb().into()),
         ("page".into(), q.page.max(1).to_string()),
     ];
@@ -198,27 +199,16 @@ pub(crate) fn discover_params(
     }
     if let Some((a, b)) = q.runtime {
         p.push(("with_runtime.gte".into(), a.to_string()));
-        p.push(("with_runtime.lte".into(), b.to_string()));
-    } else if q.sort == Sort::Newest {
-        // Un lungometraggio, non un corto da zero minuti.
-        p.push(("with_runtime.gte".into(), "60".into()));
+        if b != u32::MAX {
+            p.push(("with_runtime.lte".into(), b.to_string()));
+        }
     }
     Ok(p)
 }
 
 pub(crate) fn minimum_votes(q: &DiscoverQuery) -> Option<u32> {
     q.min_votes
-        .or_else(|| {
-            if matches!(q.sort, Sort::Rating | Sort::Newest) {
-                Some(50)
-            } else if q.min_rating.is_some() {
-                Some(25)
-            } else if q.max_rating.is_some() {
-                Some(1)
-            } else {
-                None
-            }
-        })
+        .or_else(|| (q.min_rating.is_some() || q.max_rating.is_some()).then_some(1))
         .map(|v| {
             if q.min_rating.is_some() || q.max_rating.is_some() {
                 v.max(1)
@@ -229,21 +219,19 @@ pub(crate) fn minimum_votes(q: &DiscoverQuery) -> Option<u32> {
 }
 
 pub(crate) fn date_bounds(q: &DiscoverQuery, today: &str) -> (Option<String>, Option<String>) {
-    let mut gte = q.year.map(|(a, _)| format!("{a}-01-01"));
-    let mut lte = q.year.map(|(_, b)| format!("{b}-12-31"));
-    match q.sort {
-        Sort::Upcoming => {
-            gte = Some(match gte {
-                Some(g) if g.as_str() > today => g,
-                _ => today.to_string(),
-            });
-        }
-        _ => {
-            lte = Some(match lte {
-                Some(l) if l.as_str() < today => l,
-                _ => today.to_string(),
-            });
-        }
+    let mut gte = q.year.map(|(a, _)| format!("{a:04}-01-01"));
+    let mut lte = q.year.map(|(_, b)| format!("{b:04}-12-31"));
+    if let Some(from) = &q.date_from {
+        gte = Some(gte.map_or(from.clone(), |g| g.max(from.clone())));
+    }
+    if let Some(to) = &q.date_to {
+        lte = Some(lte.map_or(to.clone(), |g| g.min(to.clone())));
+    }
+    if q.sort == Sort::Upcoming {
+        gte = Some(match gte {
+            Some(g) if g.as_str() > today => g,
+            _ => today.to_string(),
+        });
     }
     (gte, lte)
 }
@@ -600,6 +588,9 @@ impl Tmdb {
     pub fn cached_details(&self, id: u64) -> Option<Details> {
         self.details_cache.lock().ok()?.get(&id).cloned()
     }
+    pub fn configuration_countries(&self) -> Result<Vec<serde_json::Value>, String> {
+        self.get("/configuration/countries", &[])
+    }
 
     pub fn details(&self, id: u64) -> Result<Details, String> {
         if let Ok(c) = self.details_cache.lock() {
@@ -609,7 +600,8 @@ impl Tmdb {
         }
         let p = vec![(
             "append_to_response".to_string(),
-            "credits,watch/providers,recommendations,external_ids,keywords".to_string(),
+            "credits,watch/providers,recommendations,external_ids,keywords,alternative_titles"
+                .to_string(),
         )];
         let raw: ApiDetails = self.get(&format!("/movie/{id}"), &p)?;
         let details = raw.into_details(&self.region);
@@ -621,6 +613,17 @@ impl Tmdb {
             c.insert(id, details.clone());
         }
         Ok(details)
+    }
+    /// I lavori di indicizzazione richiedono metadati e keyword, senza filmografie o provider.
+    pub fn catalog_details(&self, id: u64) -> Result<Details, String> {
+        let raw: ApiDetails = self.get(
+            &format!("/movie/{id}"),
+            &[(
+                "append_to_response".into(),
+                "keywords,alternative_titles".into(),
+            )],
+        )?;
+        Ok(raw.into_details(&self.region))
     }
 
     /// Completamento con il voto IMDb, quando i dati pubblici sono stati scaricati
@@ -693,12 +696,22 @@ mod tests {
             .filter(|(k, _)| k == "vote_count.gte")
             .collect::<Vec<_>>();
         assert_eq!(limits.len(), 1);
-        assert_eq!(limits[0].1, "50");
-        assert!(params
-            .iter()
-            .any(|(k, v)| k == "with_runtime.gte" && v == "60"));
+        assert_eq!(limits[0].1, "1");
+        assert!(!params.iter().any(|(k, _)| k == "with_runtime.gte"));
     }
 
+    #[test]
+    fn durata_lunga_non_impone_un_tetto_nascosto() {
+        let q = crate::domain::constraints::DiscoverQuery {
+            runtime: Some((121, u32::MAX)),
+            ..Default::default()
+        };
+        let params = super::discover_params(&q, "2026-11-02").unwrap();
+        assert!(params
+            .iter()
+            .any(|(k, v)| k == "with_runtime.gte" && v == "121"));
+        assert!(!params.iter().any(|(k, _)| k == "with_runtime.lte"));
+    }
     #[test]
     fn il_massimo_sul_voto_esclude_i_titoli_senza_valutazioni() {
         let q = crate::domain::constraints::DiscoverQuery {
@@ -736,14 +749,14 @@ mod tests {
     }
 
     #[test]
-    fn piu_recenti_si_ferma_a_oggi() {
+    fn piu_recenti_non_introduce_un_filtro_di_data() {
         let q = DiscoverQuery {
             sort: Sort::Newest,
             ..Default::default()
         };
         let (gte, lte) = date_bounds(&q, "2026-10-28");
         assert_eq!(gte, None);
-        assert_eq!(lte.as_deref(), Some("2026-10-28"));
+        assert_eq!(lte, None);
     }
 
     #[test]
@@ -788,7 +801,7 @@ mod tests {
             ..Default::default()
         };
         let (_, lte) = date_bounds(&q, "2026-10-28");
-        assert_eq!(lte.as_deref(), Some("2026-10-28"));
+        assert_eq!(lte.as_deref(), Some("2029-12-31"));
     }
 
     #[test]

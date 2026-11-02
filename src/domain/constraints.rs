@@ -115,7 +115,7 @@ pub fn movement_countries(tax: &Taxonomy, ids: &[String]) -> Option<BTreeSet<Str
         let s: BTreeSet<String> = m.countries.iter().cloned().collect();
         set = Some(match set {
             None => s,
-            Some(cur) => cur.intersection(&s).cloned().collect(),
+            Some(cur) => cur.union(&s).cloned().collect(),
         });
     }
     set
@@ -132,75 +132,30 @@ pub fn effective_countries(tax: &Taxonomy, f: &Facets) -> Vec<String> {
 }
 
 /// Generi esclusi d'ufficio dai movimenti scelti (finiscono in without_genres).
-pub fn forbidden_genres(tax: &Taxonomy, f: &Facets) -> Vec<u32> {
-    let mut set = BTreeSet::new();
-    for id in &f.movements {
-        if let Some(m) = tax.movement(id) {
-            for g in &m.genres_forbidden {
-                set.insert(*g);
-            }
-        }
-    }
-    set.into_iter().collect()
+pub fn forbidden_genres(_tax: &Taxonomy, _f: &Facets) -> Vec<u32> {
+    Vec::new()
 }
 
 /// Calcola, per ogni faccia, se e ancora selezionabile e con quale motivazione.
-pub fn pruning(tax: &Taxonomy, f: &Facets) -> Prune {
-    let mut p = Prune::default();
-
-    let active: Vec<&Movement> = f
-        .movements
-        .iter()
-        .filter_map(|id| tax.movement(id))
-        .collect();
-
-    for g in &tax.genres {
-        let mut av = Availability::ok();
-        for m in &active {
-            if m.genres_forbidden.contains(&g.id) {
-                av = Availability::blocked(format!("«{}» non appartiene a «{}»", g.name, m.label));
-                break;
-            }
-            if !m.genres_core.contains(&g.id) && !m.genres_allowed.contains(&g.id) {
-                av = Availability::soft(format!(
-                    "«{}» non e centrale per «{}»: potrebbero uscire pochi risultati",
-                    g.name, m.label
-                ));
-            }
-        }
-        p.genres.insert(g.id, av);
+pub fn pruning(tax: &Taxonomy, _f: &Facets) -> Prune {
+    // Una generalizzazione editoriale non rende impossibile una combinazione.
+    Prune {
+        genres: tax
+            .genres
+            .iter()
+            .map(|g| (g.id, Availability::ok()))
+            .collect(),
+        countries: tax
+            .countries
+            .iter()
+            .map(|c| (c.code.clone(), Availability::ok()))
+            .collect(),
+        moods: tax
+            .moods
+            .iter()
+            .map(|m| (m.id.clone(), Availability::ok()))
+            .collect(),
     }
-
-    let allowed_countries = movement_countries(tax, &f.movements);
-    for c in &tax.countries {
-        let av = match &allowed_countries {
-            Some(set) if !set.contains(&c.code) => Availability::blocked(format!(
-                "I movimenti scelti sono legati a {}",
-                set.iter()
-                    .map(|x| tax.country_label(x))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )),
-            _ => Availability::ok(),
-        };
-        p.countries.insert(c.code.clone(), av);
-    }
-
-    for mo in &tax.moods {
-        let mut av = Availability::ok();
-        for m in &active {
-            if mo.incompatible_movements.contains(&m.id) {
-                av = Availability::blocked(format!(
-                    "«{}» e incompatibile con «{}»",
-                    mo.label, m.label
-                ));
-                break;
-            }
-        }
-        p.moods.insert(mo.id.clone(), av);
-    }
-
-    p
 }
 
 /// Propagazione dei vincoli: corregge le facce impossibili e spiega ogni correzione.
@@ -219,121 +174,9 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
     f.without_genres.retain(|g| tax.genre_name(*g).is_some());
     f.genres.retain(|g| !f.without_genres.contains(g));
 
-    let span = decade_span(tax, &f);
-    let mut kept: Vec<String> = Vec::new();
-    let mut kept_span = span;
-    let mut kept_countries: Option<BTreeSet<String>> = None;
-
-    for id in &f.movements {
-        let Some(m) = tax.movement(id) else {
-            msgs.push(format!("Movimento «{}» non riconosciuto: rimosso.", id));
-            continue;
-        };
-        let next_span = if let Some((a, b)) = kept_span {
-            let lo = a.max(m.period[0]);
-            let hi = b.min(m.period[1]);
-            if lo > hi {
-                msgs.push(format!(
-                    "Rimosso «{}»: copre {}–{}, fuori dall'intervallo {}–{}.",
-                    m.label, m.period[0], m.period[1], a, b
-                ));
-                continue;
-            }
-            Some((lo, hi))
-        } else {
-            Some((m.period[0], m.period[1]))
-        };
-        let s: BTreeSet<String> = m.countries.iter().cloned().collect();
-        let next_countries = match &kept_countries {
-            None => Some(s),
-            Some(cur) => {
-                let inter: BTreeSet<String> = cur.intersection(&s).cloned().collect();
-                if inter.is_empty() {
-                    let names = kept
-                        .iter()
-                        .filter_map(|k| tax.movement(k))
-                        .map(|x| x.label.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    msgs.push(format!(
-                        "Rimosso «{}»: nessun paese in comune con {}.",
-                        m.label,
-                        if names.is_empty() {
-                            "i movimenti scelti".to_string()
-                        } else {
-                            names
-                        }
-                    ));
-                    continue;
-                }
-                Some(inter)
-            }
-        };
-        kept_span = next_span;
-        kept_countries = next_countries;
-        kept.push(id.clone());
-    }
-    if kept.len() != f.movements.len() {
-        f.movements = kept;
-    }
-
-    if !f.movements.is_empty() {
-        let forbidden = forbidden_genres(tax, &f);
-        f.genres.retain(|g| {
-            let ok = !forbidden.contains(g);
-            if !ok {
-                msgs.push(format!(
-                    "Rimosso il genere «{}»: estraneo ai movimenti scelti.",
-                    tax.genre_name(*g).unwrap_or_default()
-                ));
-            }
-            ok
-        });
-
-        if !f.countries.is_empty() {
-            if let Some(set) = movement_countries(tax, &f.movements) {
-                f.countries.retain(|c| {
-                    let ok = set.contains(c);
-                    if !ok {
-                        msgs.push(format!(
-                            "Rimosso il paese «{}»: i movimenti scelti sono legati a {}.",
-                            tax.country_label(c),
-                            set.iter()
-                                .map(|x| tax.country_label(x))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ));
-                    }
-                    ok
-                });
-            }
-        }
-
-        let active: Vec<&Movement> = f
-            .movements
-            .iter()
-            .filter_map(|id| tax.movement(id))
-            .collect();
-        f.moods.retain(|mid| {
-            let bad = match tax.mood(mid) {
-                None => true,
-                Some(mo) => active
-                    .iter()
-                    .any(|m| mo.incompatible_movements.contains(&m.id)),
-            };
-            if bad {
-                let label = tax
-                    .mood(mid)
-                    .map(|x| x.label.clone())
-                    .unwrap_or_else(|| mid.clone());
-                msgs.push(format!(
-                    "Rimosso il mood «{}»: incompatibile con i movimenti scelti.",
-                    label
-                ));
-            }
-            !bad
-        });
-    }
+    f.movements.retain(|id| tax.movement(id).is_some());
+    f.countries.retain(|id| tax.country_name(id).is_some());
+    f.moods.retain(|id| tax.mood(id).is_some());
 
     if let Some(r) = f.min_rating {
         f.min_rating = Some(r.clamp(0.0, 10.0));
@@ -348,12 +191,6 @@ pub fn sanitize(tax: &Taxonomy, input: &Facets) -> (Facets, Vec<String>) {
             ));
             f.min_rating = Some(b);
             f.max_rating = Some(a);
-        }
-    }
-    if let Some(v) = f.min_votes {
-        if v > 1_000_000 {
-            msgs.push("Numero minimo di voti troppo alto: l'ho ridotto.".into());
-            f.min_votes = Some(1_000_000);
         }
     }
     // Ogni tema scelto resta un requisito in AND; niente troncamenti nascosti.
@@ -433,6 +270,8 @@ pub fn movement_recipe(tax: &Taxonomy, m: &Movement) -> (Vec<String>, Vec<String
 
 #[derive(Clone, Debug, Default)]
 pub struct DiscoverQuery {
+    pub include_adult: bool,
+    pub include_video: bool,
     pub genres: Vec<u32>,
     /// Con true i generi vengono passati con l'operatore OR (|) invece di AND (,).
     pub genres_or: bool,
@@ -442,6 +281,8 @@ pub struct DiscoverQuery {
     pub keywords_or: bool,
     pub countries: Vec<String>,
     pub year: Option<(u16, u16)>,
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
     pub min_rating: Option<f32>,
     pub max_rating: Option<f32>,
     /// Numero minimo di voti TMDB (vote_count.gte).
@@ -464,23 +305,8 @@ pub fn to_discover(
 
     // I generi impliciti del movimento sono alternative solo quando
     // l'utente non ha scelto un genere: quelli espliciti restano obbligatori.
-    let mut genres = f.genres.clone();
-    let mut genres_or = false;
-    let mut core: Vec<u32> = Vec::new();
-    for id in &f.movements {
-        if let Some(m) = tax.movement(id) {
-            for g in &m.genres_core {
-                if !core.contains(g) {
-                    core.push(*g);
-                }
-            }
-        }
-    }
-    if !core.is_empty() && f.genres.is_empty() {
-        genres = core;
-        genres_or = true;
-    }
-
+    let genres = f.genres.clone();
+    let genres_or = false;
     // Parole chiave: quelle dei mood e dei temi liberi sono argomenti (AND fra
     // loro), la parola chiave propria di una corrente (es. «slasher») e
     // l'identita stessa della corrente, quindi va in OR. Se ci sono entrambe si
@@ -528,6 +354,8 @@ pub fn to_discover(
     }
 
     Ok(DiscoverQuery {
+        include_adult: false,
+        include_video: false,
         genres,
         genres_or,
         without_genres: without,
@@ -535,6 +363,8 @@ pub fn to_discover(
         keywords_or,
         countries: effective_countries(tax, f),
         year,
+        date_from: None,
+        date_to: None,
         min_rating: f.min_rating,
         max_rating: f.max_rating,
         min_votes: f.min_votes,

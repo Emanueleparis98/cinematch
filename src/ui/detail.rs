@@ -103,10 +103,7 @@ fn avail_row(ui: &mut egui::Ui, label: &str, items: &[String], color: egui::Colo
     // resta per i comandi. La barra segue l'altezza del testo.
     let r = row.response.rect;
     ui.painter().rect_filled(
-        egui::Rect::from_min_size(
-            egui::pos2(r.left(), r.top()),
-            egui::vec2(2.0, r.height()),
-        ),
+        egui::Rect::from_min_size(egui::pos2(r.left(), r.top()), egui::vec2(2.0, r.height())),
         egui::CornerRadius::ZERO,
         color,
     );
@@ -127,10 +124,7 @@ fn fact(ui: &mut egui::Ui, title: &str, value: &str) {
                 ui.label(lumen::label(title));
             },
         );
-        ui.add(
-            egui::Label::new(lumen::body(12.5, value).color(lumen::MUTED))
-                .wrap(),
-        );
+        ui.add(egui::Label::new(lumen::body(12.5, value).color(lumen::MUTED)).wrap());
     });
 }
 
@@ -161,17 +155,12 @@ fn status_pill(ui: &mut egui::Ui, status: &str) {
     painter.rect_stroke(
         rect,
         lumen::radius(lumen::RADIUS),
-        Stroke::new(1.0_f32, lumen::alpha(color, 80)), egui::StrokeKind::Inside);
-    painter.circle_filled(
-        egui::pos2(rect.left() + 8.0, rect.center().y),
-        2.2,
-        color,
+        Stroke::new(1.0_f32, lumen::alpha(color, 80)),
+        egui::StrokeKind::Inside,
     );
+    painter.circle_filled(egui::pos2(rect.left() + 8.0, rect.center().y), 2.2, color);
     painter.galley(
-        egui::pos2(
-            rect.left() + 14.0,
-            rect.center().y - galley.size().y * 0.5,
-        ),
+        egui::pos2(rect.left() + 14.0, rect.center().y - galley.size().y * 0.5),
         galley,
         color,
     );
@@ -256,14 +245,11 @@ fn rating_button(
                     ui.set_width(186.0);
                     ui.horizontal(|ui| {
                         ui.label(lumen::mono(9.0, "IL TUO VOTO").color(lumen::FAINT));
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                if lumen::link(ui, "×", lumen::FAINT).clicked() {
-                                    close = true;
-                                }
-                            },
-                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if lumen::link(ui, "×", lumen::FAINT).clicked() {
+                                close = true;
+                            }
+                        });
                     });
                     let (rect, resp) =
                         ui.allocate_exact_size(egui::vec2(186.0, 158.0), Sense::click_and_drag());
@@ -291,10 +277,7 @@ fn rating_button(
                         let a = start + i as f32 / 10.0 * std::f32::consts::TAU;
                         let dir = egui::vec2(a.cos(), a.sin());
                         painter.line_segment(
-                            [
-                                center + dir * (radius + 5.0),
-                                center + dir * (radius + 9.0),
-                            ],
+                            [center + dir * (radius + 5.0), center + dir * (radius + 9.0)],
                             Stroke::new(
                                 1.0_f32,
                                 if i + 1 == draft {
@@ -375,12 +358,7 @@ fn rating_button(
     }
 }
 
-fn simkl_bar(
-    ui: &mut egui::Ui,
-    movie_id: u64,
-    track: &TrackInfo,
-    actions: &mut Vec<DetailAction>,
-) {
+fn simkl_bar(ui: &mut egui::Ui, movie_id: u64, track: &TrackInfo, actions: &mut Vec<DetailAction>) {
     let status = track.status.as_deref().unwrap_or("");
     // Stato e fonte restano un solo gruppo a sinistra; a destra c'è solo
     // l'uscita verso SIMKL, senza ripetere il nome.
@@ -511,6 +489,7 @@ pub fn panel(
     why: Option<&str>,
     consiglio: Option<&str>,
     focus_close: bool,
+    sources: &[crate::catalog::MovementFact],
 ) -> Vec<DetailAction> {
     let mut actions: Vec<DetailAction> = Vec::new();
 
@@ -550,80 +529,95 @@ pub fn panel(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let width = ui.available_width();
+            for fact in sources {
+                ui.label(lumen::body(
+                    11.0,
+                    format!(
+                        "{} · {}",
+                        fact.movement.replace('_', " "),
+                        if fact.relation == "documented" {
+                            "Appartenenza documentata"
+                        } else {
+                            "Affinità editoriale"
+                        }
+                    ),
+                ));
+                ui.label(lumen::body(11.0, &fact.note).color(lumen::MUTED));
+                ui.hyperlink_to("Leggi la fonte", &fact.source);
+                ui.add_space(8.0);
+            }
             let poster_w = (if compact { 92.0_f32 } else { 104.0 }).min(width * 0.34);
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 12.0;
-                let _ = lumen::poster(
-                    ui,
-                    images,
-                    Some(&d.movie),
-                    poster_w,
-                    poster_w * 1.5,
-                    true,
-                );
+                let _ = lumen::poster(ui, images, Some(&d.movie), poster_w, poster_w * 1.5, true);
                 let text_w = (width - poster_w - 12.0).max(0.0);
-                ui.allocate_ui_with_layout(egui::vec2(text_w, 0.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    ui.set_width(text_w);
-                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                    ui.label(lumen::display(if width < 300.0 { 20.0 } else { 24.0 }, &d.movie.title));
-                    if !d.movie.original_title.is_empty()
-                        && d.movie.original_title != d.movie.title
-                    {
-                        ui.add_space(2.0);
-                        ui.label(
-                            lumen::mono(9.0, &d.movie.original_title).color(lumen::FAINT),
-                        );
-                    }
-                    if !d.tagline.is_empty() {
-                        ui.add_space(6.0);
-                        ui.label(
-                            lumen::body(12.5, format!("«{}»", d.tagline))
-                                .italics()
-                                .color(lumen::MUTED),
-                        );
-                    }
-                    let mut meta: Vec<String> = Vec::new();
-                    if let Some(y) = d.movie.year {
-                        meta.push(y.to_string());
-                    }
-                    if let Some(r) = d.runtime {
-                        meta.push(format!("{r} min"));
-                    }
-                    if !d.countries.is_empty() {
-                        meta.push(
-                            d.countries
-                                .iter()
-                                .map(|c| short_country(c))
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                        );
-                    }
-                    if !meta.is_empty() {
-                        ui.add_space(if d.tagline.is_empty() { 4.0 } else { 8.0 });
-                        ui.label(lumen::mono(9.0, meta.join(" · ")).color(lumen::FAINT));
-                    }
-                    let mut votes: Vec<String> = Vec::new();
-                    if d.movie.votes > 0 {
-                        votes.push(format!(
-                            "TMDB {:.1} ★ {}",
-                            d.movie.rating,
-                            compact_votes(d.movie.votes)
+                ui.allocate_ui_with_layout(
+                    egui::vec2(text_w, 0.0),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        ui.set_width(text_w);
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                        ui.label(lumen::display(
+                            if width < 300.0 { 20.0 } else { 24.0 },
+                            &d.movie.title,
                         ));
-                    }
-                    if let Some(imdb) = d.imdb {
-                        if imdb.votes > 0 {
+                        if !d.movie.original_title.is_empty()
+                            && d.movie.original_title != d.movie.title
+                        {
+                            ui.add_space(2.0);
+                            ui.label(lumen::mono(9.0, &d.movie.original_title).color(lumen::FAINT));
+                        }
+                        if !d.tagline.is_empty() {
+                            ui.add_space(6.0);
+                            ui.label(
+                                lumen::body(12.5, format!("«{}»", d.tagline))
+                                    .italics()
+                                    .color(lumen::MUTED),
+                            );
+                        }
+                        let mut meta: Vec<String> = Vec::new();
+                        if let Some(y) = d.movie.year {
+                            meta.push(y.to_string());
+                        }
+                        if let Some(r) = d.runtime {
+                            meta.push(format!("{r} min"));
+                        }
+                        if !d.countries.is_empty() {
+                            meta.push(
+                                d.countries
+                                    .iter()
+                                    .map(|c| short_country(c))
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                            );
+                        }
+                        if !meta.is_empty() {
+                            ui.add_space(if d.tagline.is_empty() { 4.0 } else { 8.0 });
+                            ui.label(lumen::mono(9.0, meta.join(" · ")).color(lumen::FAINT));
+                        }
+                        let mut votes: Vec<String> = Vec::new();
+                        if d.movie.votes > 0 {
                             votes.push(format!(
-                                "IMDb {:.1} ★ {}",
-                                imdb.rating,
-                                compact_votes(imdb.votes)
+                                "TMDB {:.1} ★ {}",
+                                d.movie.rating,
+                                compact_votes(d.movie.votes)
                             ));
                         }
-                    }
-                    if !votes.is_empty() {
-                        ui.add_space(3.0);
-                        ui.label(lumen::mono(9.0, votes.join(" · ")).color(lumen::MUTED));
-                    }
-                });
+                        if let Some(imdb) = d.imdb {
+                            if imdb.votes > 0 {
+                                votes.push(format!(
+                                    "IMDb {:.1} ★ {}",
+                                    imdb.rating,
+                                    compact_votes(imdb.votes)
+                                ));
+                            }
+                        }
+                        if !votes.is_empty() {
+                            ui.add_space(3.0);
+                            ui.label(lumen::mono(9.0, votes.join(" · ")).color(lumen::MUTED));
+                        }
+                    },
+                );
             });
 
             ui.add_space(12.0);
@@ -644,8 +638,12 @@ pub fn panel(
             ui.add_space(10.0);
             ui.label(lumen::label("Dove vederlo"));
             ui.add_space(4.0);
-            if d.flatrate.is_empty() && d.rent.is_empty() && d.buy.is_empty() && provider.is_none() {
-                ui.label(lumen::body(12.5, "Informazioni sulla disponibilità non presenti.").color(lumen::MUTED));
+            if d.flatrate.is_empty() && d.rent.is_empty() && d.buy.is_empty() && provider.is_none()
+            {
+                ui.label(
+                    lumen::body(12.5, "Informazioni sulla disponibilità non presenti.")
+                        .color(lumen::MUTED),
+                );
             } else {
                 avail_row(ui, "IN ABBONAMENTO", &d.flatrate, lumen::CELADON);
                 avail_row(ui, "A NOLEGGIO", &d.rent, lumen::MUTED);
@@ -678,8 +676,7 @@ pub fn panel(
                         ui.add_space(9.0);
                         ui.add(
                             egui::Label::new(
-                                lumen::body(11.5, format!("Consiglio · {c}"))
-                                    .color(lumen::MUTED),
+                                lumen::body(11.5, format!("Consiglio · {c}")).color(lumen::MUTED),
                             )
                             .wrap(),
                         );
@@ -772,9 +769,21 @@ mod tests {
                 let ctx = egui::Context::default();
                 lumen::install(&ctx);
                 ctx.set_pixels_per_point(scale);
-                let render = || frame(&ctx, egui::vec2(width, 650.0), |ui| {
-                    super::panel(ui, &images, &details, true, &super::TrackInfo::default(), None, None, false);
-                });
+                let render = || {
+                    frame(&ctx, egui::vec2(width, 650.0), |ui| {
+                        super::panel(
+                            ui,
+                            &images,
+                            &details,
+                            true,
+                            &super::TrackInfo::default(),
+                            None,
+                            None,
+                            false,
+                            &[],
+                        );
+                    })
+                };
                 let _ = render();
                 let output = render();
                 let heading = text_rect(&output, "SCHEDA FILM");
@@ -782,7 +791,11 @@ mod tests {
                 for shape in &output.shapes {
                     if let egui::epaint::Shape::Text(text) = &shape.shape {
                         let bounds = text.galley.rect.translate(text.pos.to_vec2());
-                        assert!(bounds.right() <= width + 0.5, "scheda larga {width} scala {scale}: {} {bounds:?}", text.galley.text());
+                        assert!(
+                            bounds.right() <= width + 0.5,
+                            "scheda larga {width} scala {scale}: {} {bounds:?}",
+                            text.galley.text()
+                        );
                         assert!(!text.galley.elided);
                     }
                 }
@@ -796,7 +809,14 @@ mod tests {
         use crate::ui::{images::ImageStore, lumen};
 
         let images = ImageStore::new();
-        for source in ["assente", "link vuoto", "abbonamento", "noleggio", "acquisto", "link"] {
+        for source in [
+            "assente",
+            "link vuoto",
+            "abbonamento",
+            "noleggio",
+            "acquisto",
+            "link",
+        ] {
             let mut details = Details::default();
             details.movie.title = "Film di prova".into();
             match source {
@@ -805,26 +825,50 @@ mod tests {
                 "acquisto" => details.buy.push("Provider di prova".into()),
                 "link" => details.provider_link = Some("https://example.com/film".into()),
                 "link vuoto" => details.provider_link = Some("  ".into()),
-                _ => {},
+                _ => {}
             }
             let ctx = egui::Context::default();
             lumen::install(&ctx);
-            let mut output = ctx.run_ui(egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(380.0, 1000.0))),
-                ..Default::default()
-            }, |ui| {
-                super::panel(ui, &images, &details, false, &super::TrackInfo::default(), None, None, false);
-            });
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(380.0, 1000.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    super::panel(
+                        ui,
+                        &images,
+                        &details,
+                        false,
+                        &super::TrackInfo::default(),
+                        None,
+                        None,
+                        false,
+                        &[],
+                    );
+                },
+            );
             output.textures_delta.clear();
-            let text = output.shapes.iter().filter_map(|shape| {
-                if let egui::epaint::Shape::Text(text) = &shape.shape {
-                    Some(text.galley.text().to_owned())
-                } else {
-                    None
-                }
-            }).collect::<Vec<_>>().join("\n");
+            let text = output
+                .shapes
+                .iter()
+                .filter_map(|shape| {
+                    if let egui::epaint::Shape::Text(text) = &shape.shape {
+                        Some(text.galley.text().to_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
             assert!(text.contains("DOVE VEDERLO"));
-            assert_eq!(text.contains("Informazioni sulla disponibilità non presenti"), matches!(source, "assente" | "link vuoto"));
+            assert_eq!(
+                text.contains("Informazioni sulla disponibilità non presenti"),
+                matches!(source, "assente" | "link vuoto")
+            );
             if matches!(source, "abbonamento" | "noleggio" | "acquisto") {
                 assert!(text.contains("Provider di prova"));
             }

@@ -10,16 +10,13 @@ use crate::ui::{fx, lumen, theme};
 const GAP: f32 = 14.0;
 
 /// Dipinge una texture arrotondata dentro `rect`, se disponibile.
-pub fn paint_image(
-    ui: &mut egui::Ui,
-    images: &ImageStore,
-    uri: &str,
-    rect: Rect,
-    rounding: f32,
-) {
+pub fn paint_image(ui: &mut egui::Ui, images: &ImageStore, uri: &str, rect: Rect, rounding: f32) {
     if let Some(tex) = images.texture(ui.ctx(), uri) {
         let sized = egui::load::SizedTexture::new(tex.id(), rect.size());
-        ui.put(rect, egui::Image::new(sized).corner_radius(lumen::radius(rounding)));
+        ui.put(
+            rect,
+            egui::Image::new(sized).corner_radius(lumen::radius(rounding)),
+        );
     }
 }
 
@@ -50,7 +47,8 @@ fn card(
     let hover = ui.ctx().animate_bool_with_time(resp.id, hovered, 0.14);
     let poster_h = (width * 1.5).floor();
     let poster_rect = Rect::from_min_size(rect.min, egui::vec2(width, poster_h));
-    ui.painter().rect_filled(poster_rect, egui::CornerRadius::ZERO, lumen::DEEP);
+    ui.painter()
+        .rect_filled(poster_rect, egui::CornerRadius::ZERO, lumen::DEEP);
     // I poster arrivano a rate: finché l'immagine non c'è, shimmer.
     let mut loaded = false;
     if let Some(path) = &m.poster_path {
@@ -61,9 +59,28 @@ fn card(
             loaded = true;
         }
     }
-    if !loaded {
+    if !loaded && m.poster_path.is_some() {
         let now = ui.ctx().input(|i| i.time);
         fx::shimmer(ui, poster_rect, 0.0, now);
+    } else if m.poster_path.is_none() {
+        let center = poster_rect.center();
+        lumen::icon(
+            ui.painter(),
+            Rect::from_center_size(center - egui::vec2(0.0, 12.0), egui::vec2(28.0, 28.0)),
+            lumen::Icon::Detail,
+            lumen::BORDER_HI,
+        );
+        ui.painter().text(
+            center + egui::vec2(0.0, 18.0),
+            Align2::CENTER_CENTER,
+            if m.release_date.is_none() && m.genre_ids.is_empty() {
+                "Scheda da completare"
+            } else {
+                "Locandina non disponibile"
+            },
+            FontId::proportional(10.0),
+            lumen::MUTED,
+        );
     }
     if m.track.watched {
         lumen::watched_overlay(ui, poster_rect, hovered);
@@ -78,7 +95,9 @@ fn card(
     ui.painter().rect_stroke(
         poster_rect,
         egui::CornerRadius::ZERO,
-        Stroke::new(1.0_f32, border), egui::StrokeKind::Inside);
+        Stroke::new(1.0_f32, border),
+        egui::StrokeKind::Inside,
+    );
     lumen::focus(ui, &resp, 0.0);
 
     let title = ui.painter().layout_job(trunc_job(
@@ -115,7 +134,8 @@ fn card(
         if hovered { lumen::MUTED } else { lumen::FAINT },
     );
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &m.title));
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
 }
 
 /// Griglia virtualizzata di poster. Ritorna l'id del film cliccato.
@@ -162,10 +182,7 @@ pub fn grid(
                             }
                         }
                         None => {
-                            ui.allocate_exact_size(
-                                egui::vec2(card_w, card_h),
-                                Sense::hover(),
-                            );
+                            ui.allocate_exact_size(egui::vec2(card_w, card_h), Sense::hover());
                         }
                     }
                 }

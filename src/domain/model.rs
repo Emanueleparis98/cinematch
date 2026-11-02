@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Sort {
     #[default]
     Popularity,
@@ -10,12 +12,11 @@ pub enum Sort {
 }
 
 impl Sort {
-    pub const ALL: [Sort; 6] = [
+    pub const ALL: [Sort; 5] = [
         Sort::Popularity,
         Sort::Rating,
         Sort::Votes,
         Sort::Newest,
-        Sort::Upcoming,
         Sort::Oldest,
     ];
 
@@ -102,14 +103,14 @@ pub fn toggle<T: PartialEq>(list: &mut Vec<T>, item: T) {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackState {
     pub watched: bool,
     pub watchlist: bool,
     pub rating: Option<u8>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Movie {
     pub id: u64,
     pub title: String,
@@ -139,6 +140,7 @@ pub struct ImdbRating {
 
 #[derive(Clone, Debug, Default)]
 pub struct Details {
+    pub alternative_titles: Vec<String>,
     pub cast_full: Vec<String>,
     pub directors: Vec<String>,
     pub collection_id: Option<u64>,

@@ -217,7 +217,19 @@ pub struct CollectionRef {
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
+pub struct AlternativeTitle {
+    #[serde(default)]
+    pub title: String,
+}
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct AlternativeTitles {
+    #[serde(default)]
+    pub titles: Vec<AlternativeTitle>,
+}
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct ApiDetails {
+    #[serde(default)]
+    pub alternative_titles: Option<AlternativeTitles>,
     #[serde(default)]
     pub origin_country: Vec<String>,
     #[serde(default)]
@@ -316,6 +328,10 @@ impl ApiDetails {
             }
         }
         Details {
+            alternative_titles: self
+                .alternative_titles
+                .map(|a| a.titles.into_iter().map(|t| t.title).collect())
+                .unwrap_or_default(),
             origin_country_codes: self.origin_country,
             cast_full: self
                 .credits

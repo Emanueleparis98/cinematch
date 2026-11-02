@@ -12,17 +12,12 @@ fn facets(decades: &[&str], movements: &[&str], genres: &[u32]) -> Facets {
 }
 
 #[test]
-fn anni_80_piu_neorealismo_e_impossibile() {
+fn criteri_fuori_dalla_ricetta_restano_scelte_esplicite() {
     let tax = Taxonomy::load();
     let f = facets(&["1980s"], &["neorealismo"], &[27]);
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(
-        clean.movements.is_empty(),
-        "il neorealismo deve essere rimosso"
-    );
-    assert!(!msgs.is_empty(), "deve esserci una spiegazione");
-    let range = constraints::year_range(&tax, &clean).unwrap().unwrap();
-    assert_eq!(range, (1980, 1989));
+    let (clean, messages) = constraints::sanitize(&tax, &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
 
 #[test]
@@ -40,8 +35,8 @@ fn anni_80_piu_giallo_e_legittimo_ma_ristretto() {
         "paese implicato dal movimento"
     );
     assert!(
-        q.without_genres.contains(&16),
-        "animazione esclusa dal giallo"
+        q.without_genres.is_empty(),
+        "nessuna esclusione editoriale implicita"
     );
     assert_eq!(q.genres, vec![27], "Horror esplicito resta obbligatorio");
     assert!(!q.genres_or, "il movimento non allarga un genere richiesto");
@@ -64,61 +59,62 @@ fn genere_estraneo_al_movimento_resta_un_filtro_stretto() {
 }
 
 #[test]
-fn il_movimento_da_solo_usa_i_suoi_generi_in_alternativa() {
-    let tax = Taxonomy::load();
-    let f = facets(&[], &["giallo_italiano"], &[]);
-    let q = to_discover(&tax, &f, &[], 1).unwrap();
-    assert!(q.genres_or);
-    assert!(q.genres.contains(&27) && q.genres.contains(&53));
+fn il_movimento_non_aggiunge_generi_impliciti() {
+    let q = to_discover(
+        &Taxonomy::load(),
+        &facets(&[], &["giallo_italiano"], &[]),
+        &[],
+        1,
+    )
+    .unwrap();
+    assert!(q.genres.is_empty());
+    assert!(q.without_genres.is_empty());
 }
 
 #[test]
-fn neorealismo_non_ammette_horror() {
-    let tax = Taxonomy::load();
-    let f = facets(&[], &["neorealismo"], &[27]);
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(clean.genres.is_empty());
-    assert!(msgs.iter().any(|m| m.contains("Horror")));
+fn un_genere_non_viene_eliminato_dalla_corrente() {
+    let mut f = facets(&[], &["neorealismo"], &[27]);
+    f.moods = vec![];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
 
 #[test]
-fn sceneggiatura_a_rovescio_decennio_dopo_movimento() {
-    let tax = Taxonomy::load();
-    let f = facets(&["1970s"], &["nouvelle_vague"], &[]);
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(clean.movements.is_empty(), "1968 non tocca gli anni 70");
-    assert!(msgs[0].contains("Nouvelle Vague"));
+fn il_decennio_non_rimuove_una_corrente() {
+    let mut f = facets(&["1970s"], &["nouvelle_vague"], &[]);
+    f.moods = vec![];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
 
 #[test]
-fn dogme_piu_fantasy_viene_bloccato() {
-    let tax = Taxonomy::load();
-    let f = facets(&[], &["dogme95"], &[14]);
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(clean.genres.is_empty());
-    assert!(msgs.iter().any(|m| m.contains("Fantasy")));
+fn la_tassonomia_non_vieta_fantasy() {
+    let mut f = facets(&[], &["dogme95"], &[14]);
+    f.moods = vec![];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
 
 #[test]
-fn mood_soprannaturale_incompatibile_col_neorealismo() {
-    let tax = Taxonomy::load();
+fn un_mood_non_viene_cancellato_da_una_generalizzazione() {
     let mut f = facets(&[], &["neorealismo"], &[]);
-    f.moods = vec!["soprannaturale".to_string()];
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert!(clean.moods.is_empty());
-    assert!(msgs.iter().any(|m| m.contains("Soprannaturale")));
+    f.moods = vec!["soprannaturale".into()];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
 
 #[test]
-fn due_movimenti_senza_periodo_comune_non_coesistono() {
-    let tax = Taxonomy::load();
-    let f = facets(&[], &["neorealismo", "new_hollywood"], &[]);
-    let (clean, msgs) = constraints::sanitize(&tax, &f);
-    assert_eq!(clean.movements.len(), 1);
-    assert!(msgs.iter().any(|m| m.contains("New Hollywood")));
+fn si_possono_selezionare_correnti_di_periodi_diversi() {
+    let mut f = facets(&[], &["neorealismo", "new_hollywood"], &[]);
+    f.moods = vec![];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }
-
-// ------------------------------------------------ correnti a parola chiave ----
 
 #[test]
 fn le_correnti_a_parola_chiave_dichiarano_la_keyword() {
@@ -274,12 +270,12 @@ fn tema_libero_e_un_requisito_e_non_un_alternativa() {
     let tax = Taxonomy::load();
     let f = Facets {
         keywords: vec!["resistenza".to_string()],
-        moods: vec!["malinconico".to_string()],
+        moods: vec!["critica_sociale".to_string()],
         ..Default::default()
     };
     let (clean, _) = constraints::sanitize(&tax, &f);
     let known = vec![
-        ("malinconico".to_string(), 111u64),
+        ("critica_sociale".to_string(), 111u64),
         ("resistenza".to_string(), 222u64),
     ];
     let q = to_discover(&tax, &clean, &known, 1).unwrap();
@@ -324,21 +320,14 @@ fn la_ricetta_del_neorealismo_sono_gli_anni_40_e_50_italiani() {
 }
 
 #[test]
-fn un_movimento_rifiutato_non_stringe_il_periodo_dei_successivi() {
-    let tax = Taxonomy::load();
-    // New Hollywood (1967-1976, US), Nouvelle Vague (1959-1968, FR) e poi
-    // slasher (1975-1990, US): la seconda e incompatibile per paese, ma non
-    // deve lasciare il periodo ristretto al 1967-1968 e far scartare la terza.
-    let f = facets(
+fn si_conservano_tutte_le_correnti_selezionate() {
+    let mut f = facets(
         &[],
         &["new_hollywood", "nouvelle_vague", "slasher_era"],
         &[],
     );
-    let (clean, _) = constraints::sanitize(&tax, &f);
-    assert!(clean.movements.iter().any(|m| m == "new_hollywood"));
-    assert!(!clean.movements.iter().any(|m| m == "nouvelle_vague"));
-    assert!(
-        clean.movements.iter().any(|m| m == "slasher_era"),
-        "lo slasher condivide il periodo e il paese con New Hollywood"
-    );
+    f.moods = vec![];
+    let (clean, messages) = constraints::sanitize(&Taxonomy::load(), &f);
+    assert_eq!(clean, f);
+    assert!(messages.is_empty());
 }

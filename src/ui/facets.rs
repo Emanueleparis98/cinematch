@@ -62,9 +62,10 @@ pub fn header(
     f: &Facets,
     query: &mut String,
     guide_open: &mut bool,
+    scope_filters: usize,
 ) -> Vec<FacetAction> {
     let mut out = Vec::new();
-    let active = f.active_count();
+    let active = f.active_count() + scope_filters;
 
     ui.horizontal(|ui| {
         ui.label(lumen::mono(11.0, "FILTRI").color(lumen::IVORY));
@@ -222,18 +223,12 @@ pub fn sections(
     }
 
     // ---- periodo ----
-    let (mlo, mhi) = movement_window(tax, f);
     let all_decades: Vec<(String, bool, Availability)> = tax
         .decades
         .iter()
         .map(|d| {
             let selected = f.decades.contains(&d.id);
-            let av = match (mlo, mhi) {
-                (Some(lo), Some(hi)) if d.to < lo || d.from > hi => Availability::blocked(format!(
-                    "I movimenti scelti coprono il periodo {lo}–{hi}"
-                )),
-                _ => Availability::ok(),
-            };
+            let av = Availability::ok();
             (d.label.clone(), selected, av)
         })
         .collect();
@@ -1193,7 +1188,7 @@ fn metrics(ui: &mut Ui, f: &Facets, out: &mut Vec<FacetAction>) {
         ui.add_space(4.0);
         ui.label(
             RichText::new(
-                "Per la classifica per voto contano solo i titoli con almeno 50 voti: alza «Voti minimi» per una lista solida.",
+                "Scegli «Voti minimi» per applicare una soglia al numero di valutazioni.",
             )
             .size(11.0)
             .color(theme::FAINT),
@@ -1203,7 +1198,9 @@ fn metrics(ui: &mut Ui, f: &Facets, out: &mut Vec<FacetAction>) {
 
 const MIN_RATINGS: &[f32] = &[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
 const MAX_RATINGS: &[f32] = &[5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0];
-const VOTES: &[u32] = &[500, 1_000, 2_000, 5_000, 10_000, 50_000, 100_000];
+const VOTES: &[u32] = &[
+    500, 1_000, 2_000, 5_000, 10_000, 50_000, 100_000, 500_000, 1_000_000, 2_000_000,
+];
 
 fn metric_chip(
     ui: &mut Ui,
@@ -1414,10 +1411,10 @@ fn votes_popup(
 
 const RUNTIMES: &[(&str, Option<(u32, u32)>)] = &[
     ("Qualsiasi", None),
-    ("Cortometraggio (< 40')", Some((0, 40))),
-    ("Breve (< 90')", Some((0, 90))),
+    ("Fino a 40'", Some((0, 40))),
+    ("Fino a 90'", Some((0, 90))),
     ("Medio (90–120')", Some((90, 120))),
-    ("Lungo (> 120')", Some((120, 600))),
+    ("Lungo (> 120')", Some((121, u32::MAX))),
 ];
 
 fn runtime_popup(
@@ -1453,10 +1450,10 @@ fn runtime_popup(
 fn runtime_label(r: Option<(u32, u32)>) -> String {
     match r {
         None => "Durata".to_string(),
-        Some((0, 40)) => "Corto (< 40')".to_string(),
-        Some((0, 90)) => "Breve (< 90')".to_string(),
+        Some((0, 40)) => "Fino a 40'".to_string(),
+        Some((0, 90)) => "Fino a 90'".to_string(),
         Some((90, 120)) => "Medio (90–120')".to_string(),
-        Some((120, 600)) => "Lungo (> 120')".to_string(),
+        Some((121, u32::MAX)) => "Lungo (> 120')".to_string(),
         Some((a, b)) => format!("{a}–{b} min"),
     }
 }
@@ -1532,18 +1529,6 @@ fn sep(ui: &mut Ui, drawn: &mut usize) {
         ui.add_space(3.0);
     }
     *drawn += 1;
-}
-
-fn movement_window(tax: &Taxonomy, f: &Facets) -> (Option<u16>, Option<u16>) {
-    let mut lo: Option<u16> = None;
-    let mut hi: Option<u16> = None;
-    for id in &f.movements {
-        if let Some(m) = tax.movement(id) {
-            lo = Some(lo.map_or(m.period[0], |v: u16| v.max(m.period[0])));
-            hi = Some(hi.map_or(m.period[1], |v: u16| v.min(m.period[1])));
-        }
-    }
-    (lo, hi)
 }
 
 fn period_label(from: u16, to: u16) -> String {

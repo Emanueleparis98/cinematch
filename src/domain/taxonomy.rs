@@ -77,6 +77,26 @@ impl Taxonomy {
     pub fn load() -> Self {
         let mut tax: Taxonomy =
             serde_json::from_str(TAXONOMY_JSON).expect("taxonomy.json non valido");
+        let countries: Vec<Country> =
+            serde_json::from_str(include_str!("../../assets/countries.json"))
+                .expect("countries.json non valido");
+        for country in countries {
+            if !tax.countries.iter().any(|c| c.code == country.code) {
+                tax.countries.push(country);
+            }
+        }
+        tax.countries.sort_by(|a, b| a.name.cmp(&b.name));
+        for from in (1870..=2090).step_by(10) {
+            if !tax.decades.iter().any(|d| d.from == from) {
+                tax.decades.push(Decade {
+                    id: format!("{from}s"),
+                    label: format!("Anni {from}"),
+                    from,
+                    to: from + 9,
+                });
+            }
+        }
+        tax.decades.sort_by_key(|d| d.from);
         tax.build_index();
         tax
     }
