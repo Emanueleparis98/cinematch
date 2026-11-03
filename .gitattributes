@@ -1,0 +1,2 @@
+# Keep pinned third-party resources byte-identical on every platform.
+extensions/cinematch/vendor/libmedia/** -text

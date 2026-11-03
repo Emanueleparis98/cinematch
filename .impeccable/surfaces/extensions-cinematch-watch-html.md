@@ -28,3 +28,10 @@ conversion. External addon availability and account setup are not design evidenc
 
 Review evidence: controlled DeepSeek response, synthetic MP4/HLS playback,
 addon and player captures at 320/600/1180; existing panel regression suite.
+
+3.1 extension: automatic integrated decoder for MKV/legacy formats, with a flat
+transport strip below the video, timeline, volume, fullscreen and track selectors.
+Preserve the inherited palette and controls. Frame-led playback is primary; no
+codec configuration form is added. Regular native playback keeps its native controls.
+Evidence includes synthetic HEVC/AC3 5.1, audio/video rendering and decoded waveform,
+E-AC3/DTS/AVI, audio languages, SRT, DASH, fullscreen, seek and source switching.

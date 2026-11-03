@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.0.1
+# CineMatch — estensione browser 3.1.0
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.0.1.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.1.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -70,18 +70,20 @@ quattro interpreti con foto, senza un pannello di gestione del cast.
 L’icona video **Addon e player** nell’intestazione apre la nuova sezione.
 Collega un manifest compatibile con Stremio/Nuvio, poi clicca la locandina di un
 film nella risposta AI. Scegli il flusso nella scheda CineMatch per riprodurlo.
-Puoi importare file o indirizzi JSON anche senza addon. Video HTTP e HLS sono
-integrati; torrent, DASH, DRM e header senza proxy non vengono convertiti.
+Puoi importare file o indirizzi JSON anche senza addon. Video HTTP, HLS e DASH
+sono integrati. libmedia aggiunge decoder locali per MKV/AVI e audio AC3/E-AC3/DTS,
+usati automaticamente quando servono. Torrent, DRM e header senza proxy conservano
+i limiti dei rispettivi servizi.
 
 I sette configuratori indicati sono disponibili in una sezione espandibile:
 completa la configurazione sui loro siti e incolla il manifest personale.
 Nessun addon è preinstallato. [Guida e collaudo](../../docs/estensione-3.0.0-player.md).
 
-La versione 3.0.1 verifica il formato con una richiesta GET/Range limitata,
-riconosce HLS anche dopo un reindirizzamento e segnala i codec non supportati
-dal browser. Le etichette H.264/AAC vengono ordinate prima delle combinazioni
-problematiche. I codec non vengono convertiti: un file AC3 non diventa AAC.
-[Dettagli e verifica](../../docs/estensione-3.0.1-codec.md).
+La versione 3.1.0 legge e decodifica i blocchi durante la visione: non converte
+e salva prima il film completo. Per il motore integrato sono disponibili pausa,
+avanzamento, volume, schermo intero e selezione delle tracce audio/sottotitoli
+incorporate. I codec e il motore sono nel pacchetto, senza CDN a runtime.
+[Compatibilità e verifica](../../docs/estensione-3.1.0-decoder.md).
 
 ## Costi, dati e permessi
 

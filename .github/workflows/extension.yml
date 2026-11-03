@@ -2,9 +2,9 @@ name: Browser extension
 on:
   push:
     branches: [main]
-    paths: ['extensions/**', 'tests/extension*', 'tests/fixtures/player/**', 'scripts/build-extension.py', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
+    paths: ['extensions/**', 'tests/extension*', 'tests/fixtures/player/**', 'scripts/build-extension.py', 'scripts/vendor-libmedia.py', '.gitattributes', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
   pull_request:
-    paths: ['extensions/**', 'tests/extension*', 'tests/fixtures/player/**', 'scripts/build-extension.py', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
+    paths: ['extensions/**', 'tests/extension*', 'tests/fixtures/player/**', 'scripts/build-extension.py', 'scripts/vendor-libmedia.py', '.gitattributes', 'plugins/cinema-currents/assets/**', 'assets/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/extension.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +24,7 @@ jobs:
       - run: pnpm test:browser
       - run: pnpm test:images
       - run: pnpm test:player
+      - run: pnpm test:codecs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: CineMatch-Chrome

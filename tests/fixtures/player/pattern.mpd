@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:mpeg:dash:schema:mpd:2011"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+	profiles="urn:mpeg:dash:profile:isoff-live:2011"
+	type="static"
+	mediaPresentationDuration="PT5.0S"
+	maxSegmentDuration="PT1.0S"
+	minBufferTime="PT2.0S">
+	<ProgramInformation>
+	</ProgramInformation>
+	<ServiceDescription id="0">
+	</ServiceDescription>
+	<Period id="0" start="PT0.0S">
+		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="12/1" maxWidth="320" maxHeight="180" par="16:9" lang="und">
+			<Representation id="0" mimeType="video/mp4" codecs="avc1.42c00c" bandwidth="170628" width="320" height="180" sar="1:1">
+				<BaseURL>pattern-stream0.mp4</BaseURL>
+				<SegmentList timescale="1000000" duration="1000000" startNumber="1">
+					<Initialization range="0-825" />
+					<SegmentURL mediaRange="826-38182" indexRange="826-877" />
+					<SegmentURL mediaRange="38183-57574" indexRange="38183-38234" />
+					<SegmentURL mediaRange="57575-75374" indexRange="57575-57626" />
+					<SegmentURL mediaRange="75375-93135" indexRange="75375-75426" />
+					<SegmentURL mediaRange="93136-108528" indexRange="93136-93187" />
+				</SegmentList>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" lang="und">
+			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="32427" audioSamplingRate="44100">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+				<BaseURL>pattern-stream1.mp4</BaseURL>
+				<SegmentList timescale="1000000" duration="1000000" startNumber="1">
+					<Initialization range="0-763" />
+					<SegmentURL mediaRange="764-5207" indexRange="764-815" />
+					<SegmentURL mediaRange="5208-9685" indexRange="5208-5259" />
+					<SegmentURL mediaRange="9686-14064" indexRange="9686-9737" />
+					<SegmentURL mediaRange="14065-18444" indexRange="14065-14116" />
+					<SegmentURL mediaRange="18445-22964" indexRange="18445-18496" />
+				</SegmentList>
+			</Representation>
+		</AdaptationSet>
+	</Period>
+</MPD>

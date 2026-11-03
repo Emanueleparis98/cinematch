@@ -3,8 +3,11 @@ from pathlib import Path
 import json
 import shutil
 import zipfile
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
+subprocess.run([sys.executable, str(ROOT / 'scripts/vendor-libmedia.py')], check=True)
 SOURCE = ROOT / "extensions" / "cinematch"
 DEST = ROOT / "dist" / "CineMatch-Chrome"
 DEST.mkdir(parents=True, exist_ok=True)

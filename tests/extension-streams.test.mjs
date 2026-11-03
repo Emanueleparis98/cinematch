@@ -21,7 +21,7 @@ test('movie requests use verified IMDb or explicitly supported TMDB IDs and pres
 });
 test('stream schema distinguishes browser video, HLS, torrent, proxy, DASH and external pages',()=>{
   const streams=parseStreams({streams:[{name:'MP4',url:'https://media.example/a.mp4'},{url:'https://media.example/a.m3u8?key=x'},{infoHash:'abc',fileIdx:1},{url:'https://media.example/a',behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{url:'https://media.example/a.mpd'},{externalUrl:'https://example.org/watch'},{ytId:'abc'}]});
-  assert.deepEqual(streams.map(s=>s.kind),['video','hls','torrent','headers','dash','external','unsupported']);assert.equal(streams.filter(s=>s.playable).length,2);
+  assert.deepEqual(streams.map(s=>s.kind),['video','hls','torrent','headers','dash','external','unsupported']);assert.equal(streams.filter(s=>s.playable).length,3);
 });
 test('stream lists deduplicate URLs and retain text as inert text, blocking executable URLs',()=>{
   const data=parseStreams([{name:'<img onerror=alert(1)>',url:'https://example.org/a',subtitles:[{url:'https://example.org/sub.vtt',lang:'it'},{url:'javascript:alert(1)'}]},{url:'https://example.org/a'},{url:'javascript:alert(1)',externalUrl:'data:text/html,x'}]);

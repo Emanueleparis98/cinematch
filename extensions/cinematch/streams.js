@@ -46,7 +46,7 @@ export function parseStreams(data){
     const kind=url?(needsHeaders?'headers':dash?'dash':/\.m3u8(?:\?|$)/i.test(url)?'hls':'video'):externalUrl?'external':torrent?'torrent':'unsupported';
     const key=url??externalUrl??(torrent?`${s.infoHash??s.url}:${s.fileIdx??''}`:`unknown:${index}`);if(seen.has(key))return [];seen.add(key);
     const reasons={headers:'Richiede un proxy configurato nell’addon per gli header video.',dash:'DASH non supportato da questo player. Scegli una sorgente MP4 o HLS.',torrent:'Torrent: configura nell’addon un servizio che restituisca un flusso HTTP.',unsupported:'Questo tipo di sorgente non è riproducibile nel browser.'};
-    return [{name:text(s.name,100)||'Sorgente video',description:text(s.description??s.title,700),filename:text(s.behaviorHints?.filename,300),url,externalUrl,kind,playable:['video','hls'].includes(kind),reason:reasons[kind]??'',subtitles:(Array.isArray(s.subtitles)?s.subtitles:[]).slice(0,30).flatMap(sub=>{try{return [{url:httpUrl(sub.url).href,lang:text(sub.lang,30)||'Sottotitoli'}];}catch{return [];}})}];
+    return [{name:text(s.name,100)||'Sorgente video',description:text(s.description??s.title,700),filename:text(s.behaviorHints?.filename,300),url,externalUrl,kind,playable:['video','hls','dash'].includes(kind),reason:kind==='dash'?'':reasons[kind]??'',subtitles:(Array.isArray(s.subtitles)?s.subtitles:[]).slice(0,30).flatMap(sub=>{try{return [{url:httpUrl(sub.url).href,lang:text(sub.lang,30)||'Sottotitoli'}];}catch{return [];}})}];
   });
 }
 export async function fetchJson(url,{signal,fetcher=fetch}={}){

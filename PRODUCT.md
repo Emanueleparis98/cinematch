@@ -35,8 +35,8 @@ precedente e fonte dei dati; non sono necessari per l'estensione.
 Dal clic sulla locandina si passa ora al player in una scheda dell’estensione,
 con il film risolto tramite TMDB/IMDb e le sorgenti degli addon scelti dall’utente.
 La sezione Addon collega manifest compatibili con Stremio/Nuvio, senza copiare
-il codice GPL del player nativo Nuvio. HTTP e HLS sono riprodotti nel browser;
-torrent, DASH, DRM e header senza proxy sono dichiarati non compatibili.
+il codice GPL del player nativo Nuvio. HTTP, HLS e DASH sono riprodotti nel browser;
+torrent, DRM e header senza proxy conservano i limiti delle rispettive sorgenti.
 Liste JSON possono essere importate solo per la sessione. I soli dati persistenti
 nuovi sono i manifest e le preferenze di attivazione, non i film o i flussi.
 I permessi opzionali vengono richiesti per gli host scelti. Nessun cookie,
@@ -47,7 +47,11 @@ Il player distingue ora gli errori HTTP dai formati non supportati. Le etichette
 dei codec guidano l’ordine e gli avvisi; all’avvio viene letto un prefisso limitato
 del flusso per riconoscere HLS e i CodecID Matroska disponibili. Le capacità sono
 interrogate nel browser in uso, senza dichiarare HEVC sempre supportato o sempre
-incompatibile. Il player non transcodifica né promette che ogni URL HTTP sia riproducibile.
+incompatibile. Il motore libmedia e i decoder locali vengono selezionati quando
+servono per MKV/AVI, HEVC, AC3/E-AC3/DTS e altri formati inclusi. I dati vengono
+letti a blocchi e decodificati durante la visione, senza convertire/salvare prima
+l’intero film. Restano le differenze di hardware, server, profili e codec inclusi;
+non si promette che ogni URL HTTP sia riproducibile.
 
 La qualità e gli eventuali limiti della risposta dipendono dal servizio esterno.
 Le schede includono note sui casi discussi; nessuna percentuale di infallibilità

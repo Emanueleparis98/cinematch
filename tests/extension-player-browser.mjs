@@ -4,7 +4,7 @@ import {readFile,writeFile,mkdtemp,rm,mkdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,basename} from 'node:path';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
-const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
+const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
 const calls=[],errors=[];let base,failStreams=false,passed=0;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
 const server=createServer((req,res)=>{
@@ -60,7 +60,7 @@ try{
   const chat=await context.newPage();chat.on('pageerror',e=>errors.push(e.message));await chat.goto('https://chat.deepseek.com/test');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).waitFor({timeout:20000});
   let player;
   await check('trusted click on DeepSeek movie poster opens the extension player for the correct TMDB/IMDb film',async()=>{
-    const opened=context.waitForEvent('page');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();player=await opened;player.on('pageerror',e=>errors.push(e.message));await player.waitForURL(`chrome-extension://${id}/watch.html?movie=5156`);await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor();assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
+    const opened=context.waitForEvent('page');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();player=await opened;player.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});player.on('response',r=>{if(r.status()>=400&&r.url().includes('.wasm'))console.log('WASM ERROR',new URL(r.url()).pathname,r.status());});await player.waitForURL(`chrome-extension://${id}/watch.html?movie=5156`);await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor();assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
   });
   await check('stream output is inert text, with torrent and header-only sources explicitly unavailable',async()=>{
     assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),5);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
@@ -79,15 +79,32 @@ try{
   await check('Comet-style redirect with HEAD rejected and wrong MIME still plays HLS, ignoring outdated filename hints',async()=>{
     await player.getByRole('button',{name:'Riproduci Comet redirect di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000});await player.locator('video').evaluate(v=>v.pause());
   });
-  await check('real synthetic HEVC/AC3 Matroska is diagnosed from bytes, with a specific alternative action',async()=>{
-    await player.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('#playback-status').textContent.includes('Il file contiene codec non supportati'));
-    assert.match(await player.locator('#playback-status').innerText(),/AC3/);assert.equal(await player.locator('#retry-play').innerText(),'Scegli un altro flusso');await player.waitForTimeout(200);assert.match(await player.locator('#playback-status').innerText(),/AC3/);
-    for(const width of [320,1180]){await player.setViewportSize({width,height:1000});assert.ok(await player.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await player.screenshot({path:`test-results/player-codec-error-v301-${width}.png`,fullPage:true});}
-    await player.locator('#retry-play').click();assert.equal(await player.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Riproduci MP4 di prova da Cinema di prova');
+  await check('real HEVC/AC3 5.1 Matroska plays through integrated decoders with pause, seek and responsive controls',async()=>{
+    await player.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded'&&Number(document.querySelector('#codec-seek').value)>.3,{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    await player.locator('#codec-toggle').click();await player.waitForFunction(()=>document.querySelector('#playback-status').textContent==='In pausa');assert.equal(await player.locator('#codec-controls').isVisible(),true);
+    await player.locator('#codec-seek').evaluate(e=>{e.value='2.5';e.dispatchEvent(new Event('change',{bubbles:true}));});await player.waitForFunction(()=>Number(document.querySelector('#codec-seek').value)>2);
+    await player.waitForFunction(()=>document.querySelector('#codec-time').value.startsWith('0:02'));
+    for(const width of [320,1180]){await player.setViewportSize({width,height:1000});assert.ok(await player.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await player.screenshot({path:`test-results/player-integrated-v310-${width}.png`,fullPage:true});}
+    await player.locator('#codec-fullscreen').click();await player.waitForFunction(()=>document.fullscreenElement?.id==='playback-stage');await player.screenshot({path:'test-results/player-fullscreen-v310.png'});await player.locator('#codec-fullscreen').click();await player.waitForFunction(()=>!document.fullscreenElement);
     await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5);await player.locator('video').evaluate(v=>v.pause());
   });
   await check('addon requests never receive AI conversations, TMDB credential, authorization headers or cookies',async()=>{
     assert.ok(calls.every(c=>!c.authorization&&!c.cookie&&!c.path.includes('eyJtest')&&!c.path.includes('Ladri')));
+  });
+  const importSource=async(name,file)=>{await player.locator('#stream-file').setInputFiles({name:'codec.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name,url:`${base}/${file}`}]}))});await player.getByRole('button',{name:`Riproduci ${name} da codec.json`}).click();};
+  await check('audio languages and embedded subtitles can be selected in the integrated player',async()=>{
+    await importSource('Tracce','pattern-tracks.mkv');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    assert.equal(await player.locator('#codec-audio-wrap').isVisible(),true);assert.equal(await player.locator('#codec-subtitle-wrap').isVisible(),true);assert.equal(await player.locator('#codec-audio option').count(),2);
+    const audio=await player.locator('#codec-audio option').nth(1).getAttribute('value');await player.locator('#codec-audio').selectOption(audio);const sub=await player.locator('#codec-subtitle option').nth(1).getAttribute('value');await player.locator('#codec-subtitle').selectOption(sub);
+    await player.getByText('Sottotitoli di prova.',{exact:true}).waitFor({timeout:5000});await player.locator('#codec-toggle').click();await player.screenshot({path:'test-results/player-tracks-v310.png',fullPage:true});
+    await player.locator('#codec-subtitle').selectOption('off');
+  });
+  await check('DASH plays with the integrated engine without a native app',async()=>{
+    await importSource('DASH','pattern.mpd');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});await player.locator('#codec-toggle').click();
+  });
+  await check('legacy AVI automatically falls back to integrated decoding and switching back stops the old player',async()=>{
+    await importSource('AVI','pattern-mpeg4-mp3.avi');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.equal(await player.locator('#codec-controls').isVisible(),false);await player.locator('video').evaluate(v=>v.pause());
   });
   await mkdir('test-results',{recursive:true});
   await check('player and addon layouts fit 320px, 600px and desktop without horizontal overflow',async()=>{
