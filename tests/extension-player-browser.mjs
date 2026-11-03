@@ -103,6 +103,8 @@ try{
     await frame.locator('#fullscreen').click();
     await frame.waitForFunction(()=>document.fullscreenElement?.id==='stage',{},{timeout:5000});
     await frame.evaluate(()=>document.exitFullscreen()).catch(()=>{});
+    await frame.waitForFunction(()=>!document.fullscreenElement,{},{timeout:5000});
+    await chat.waitForTimeout(150);
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
     assert.equal(await chat.evaluate(()=>document.documentElement.style.overflow),'');
     assert.equal(await focusedChatLabel(),'Guarda Ladri di biciclette con CineMatch');
