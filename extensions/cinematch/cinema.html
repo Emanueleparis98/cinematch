@@ -114,6 +114,38 @@
       <div class="cm-drawer-list" id="drawerList"></div>
     </aside>
   </section>
+
+  <section class="cm-addons" id="addonsView" hidden aria-label="Addon e player">
+    <div class="cm-addons-head">
+      <button class="cm-back" id="addonsBack" type="button">← Film</button>
+      <div>
+        <p class="cm-kicker">CineMatch</p>
+        <h1>Addon e player</h1>
+        <p class="muted intro">Collega i tuoi manifest compatibili con Stremio e Nuvio. Le ricerche inviano agli addon l’identificativo del film, mai la chat o la chiave TMDB.</p>
+      </div>
+    </div>
+    <form id="addonForm" class="cm-addon-form">
+      <label for="addonUrl">Link di installazione dell’addon</label>
+      <div class="cm-addon-form-row">
+        <input id="addonUrl" type="text" inputmode="url" placeholder="https://…/manifest.json" required autocomplete="off" spellcheck="false">
+        <button type="submit" class="cm-primary">Aggiungi addon</button>
+      </div>
+      <p id="addonStatus" class="cm-addon-status" role="status" aria-live="polite">Incolla il manifest oppure un link stremio://. I link personali restano sul tuo browser.</p>
+    </form>
+    <div class="cm-addon-list-head"><h2>Addon collegati</h2><span id="addonCount" class="muted"></span></div>
+    <div id="addonList" class="cm-addon-list"></div>
+    <p id="addonEmpty" class="muted">Non hai ancora collegato addon.</p>
+    <details class="cm-addon-help">
+      <summary>Come recuperare il manifest e quali flussi funzionano</summary>
+      <p>Nel sito dell’addon completa la configurazione e scegli “Copia manifest” o “Copy link”. Incolla qui il link completo, incluse le eventuali preferenze personali. Un configuratore non è un manifest.</p>
+      <p>Il player integra video HTTP, HLS e DASH. Il motore aggiuntivo legge MKV e AVI e include decoder per HEVC, AC3, E-AC3, DTS e altri formati. La riproduzione avviene a blocchi, senza salvare prima il film completo.</p>
+      <p>Torrent e magnet richiedono un servizio dell’addon che fornisca un URL HTTP; header personalizzati richiedono un proxy configurato nell’addon.</p>
+    </details>
+    <details class="cm-addon-help">
+      <summary>Configuratori utili</summary>
+      <p class="cm-configurators"><a href="https://comet.feels.legal/configure" target="_blank" rel="noopener noreferrer">Comet</a><a href="https://mediafusion.elfhosted.com/app/configure" target="_blank" rel="noopener noreferrer">MediaFusion</a><a href="https://icv.stremio-italia.eu/" target="_blank" rel="noopener noreferrer">IlCorsaroViola</a><a href="https://streamvix.hayd.uk/" target="_blank" rel="noopener noreferrer">StreamViX</a><a href="https://easystreams.realbestia.com/" target="_blank" rel="noopener noreferrer">EasyStreams</a><a href="https://mammamia.stremio-italia.eu/" target="_blank" rel="noopener noreferrer">MammaMia</a><a href="https://toastflix.stremio-italia.eu/" target="_blank" rel="noopener noreferrer">ToastFlix</a></p>
+    </details>
+  </section>
 </main>
 
 <div class="cm-toast" id="toast" role="status" aria-live="polite"></div>

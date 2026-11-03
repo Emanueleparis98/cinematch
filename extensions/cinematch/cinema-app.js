@@ -1,4 +1,4 @@
-import {permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from "./streams.js";
+import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from "./streams.js";
 import {declaredCodecs,compatibility,likelyIntegrated} from "./playback.js";
 import {createPlayer} from "./player-engine.js";
 import {permissionLabel} from "./media-access.js";
@@ -92,14 +92,16 @@ $("backToPicker").onclick=showPicker;
 $("playBest").onclick=()=>{if(state.recommended)startStream(state.recommended);};
 $("resumePlay").onclick=()=>{const stream=state.recommended||state.groups.flatMap(group=>group.streams).find(item=>item.playable);if(stream)startStream(stream,{resumeAt:state.resume});};
 $("refreshSources").onclick=()=>loadStreams();
-$("manageAddons").onclick=openAddons;
+$("manageAddons").onclick=()=>state.view==="addons"?showPicker():showAddons();
+$("addonsBack").onclick=showPicker;
 $("importJson").onclick=()=>$("jsonFile").click();
 
 /* ---------- Player visibility ---------- */
 function showPlayer(stream){
   state.view="player";state.selected=stream.id;
-  document.body.classList.add("player-mode");
-  $("pickerView").hidden=true;$("playerView").hidden=false;
+  document.body.classList.add("player-mode");document.body.classList.remove("addons-mode");
+  $("pickerView").hidden=true;$("addonsView").hidden=true;$("playerView").hidden=false;
+  $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
   $("playerTitle").textContent=state.movie?.title??"Film";
   const presentation=present(stream);
   $("playerSource").textContent=`${stream.groupName??"Sorgente"} · ${presentation.quality}`;
@@ -115,11 +117,67 @@ function showPicker(){
   player.pause().catch(()=>{});
   state.view="picker";
   state.selected=null;
-  document.body.classList.remove("player-mode");
-  $("playerView").hidden=true;$("pickerView").hidden=false;
+  document.body.classList.remove("player-mode","addons-mode");
+  $("playerView").hidden=true;$("addonsView").hidden=true;$("pickerView").hidden=false;
+  $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
   closeDrawer();renderSources();
   $("playBest").focus({preventScroll:true});
   updateResume();
+}
+function showAddons(){
+  saveResume();
+  player.pause().catch(()=>{});
+  state.view="addons";
+  document.body.classList.remove("player-mode");document.body.classList.add("addons-mode");
+  $("pickerView").hidden=true;$("playerView").hidden=true;$("addonsView").hidden=false;
+  $("manageAddons").textContent="Film";$("topbarTitle").textContent="Addon e player";
+  renderAddons();
+  $("addonsBack").focus({preventScroll:true});
+}
+function setAddonStatus(message,type=""){
+  const status=$("addonStatus");status.textContent=message;status.className=`cm-addon-status ${type}`.trim();
+}
+$("addonForm").onsubmit=async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,button=form.querySelector('button[type="submit"]');
+  try{
+    const url=manifestUrl($("addonUrl").value);
+    button.disabled=true;
+    setAddonStatus(`Collegamento a ${httpUrl(url).host}…`);
+    if(!await chrome.permissions.request({origins:[permissionOrigin(url)]}))throw new Error("Accesso al sito non concesso. Riprova e consenti il collegamento.");
+    if(state.addons.length>=20)throw new Error("Hai già 20 addon. Rimuovine uno prima di aggiungerne altri.");
+    const addon=parseManifest(await fetchJson(url),url);
+    const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(url));
+    const key="streamAddon:"+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
+    await chrome.storage.local.set({[key]:addon});
+    $("addonUrl").value="";
+    setAddonStatus(`${addon.name} collegato. Torna al film per scegliere una sorgente.`,"success");
+    await loadAddons();renderAddons();await loadStreams();
+  }catch(error){
+    setAddonStatus(error.message??"Non è stato possibile collegare l’addon.","error");
+  }finally{
+    button.disabled=false;
+  }
+};
+function renderAddons(){
+  const list=$("addonList");list.replaceChildren();
+  $("addonCount").textContent=state.addons.length?`${state.addons.length} collegati`:"";
+  $("addonEmpty").hidden=state.addons.length>0;
+  for(const addon of state.addons){
+    const row=el("div",undefined,"cm-addon-row");
+    const check=document.createElement("input");check.type="checkbox";check.className="cm-addon-check";check.checked=addon.enabled!==false;check.setAttribute("aria-label",`Attiva ${addon.name}`);
+    check.onchange=async()=>{
+      const saved=(await chrome.storage.local.get(addon.key))[addon.key];if(!saved)return;
+      saved.enabled=check.checked;await chrome.storage.local.set({[addon.key]:saved});
+      await loadAddons();renderAddons();await loadStreams();
+    };
+    const main=el("div",undefined,"main");main.append(el("strong",addon.name));
+    let host="";try{host=httpUrl(addon.url).host;}catch{}
+    main.append(el("span",[host,addon.version].filter(Boolean).join(" · ")));
+    const remove=el("button","Rimuovi","cm-addon-remove");remove.type="button";remove.setAttribute("aria-label",`Rimuovi ${addon.name}`);
+    remove.onclick=async()=>{await chrome.storage.local.remove(addon.key);await loadAddons();renderAddons();await loadStreams();};
+    row.append(check,main,remove);list.append(row);
+  }
 }
 function openDrawer(){
   $("drawer").classList.add("open");$("drawerBackdrop").classList.add("open");$("drawer").focus({preventScroll:true});
@@ -179,7 +237,7 @@ function renderEmptyState(title,message,actionLabel="Gestisci addon"){
   const list=$("sourceList");list.replaceChildren();
   const empty=el("div",undefined,"cm-empty");
   empty.innerHTML=`<div class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M9 10l6 3-6 3z"/></svg></div><h3>${escapeText(title)}</h3><p>${escapeText(message)}</p><button class="cm-primary" type="button" data-addons>${escapeText(actionLabel)}</button>`;
-  empty.querySelector("[data-addons]").onclick=openAddons;list.append(empty);
+  empty.querySelector("[data-addons]").onclick=showAddons;list.append(empty);
   $("sourcesStatus").textContent=message;
 }
 const escapeText=value=>String(value).replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
@@ -256,6 +314,7 @@ async function loadAddons(){
   }).sort((a,b)=>a.name.localeCompare(b.name,"it"));
 }
 async function loadStreams(){
+  if(!state.movie){state.loading=false;return;}
   const current=++state.generation;state.loading=true;state.groups=[];state.selected=null;state.recommended=null;state.recommendedId=null;state.presented=new Map();
   renderChips();renderSources();
   const queue=state.addons.filter(addon=>addon.enabled);
@@ -279,9 +338,13 @@ async function loadStreams(){
 }
 async function startStream(stream,{resumeAt=0}={}){
   if(!stream?.playable)return;
+  const previous=state.view==="player"&&player.duration>5?Math.max(0,Math.min(1,player.currentTime/player.duration)):null;
   showPlayer(stream);
-  try{await player.load(stream);if(resumeAt>5)await player.seek(resumeAt);}
-  catch(error){showPlayerError(error);}
+  try{
+    await player.load(stream);
+    if(resumeAt>5)await player.seek(resumeAt);
+    else if(previous!==null){const duration=player.duration;if(duration>5)await player.seek(previous*duration);}
+  }catch(error){showPlayerError(error);}
 }
 
 /* ---------- Movie and poster ---------- */
@@ -334,10 +397,6 @@ window.addEventListener("message",event=>{
   if(event.data?.type==="cinematch:theme")applyTheme(event.data.theme,event.data.accent);
 });
 function closeOverlay(){parent.postMessage({type:"cinematch:close"},"*");}
-function openAddons(){
-  chrome.tabs.create({url:chrome.runtime.getURL("watch.html#addons")}).catch(()=>{});
-  setTimeout(closeOverlay,160);
-}
 let toastTimer;
 function toast(message){const toast=$("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2400);}
 
@@ -358,6 +417,7 @@ document.addEventListener("keydown",event=>{
   if(event.key==="Escape"){
     if(document.fullscreenElement)return;
     if($("drawer").classList.contains("open")){event.preventDefault();closeDrawer();return;}
+    if(state.view==="addons"){event.preventDefault();showPicker();return;}
     if(state.view==="picker"){event.preventDefault();closeOverlay();return;}
     const target=event.target instanceof Element?event.target:null;
     if(target?.matches("input,select,textarea,button"))return;

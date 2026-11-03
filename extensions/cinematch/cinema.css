@@ -7,6 +7,7 @@ button:hover{background:var(--raised);border-color:var(--line)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .cn-main{flex:1;min-height:0;overflow:hidden;padding:0}
 .cn-main>section{max-width:none;margin:0}
+.cn-main>section.cm-addons{max-width:900px;margin:0 auto}
 .cn-topbar{height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 60px 0 20px;border-bottom:1px solid var(--line);background:var(--surface);position:relative;z-index:4}
 .cn-brand{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;letter-spacing:-.04em;color:var(--text)}
 .cn-brand svg{width:24px;height:24px;fill:none;stroke:var(--accent);stroke-width:1.8;flex:none}
@@ -218,4 +219,42 @@ html[data-theme="dark"] .cm-source-name .rec{color:#0b1020}
   .cm-controls-row button{width:27px;height:27px}
   .cm-time{font-size:9px;min-width:68px}
   .cm-track{display:none}
+}
+
+/* ---------- Addon management in the panel ---------- */
+body.cinema-app,.cn-topbar,.cm-picker,.cm-addons,.cm-addon-form,.cm-addon-row{transition:background-color .22s ease,color .22s ease,border-color .22s ease}
+.cm-addons{height:100%;overflow-y:auto;max-width:900px;margin:0 auto;padding:22px 28px 34px;scrollbar-width:thin}
+.cm-addons-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:20px}
+.cm-addons-head .cm-back{flex:none;margin-top:3px}
+.cm-addons-head h1{margin:4px 0 0;font-size:30px;line-height:1.08;letter-spacing:-.04em}
+.cm-addons-head .intro{max-width:64ch;margin:6px 0 0;font-size:11px;line-height:1.65}
+.cm-addon-form{margin:18px 0 24px;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.cm-addon-form label{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase}
+.cm-addon-form-row{display:flex;gap:8px;align-items:flex-end;margin-top:6px}
+.cm-addon-form-row input{flex:1;min-width:0;font-size:12px;padding:10px 11px}
+.cm-addon-form-row .cm-primary{flex:none;white-space:nowrap}
+.cm-addon-status{margin:8px 0 0;font-size:10px;line-height:1.5;color:var(--muted);min-height:15px}
+.cm-addon-status.error{color:var(--danger)}
+.cm-addon-status.success{color:var(--good)}
+.cm-addon-list-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 10px}
+.cm-addon-list-head h2{margin:0;font-size:17px;letter-spacing:-.025em}
+.cm-addon-list-head span{font-size:10px}
+.cm-addon-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--surface);margin-bottom:8px}
+.cm-addon-check{width:18px!important;height:18px;padding:0!important;margin:0;flex:none;accent-color:var(--accent)}
+.cm-addon-row .main{flex:1;min-width:0}
+.cm-addon-row strong{display:block;font-size:12px;line-height:1.35}
+.cm-addon-row .main span{display:block;margin-top:2px;font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-addon-remove{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:5px 8px;font-size:9.5px;font-weight:700;flex:none}
+.cm-addon-remove:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.cm-addon-help{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
+.cm-addon-help summary{font-size:11px}
+.cm-addon-help p{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.65}
+.cm-configurators{display:flex;flex-wrap:wrap;gap:7px 16px}
+.cm-configurators a{font-size:11px}
+@media(max-width:560px){
+  .cm-addons{padding:16px 12px 26px}
+  .cm-addons-head{gap:10px}
+  .cm-addons-head h1{font-size:24px}
+  .cm-addon-form-row{flex-direction:column;align-items:stretch}
+  .cm-addon-form-row .cm-primary{width:100%}
 }

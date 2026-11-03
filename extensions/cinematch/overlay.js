@@ -48,6 +48,7 @@
 
   let host, shadow, dialog, frame, loading, fallback, closeButton, titleEl, posterEl, fallbackMessageEl;
   let readyTimer, currentId = 0, lastFocus = null, previousOverflow = null, closing = false, activeTheme = null;
+  let themeObserver = null, themeMedia = null, themeTimer = null;
 
   function ensureShell() {
     if (host) return;
@@ -107,6 +108,7 @@
   }
 
   function cleanup() {
+    stopThemeWatch();
     clearTimeout(readyTimer);
     readyTimer = null;
     closing = false;
@@ -168,6 +170,37 @@
     return { theme: dark ? "dark" : "light", accent: accents[location.hostname] || "#7e9bff" };
   }
 
+  function sendTheme() {
+    if (!dialog?.open || !frame?.contentWindow) return;
+    activeTheme = chatTheme();
+    try { frame.contentWindow.postMessage({ type: "cinematch:theme", ...activeTheme }, EXTENSION_ORIGIN); } catch {}
+  }
+
+  function startThemeWatch() {
+    stopThemeWatch();
+    const targets = [document.documentElement, document.body, document.querySelector("main")].filter(Boolean);
+    if (targets.length) {
+      themeObserver = new MutationObserver(() => {
+        clearTimeout(themeTimer);
+        themeTimer = setTimeout(sendTheme, 120);
+      });
+      for (const target of targets) {
+        themeObserver.observe(target, { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-color-mode", "data-mode"] });
+      }
+    }
+    themeMedia = matchMedia("(prefers-color-scheme: dark)");
+    themeMedia.addEventListener?.("change", sendTheme);
+  }
+
+  function stopThemeWatch() {
+    themeObserver?.disconnect();
+    themeObserver = null;
+    clearTimeout(themeTimer);
+    themeTimer = null;
+    themeMedia?.removeEventListener?.("change", sendTheme);
+    themeMedia = null;
+  }
+
   function open(options = {}) {
     const id = Number(options.id);
     if (!Number.isSafeInteger(id) || id < 1) return false;
@@ -184,6 +217,7 @@
         previousOverflow = null;
         return false;
       }
+      startThemeWatch();
     }
     closing = false;
     dialog.classList.remove("closing");
@@ -225,7 +259,7 @@
       clearTimeout(readyTimer);
       loading.hidden = true;
       fallback.hidden = true;
-      try { frame.contentWindow.postMessage({ type: "cinematch:theme", ...(activeTheme || chatTheme()) }, EXTENSION_ORIGIN); } catch {}
+      sendTheme();
     } else if (data.type === "cinematch:close") {
       close();
     } else if (data.type === "cinematch:error") {

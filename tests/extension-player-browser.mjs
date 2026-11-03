@@ -33,6 +33,7 @@ const server=createServer((req,res)=>{
     if(slowStartStarted)return send();slowStartStarted=true;return setTimeout(send,9000);
   }
   if(path==='/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(manifest));}
+  if(path==='/second/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({...manifest,id:'cinematch.test2',name:'Cinema di prova 2'}));}
   if(path==='/bad/manifest.json'){res.setHeader('Content-Type','text/html');return res.end('<html>Not JSON</html>');}
   if(path==='/comet-like'){if(req.method==='HEAD'){res.statusCode=405;return res.end();}res.statusCode=302;res.setHeader('Location','/opaque');return res.end();}
   if(path==='/opaque'){res.setHeader('Content-Type','application/octet-stream');return res.end(files.get('pattern.m3u8'));}
@@ -131,6 +132,10 @@ try{
     assert.ok(frame);await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
     assert.equal(await frame.evaluate(()=>document.documentElement.dataset.theme),'dark');
     assert.equal(await frame.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(15, 20, 29)');
+    await chat.evaluate(()=>{document.body.style.background='#f7f7f8';document.body.style.color='#202124';});
+    await frame.waitForFunction(()=>document.documentElement.dataset.theme==='light',{},{timeout:5000});
+    await chat.evaluate(()=>{document.body.style.background='#14161a';document.body.style.color='#ececec';});
+    await frame.waitForFunction(()=>document.documentElement.dataset.theme==='dark',{},{timeout:5000});
     await frame.locator('#jsonFile').setInputFiles({name:'extra.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'Extra test',url:`${base}/pattern.mp4`}]}))});
     await frame.getByRole('button',{name:'Riproduci Extra test da extra.json'}).waitFor({timeout:5000});
     await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-dark-v330.png'});
@@ -150,6 +155,30 @@ try{
       await frame.waitForFunction(()=>!document.querySelector('#playerView').hidden&&document.querySelector('video').currentTime>4,{},{timeout:15000});
       await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
     }finally{await manager.evaluate(()=>chrome.storage.session.remove('resume:5156'));}
+  });
+  await check('the panel manages addons without leaving the chat',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    await frame.getByRole('button',{name:'Addon',exact:true}).click();
+    await frame.locator('#addonsView').waitFor({state:'visible',timeout:5000});
+    const addonList=frame.locator('#addonList');
+    await addonList.getByText('Cinema di prova',{exact:true}).waitFor({timeout:5000});
+    await frame.locator('#addonUrl').fill(`${base}/second/manifest.json`);
+    await frame.getByRole('button',{name:'Aggiungi addon',exact:true}).click();
+    await addonList.getByText('Cinema di prova 2',{exact:true}).waitFor({timeout:15000});
+    assert.equal(await frame.evaluate(async()=>Object.keys(await chrome.storage.local.get(null)).filter(key=>key.startsWith('streamAddon:')).length),2);
+    await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-addons-v340.png'});
+    await addonList.getByRole('checkbox',{name:'Attiva Cinema di prova 2'}).uncheck();
+    await frame.waitForFunction(async()=>{const data=await chrome.storage.local.get(null);return Object.entries(data).some(([key,value])=>key.startsWith('streamAddon:')&&value.name==='Cinema di prova 2'&&value.enabled===false);},{},{timeout:5000});
+    await addonList.getByRole('button',{name:'Rimuovi Cinema di prova 2'}).click();
+    await addonList.getByText('Cinema di prova 2',{exact:true}).waitFor({state:'detached',timeout:5000});
+    assert.equal(await frame.evaluate(async()=>Object.keys(await chrome.storage.local.get(null)).filter(key=>key.startsWith('streamAddon:')).length),1);
+    await frame.locator('#addonsBack').click();
+    await frame.locator('#pickerView').waitFor({state:'visible',timeout:5000});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
   });
   await check('the in-chat overlay plays an integrated MKV HEVC/AC3 stream inside the same dialog',async()=>{
     await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();

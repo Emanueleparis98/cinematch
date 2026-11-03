@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.3.0
+# CineMatch — estensione browser 3.4.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.3.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.4.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -43,12 +43,15 @@ progressivo di film o richieste. I limiti della chat rimangono quelli del serviz
 
 ## Addon e player integrato
 
-Apri **Addon e player** dall’icona video nell’intestazione per collegare i tuoi
-manifest compatibili con Stremio/Nuvio. Poi clicca una locandina nella chat: si
-apre un pannello CineMatch **sopra la conversazione**, senza cambiare scheda.
-Il picker mostra poster, regia, cast e sorgenti raggruppate per addon; scegli un
-flusso e il player parte nello stesso pannello. Il tema del picker segue la chat,
-il player resta scuro, e la posizione di visione viene ricordata nella sessione.
+Clicca una locandina nella chat: si apre un pannello CineMatch **sopra la
+conversazione**, senza cambiare scheda. Il picker mostra poster, regia, cast e
+sorgenti raggruppate per addon; scegli un flusso e il player parte nello stesso
+pannello. Il tema del picker segue la chat in tempo reale, il player resta scuro,
+e la posizione di visione viene ricordata nella sessione. Dal pulsante **Addon**
+puoi collegare, attivare e rimuovere i manifest compatibili con Stremio/Nuvio
+senza uscire dalla chat; la pagina **Addon e player** resta disponibile per la
+gestione completa e come fallback.
+
 Sono supportati video HTTP, HLS e DASH, con pausa, seek, tracce audio, sottotitoli
 e schermo intero. Il motore integrato libmedia aggiunge decoder locali per MKV/AVI,
 HEVC, H.266/VVC in MP4 e audio AC3/E-AC3/DTS. La riproduzione avviene a blocchi:
@@ -68,6 +71,7 @@ fallback nella scheda dedicata.
 [Avvio dei flussi lenti e dei grandi remux, 3.1.6](docs/estensione-3.1.6-avvio.md).
 [Codec e accelerazione, 3.2.0](docs/estensione-3.2.0-codec.md).
 [Player in-chat, 3.3.0](docs/estensione-3.3.0-in-chat.md).
+[Addon nel pannello e tema live, 3.4.0](docs/estensione-3.4.0-pannello.md).
 
 ## Sviluppo dell'estensione
 
@@ -90,7 +94,7 @@ pubblica lo ZIP come artefatto CI. I test browser usano Chromium isolato e pagin
 simulate: nessun account reale o richiesta AI. I siti possono cambiare editor;
 in quel caso rimane il copia/incolla.
 
-Il pannello e la connessione TMDB usano un tema fisso scuro. Spunte disegnate e
+Il pannello laterale e la connessione TMDB usano un tema fisso scuro; il picker in-chat segue il tema della chat e il player resta scuro. Spunte disegnate e
 menu personalizzati sostituiscono i menu del sistema, con navigazione da tastiera.
 Le immagini arrivano subito sotto la riga del titolo, prima della descrizione,
 anche quando il provider mette entrambi nello stesso paragrafo.
