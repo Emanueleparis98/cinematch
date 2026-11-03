@@ -11,3 +11,47 @@ body.full-page main{padding:40px 30px}body.full-page footer,body.full-page .app-
 @media(max-width:340px){.filters{grid-template-columns:1fr}h1{font-size:27px}.app-header{padding-left:16px;padding-right:16px}.tabs{margin-left:16px;margin-right:16px}main{padding-left:16px;padding-right:16px}footer{padding-left:16px;padding-right:16px}.quantity-row{flex-wrap:wrap}.brand{font-size:18px}.connection-button{font-size:9px;padding:6px}.header-actions{gap:0}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 .connection-button,.badge,.movement-meta,#prompt-length,.chat-state,.status{font-size:11px}.brand{letter-spacing:-.04em}:focus-visible{outline-color:#91b5ff}
+
+/* In-chat launcher (panel.html?view=embed) */
+body.embed .app-header{padding:12px 54px 12px 22px;min-height:58px}
+body.embed #expand{display:none}
+body.embed main{padding:22px 26px 26px}
+body.embed main>section{max-width:900px}
+body.embed .tabs{width:min(900px,calc(100vw - 52px));margin:0 auto}
+body.embed footer{width:min(900px,calc(100vw - 52px));max-height:none;margin:0 auto 18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:none}
+body.embed .provider-row{display:none}
+body.embed .chat-state{margin-top:0}
+body.embed .movement-list{display:grid;grid-template-columns:1fr 1fr;column-gap:28px}
+@media(max-width:760px){
+  body.embed .app-header{padding:10px 48px 10px 14px}
+  body.embed main{padding:18px 14px 22px}
+  body.embed .tabs,body.embed footer{width:calc(100vw - 28px)}
+  body.embed .movement-list{display:block}
+}
+
+/* Wide in-chat layout */
+body.embed #explore-pane{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:26px;align-items:start}
+body.embed #browser{grid-column:1;min-width:0}
+body.embed #explore-pane .movement-list{display:block}
+body.embed #detail,body.embed #detail-empty{grid-column:2;min-width:0;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+body.embed #detail{position:sticky;top:0;max-height:calc(100dvh - 250px);overflow-y:auto;scrollbar-width:thin}
+body.embed #detail-empty,body.embed #preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:260px;text-align:center}
+body.embed .empty-mark{width:46px;height:46px;border-radius:13px;background:var(--raised);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent)}
+body.embed .empty-mark svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6}
+body.embed .empty-kicker{margin:3px 0 0;color:var(--accent);font-size:9px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}
+body.embed #detail-empty h2,body.embed #preview-empty h2{margin:0;font-size:18px;letter-spacing:-.02em}
+body.embed #detail-empty p,body.embed #preview-empty p{max-width:38ch;margin:0;color:var(--muted);font-size:11px;line-height:1.6}
+body.embed #prompt-pane{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:24px;align-items:start}
+body.embed #prompt-pane>h1,body.embed #prompt-pane>.intro,body.embed #selected{grid-column:1/-1}
+body.embed #request-form{grid-column:1;grid-row:4;min-width:0;margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+body.embed #preview-section,body.embed #preview-empty{grid-column:2;grid-row:4;min-width:0;margin-top:0;position:sticky;top:0;max-height:calc(100dvh - 280px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;scrollbar-width:thin}
+body.embed #preview-section textarea{min-height:420px}
+body.embed #preview-section .preview-heading{margin-bottom:12px}
+@media(max-width:980px){
+  body.embed #explore-pane,body.embed #prompt-pane{display:block}
+  body.embed #detail,body.embed #detail-empty{position:static;max-height:none}
+  body.embed #detail-empty{display:none}
+  body.embed #prompt-pane>h1,body.embed #prompt-pane>.intro,body.embed #selected{grid-column:auto}
+  body.embed #request-form,body.embed #preview-section,body.embed #preview-empty{position:static;max-height:none;margin-top:16px}
+  body.embed #preview-empty{display:none}
+}

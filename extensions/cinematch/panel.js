@@ -1,6 +1,9 @@
 import {KINDS,MODES,PROVIDERS,defaultRequest,generatePrompt,matches,normalize,period,providerForUrl,signature} from "./core.js";
 import {enhanceSelects,refreshSelects} from "./controls.js";
 
+const embed = new URL(location.href).searchParams.get("view") === "embed";
+const embedWide = () => embed && !matchMedia("(max-width: 980px)").matches;
+if (embed) document.body.classList.add("embed");
 const $ = id => document.getElementById(id);
 const state = {request:defaultRequest(),query:"",kind:"",era:"all",region:"",sort:"chronological",tab:"explore",detail:null,prompt:"",generatedSig:null,provider:"chatgpt",targetTabId:null};
 let catalog = [], windowId, saveTimer, conflict = null, busy = false;
@@ -25,6 +28,7 @@ function save() {clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,250);}
 function criteriaChanged() {resetConflict();status();actionState();save();}
 function showTab(tab) {
   state.tab=tab;$("explore-pane").hidden=tab!=="explore";$("prompt-pane").hidden=tab!=="prompt";$("actions").hidden=tab!=="prompt";
+  if(embed)$("preview-empty").hidden=tab!=="prompt"||Boolean(state.prompt);
   for(const id of ["explore","prompt"]) {$(id+"-tab").setAttribute("aria-selected",String(id===tab));$(id+"-tab").tabIndex=id===tab?0:-1;}
   actionState();save();
 }
@@ -44,8 +48,18 @@ function renderList() {
 }
 function showDetail(id) {
   const m=catalog.find(m=>m.id===id);if(!m)return;
-  state.detail=id;$("browser").hidden=true;$("detail").hidden=false;
-  const article=$("detail");article.replaceChildren(button("Tutte le voci",()=>{state.detail=null;$("browser").hidden=false;article.hidden=true;save();},"text-button detail-back"),element("h1","",m.label));
+  state.detail=id;
+  if(embed){$("browser").hidden=!embedWide();$("detail-empty").hidden=true;}
+  else $("browser").hidden=true;
+  $("detail").hidden=false;
+  const article=$("detail");
+  const closeDetail=()=>{
+    state.detail=null;article.hidden=true;
+    if(embed){$("browser").hidden=false;$("detail-empty").hidden=!embedWide();}
+    else $("browser").hidden=false;
+    save();
+  };
+  article.replaceChildren(button("Tutte le voci",closeDetail,"text-button detail-back"),element("h1","",m.label));
   if(m.original_name!==m.label)article.append(element("p","detail-subtitle",m.original_name));
   article.append(element("p","detail-meta",`${KINDS[m.kind]} · ${period(m)} · ${m.regions.join(", ")}`),element("p","detail-summary",m.summary));
   const actions=element("div","detail-actions");
@@ -71,7 +85,9 @@ function renderSelection() {
 function generate() {
   try {
     const result=generatePrompt(state.request,catalog);state.prompt=result.prompt;state.generatedSig=signature(state.request);$("prompt-preview").value=state.prompt;
-    resetConflict();actionState();status("Richiesta pronta per la tua chat.","success");save();
+    resetConflict();actionState();status("Richiesta pronta per la tua chat.","success");
+    if(embed)$("preview-empty").hidden=true;
+    save();
     const main=document.querySelector("main"),preview=$("preview-section");
     main.scrollTo({top:main.scrollTop+preview.getBoundingClientRect().top-main.getBoundingClientRect().top,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});
   }catch(error){status(error.message,"error");}
@@ -98,7 +114,7 @@ async function insert(mode="empty") {
   if(!ready()||busy)return;busy=true;actionState();status("Preparo l’inserimento…");
   try {
     const result=await chrome.runtime.sendMessage({type:"insert-prompt",windowId,targetTabId:state.targetTabId,provider:state.provider,prompt:state.prompt,mode,draftToken:conflict?.draftToken});
-    if(result?.ok){resetConflict();status(result.code==="already-inserted"?"Il prompt è già nell’editor. L’invio resta a te.":"Prompt inserito nell’editor. Rileggilo e invia quando vuoi.","success");}
+    if(result?.ok){resetConflict();status(result.code==="already-inserted"?"Il prompt è già nell’editor. L’invio resta a te.":"Prompt inserito nell’editor. Rileggilo e invia quando vuoi.","success");if(embed)setTimeout(()=>parent.postMessage({type:"cinematch:prompt-close"},"*"),500);}
     else if(result?.code==="draft-not-empty"){conflict=result;$("conflict").hidden=false;status("La bozza presente non è stata modificata.");}
     else {resetConflict();status(insertionMessages[result?.code]??insertionMessages.unavailable,"error");}
   }catch{resetConflict();status(insertionMessages.unavailable,"error");}
@@ -129,6 +145,7 @@ async function boot() {
   for(const region of [...new Set(catalog.flatMap(m=>m.regions))].sort((a,b)=>a.localeCompare(b,"it")))$("region").append(new Option(region,region));
   for(const provider of PROVIDERS)$("provider").append(new Option(provider.name,provider.id));
   fillForm();renderList();renderSelection();if(state.detail)showDetail(state.detail);showTab(state.tab==="prompt"?"prompt":"explore");
+  if(embed&&!state.detail)$("detail-empty").hidden=!embedWide();
   $("explore-tab").addEventListener("click",()=>showTab("explore"));$("prompt-tab").addEventListener("click",()=>showTab("prompt"));
   document.querySelector(".tabs").addEventListener("keydown",event=>{if(["ArrowLeft","ArrowRight"].includes(event.key)){event.preventDefault();const tab=state.tab==="prompt"?"explore":"prompt";showTab(tab);$(tab+"-tab").focus();}});
   $("search").addEventListener("input",()=>{state.query=$("search").value;renderList();save();});
@@ -154,7 +171,13 @@ async function boot() {
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveNow();});
   document.addEventListener("keydown",event=>{if((event.ctrlKey||event.metaKey)&&event.key==="Enter"&&state.tab==="prompt"){event.preventDefault();generate();}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="f"){event.preventDefault();state.detail=null;$("browser").hidden=false;$("detail").hidden=true;showTab("explore");$("search").focus();}});
   if(new URL(location.href).searchParams.get("view")==="full")document.body.classList.add("full-page");
+  if(embed)document.addEventListener("keydown",event=>{
+    if(event.key!=="Escape")return;
+    if(event.target instanceof Element&&event.target.matches("input,textarea,select,[contenteditable='true']"))return;
+    parent.postMessage({type:"cinematch:prompt-close"},"*");
+  });
   enhanceSelects();
   await syncActive();
+  if(embed)parent.postMessage({type:"cinematch:prompt-ready"},"*");
 }
-boot().catch(()=>{$("boot-error").hidden=false;document.querySelector("main").hidden=true;$("actions").hidden=true;});
+boot().catch(()=>{$("boot-error").hidden=false;document.querySelector("main").hidden=true;$("actions").hidden=true;if(embed)parent.postMessage({type:"cinematch:prompt-ready"},"*");});

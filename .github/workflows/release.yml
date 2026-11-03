@@ -72,6 +72,9 @@ jobs:
       - name: Test browser
         run: pnpm test:browser
 
+      - name: Test launcher in-chat
+        run: pnpm test:launcher
+
       - name: Test immagini TMDB
         run: pnpm test:images
 

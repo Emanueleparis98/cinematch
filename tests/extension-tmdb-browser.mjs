@@ -113,7 +113,7 @@ try{
     });
     await check('answers without film references add no interface or requests',async()=>{const before=requests;await first.evaluate(()=>{const n=document.createElement('div');n.dataset.messageAuthorRole='assistant';n.textContent='Una risposta senza film';document.querySelector('main').append(n);});await first.waitForTimeout(1000);assert.equal(requests,before);});
   }
-  await check('removing the credential removes illustrations and prevents future queries',async()=>{await options.locator('#remove').click();await options.waitForFunction(()=>document.getElementById('remove').disabled);await first.waitForFunction(()=>!document.querySelector('[data-cinematch-ui]'));});
+  await check('removing the credential removes illustrations and prevents future queries',async()=>{await options.locator('#remove').click();await options.waitForFunction(()=>document.getElementById('remove').disabled);await first.waitForFunction(()=>!document.querySelector('[data-cinematch-ui="film"]'));});
   assert.deepEqual(errors,[]);console.log(`Seamless ${live?'LIVE':'fixture'} browser checks passed: ${passed}`);
 }catch(error){console.error(String(error).replaceAll(token,'[redacted]'));process.exitCode=1;}
 finally{await context.close();await rm(profile,{recursive:true,force:true});}

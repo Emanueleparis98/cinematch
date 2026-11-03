@@ -32,9 +32,12 @@ alla riga del titolo, prima della descrizione anche nei paragrafi con titolo inl
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 
-Dal clic sulla locandina si apre ora un pannello CineMatch sopra la chat, senza
-cambiare scheda: il film viene risolto tramite TMDB/IMDb, il picker mostra le
-sorgenti degli addon scelti dall’utente e il player parte nello stesso pannello.
+Un pulsante flottante CineMatch apre accanto alla chat un pannello con le 74
+correnti e il generatore di prompt; l’elenco e il dettaglio, il form e l’anteprima
+sono affiancati nel layout largo. Dal clic sulla locandina si apre invece il
+pannello del film, senza cambiare scheda: il film viene risolto tramite TMDB/IMDb,
+il picker mostra le sorgenti degli addon scelti dall’utente e il player parte
+nello stesso pannello.
 Il tema del picker segue la chat, mentre il player resta scuro; la posizione di
 visione viene ricordata nella sessione. Se l’iframe non può essere incorporato,
 resta disponibile la scheda dedicata come fallback.

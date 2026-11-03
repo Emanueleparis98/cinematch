@@ -32,6 +32,12 @@
         <div id="movement-list" class="movement-list"></div>
         <div id="empty" class="empty" hidden><h2>Nessuna voce trovata</h2><p>Prova un sinonimo, un autore o azzera i filtri.</p></div>
       </div>
+      <aside id="detail-empty" class="detail-empty" hidden>
+        <div class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M9 10l6 3-6 3z"/></svg></div>
+        <p class="empty-kicker">Dettaglio</p>
+        <h2>Scegli una corrente</h2>
+        <p>Clicca una voce dell’elenco per leggere caratteristiche, figure, opere e fonti senza perdere la ricerca.</p>
+      </aside>
       <article id="detail" hidden></article>
     </section>
     <section id="prompt-pane" role="tabpanel" aria-labelledby="prompt-tab" hidden>
@@ -57,6 +63,12 @@
         <label class="sr-only" for="prompt-preview">Prompt modificabile</label><textarea id="prompt-preview" rows="14" spellcheck="false"></textarea>
         <p class="muted small">Puoi modificare il testo. La qualità della risposta e i limiti d’uso dipendono dalla chat scelta.</p>
       </section>
+      <aside id="preview-empty" class="preview-empty" hidden>
+        <div class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 12a3 3 0 0 1-3 3H7l-4 2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M7 7h6M7 10h4"/></svg></div>
+        <p class="empty-kicker">Anteprima</p>
+        <h2>Il prompt apparirà qui</h2>
+        <p>Seleziona le correnti, scrivi la tua richiesta e premi <strong>Genera il prompt</strong>.</p>
+      </aside>
     </section>
   </main>
   <footer id="actions" hidden>

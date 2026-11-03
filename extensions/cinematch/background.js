@@ -64,6 +64,13 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 
 chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true}).catch(()=>{});
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+  if(sender.id!==chrome.runtime.id||message?.type!=="open-panel")return false;
+  const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);
+  if(!chat)return false;
+  chrome.tabs.create({url:chrome.runtime.getURL("panel.html?view=full")}).then(()=>respond({ok:true})).catch(()=>respond({ok:false}));
+  return true;
+});
+chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL("panel.html"))) return false;
   if (message?.type !== "insert-prompt") return false;
   (async()=>{

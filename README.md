@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.4.0
+# CineMatch — estensione browser 3.5.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.4.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.5.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -40,6 +40,16 @@ nessuna cronologia o accesso generale iniziale ai siti. Addon e sorgenti video
 richiedono permessi opzionali per singolo host. La chiave non viene esposta alle chat.
 La bozza è conservata in memoria per la sessione del browser, senza archivio
 progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
+
+## Correnti e prompt in-chat
+
+Un pulsante flottante **CineMatch** compare accanto alla chat. Premendolo si apre
+un pannello moderno con le **74 correnti**, ricerca, filtri, dettaglio affiancato,
+selezione e generatore di prompt. Il layout largo mostra elenco e dettaglio nello
+stesso colpo d’occhio; nella sezione **La tua richiesta** il form e l’anteprima
+del prompt stanno fianco a fianco. Puoi copiare il testo oppure inserirlo
+direttamente nel composer della chat: l’invio resta all’utente. La bozza e le
+selezioni restano nella sessione e sono condivise con il pannello laterale.
 
 ## Addon e player integrato
 
@@ -72,6 +82,7 @@ fallback nella scheda dedicata.
 [Codec e accelerazione, 3.2.0](docs/estensione-3.2.0-codec.md).
 [Player in-chat, 3.3.0](docs/estensione-3.3.0-in-chat.md).
 [Addon nel pannello e tema live, 3.4.0](docs/estensione-3.4.0-pannello.md).
+[Launcher correnti e prompt, 3.5.0](docs/estensione-3.5.0-launcher.md).
 
 ## Sviluppo dell'estensione
 
@@ -81,6 +92,7 @@ pnpm install --frozen-lockfile
 pnpm test
 pnpm exec playwright install chromium
 pnpm test:browser
+pnpm test:launcher
 pnpm test:images
 pnpm test:player
 pnpm test:codecs
