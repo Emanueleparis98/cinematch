@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve,basename} from 'node:path';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
 const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
-const calls=[],errors=[];let base,failStreams=false,passed=0,oversizedResponses=0;
+const calls=[],errors=[];let base,failStreams=false,passed=0,oversizedResponses=0,slowStartStarted=false;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
 const cdn=createServer((req,res)=>{
   const file=files.get('pattern-hevc-ac3.mkv'),range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);
@@ -20,6 +20,17 @@ const server=createServer((req,res)=>{
   if(path==='/cdn-redirect'){res.statusCode=302;res.setHeader('Location',`${cdnBase}/private/movie.mkv?signature=private-test-token`);return res.end();}
   if(path==='/rd-large-eof'){
     const total=80138595881,range=req.headers.range.match(/bytes=(\d+)-(\d+)/),start=Number(range[1]),end=Number(range[2]);res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${total}`);res.setHeader('Content-Length',end-start+1);return res.end(Buffer.alloc(Math.min(end,total-1)-start+1,91));
+  }
+  if(path==='/slow-start'){
+    const file=files.get('pattern-hevc-ac3.mkv');
+    const send=()=>{
+      if(res.destroyed)return;
+      res.setHeader('Content-Type','video/x-matroska');res.setHeader('Accept-Ranges','bytes');
+      const range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);const start=range?Number(range[1]):0,end=range?(range[2]?Math.min(Number(range[2]),file.length-1):file.length-1):file.length-1;
+      if(range){res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);}
+      res.setHeader('Content-Length',end-start+1);res.end(file.subarray(start,end+1));
+    };
+    if(slowStartStarted)return send();slowStartStarted=true;return setTimeout(send,9000);
   }
   if(path==='/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(manifest));}
   if(path==='/bad/manifest.json'){res.setHeader('Content-Type','text/html');return res.end('<html>Not JSON</html>');}
@@ -110,6 +121,12 @@ try{
       try{await reader.open();const total=await reader.size();await reader.seek(total-65536n);const data=new Uint8Array(65536),count=await reader.read(data);return {total:String(total),count,first:data[0],last:data.at(-1),bytes:reader.bytesRead,eof:await reader.read(data)};}finally{await reader.stop();}
     },`${base}/rd-large-eof`);
     assert.deepEqual(result,{total:'80138595881',count:65536,first:91,last:91,bytes:131072,eof:-1048576});
+  });
+  await check('a first byte slower than the old probe timeout still opens the integrated decoder',async()=>{
+    await importSource('Avvio lento','slow-start');
+    await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    assert.ok(!(await player.locator('#playback-status').innerText()).includes('Riproduzione terminata'));
+    await player.locator('#codec-toggle').click();
   });
   await check('CDN responses larger than the requested range decode HEVC/AC3 and allow seeking',async()=>{
     const before=oversizedResponses;await importSource('CDN range HEVC AC3','oversized-range.mkv');

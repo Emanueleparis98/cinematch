@@ -115,6 +115,18 @@ test('large MKV tail seeks clamp outgoing ranges to EOF instead of requesting an
   await reader.seek(BigInt(total-1));assert.equal(await reader.read(out),1);assert.equal(requests.at(-1).end,total-1);await reader.stop();
 });
 
+test('a timed-out block retries a smaller window once and reuses it for the session',async()=>{
+  const total=8*MiB,requests=[];
+  const reader=new RangeReader('https://slow.test/movie',{timeout:300,fetcher:async(_,init)=>{
+    const [,a,b]=init.headers.Range.match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);requests.push({start,end,size:end-start+1});
+    if(requests.length===1)return new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('Stopped','AbortError')),{once:true}));
+    return bytesResponse(start,Math.min(start+MiB-1,total-1),total);
+  }});
+  try{
+    await reader.open();assert.equal(requests.length,2);assert.equal(requests[1].size,65536);assert.equal(reader.chunkSize,MiB);assert.equal(reader.block.data.length,65536);
+    const out=new Uint8Array(65536);assert.equal(await reader.read(out),65536);await reader.next?.promise;assert.equal(requests.at(-1).size,MiB,'the reduced window is used for read-ahead');
+  }finally{await reader.stop();}
+});
 test('missing CORS-exposed range headers have a distinct diagnostic from invalid byte offsets',async()=>{
   const reader=new RangeReader('https://cdn.test/movie',{fetcher:async()=>new Response('data',{status:206,headers:{'content-length':'4'}})});
   await assert.rejects(reader.open(),e=>e.rangeCode==='RANGE_HEADER_MISSING'&&e.message.includes('Content-Range')&&!e.message.includes('intervallo video non valido'));await reader.stop();

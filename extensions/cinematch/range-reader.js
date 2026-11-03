@@ -1,11 +1,12 @@
 import {httpUrl} from './streams.js';
 import {mediaFetch} from './media-access.js';
-const EOF=-1048576,MiB=1024*1024;
+const EOF=-1048576,MiB=1024*1024,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const aborted=()=>new DOMException('Stopped','AbortError');
 export class RangeReader {
-  constructor(url,{fetcher=mediaFetch,chunkSize=8*MiB,prefetch=true,ext='mkv',onError=()=>{}}={}){
+  constructor(url,{fetcher=mediaFetch,chunkSize=8*MiB,prefetch=true,ext='mkv',onError=()=>{},timeout=45000}={}){
     this.url=httpUrl(url).href;this.resolvedUrl=null;this.fetcher=(...args)=>fetcher(...args);
     this.chunkSize=Math.min(8*MiB,Math.max(65536,chunkSize));this.prefetch=prefetch;this.ext=ext;this.onError=onError;
+    this.timeout=Math.max(250,Number(timeout)||45000);
     this.position=0;this.length=0;this.bytesRead=0;this.requestCount=0;this.block=null;this.next=null;this.controller=null;this.controllers=new Set();this.closed=false;this.lastError=null;this.epoch=0;this.samples=[];
   }
   get bufferedBytes(){return (this.block?.data.length??0)+(this.next?.block?.data.length??0);}
@@ -14,9 +15,10 @@ export class RangeReader {
     if(!this.closed&&epoch===this.epoch){this.lastError=error.name==='AbortError'?new Error('Il server video non risponde. Riprova.'):error instanceof TypeError?new Error('Connessione al server video non riuscita. Controlla accesso e disponibilità.'):error;this.onError(this.lastError);}
     return error;
   }
-  async fetchBlock(start,size,controller){
+  async fetchBlock(start,size,controller,attempt=0){
     if(this.closed)throw aborted();
-    this.controllers.add(controller);const timer=setTimeout(()=>controller.abort(),20000),began=performance.now();
+    this.controllers.add(controller);let timedOut=false;
+    const timer=setTimeout(()=>{timedOut=true;controller.abort()},attempt?Math.min(30000,this.timeout):this.timeout),began=performance.now();
     try{
       const end=this.length?Math.min(start+size-1,this.length-1):start+size-1;
       const init={headers:{Range:`bytes=${start}-${end}`},signal:controller.signal,credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'follow'};
@@ -27,7 +29,17 @@ export class RangeReader {
       if(target!==this.url&&[401,403,404,410].includes(response.status)){
         await response.body?.cancel().catch(()=>{});this.resolvedUrl=null;this.requestCount++;response=await this.fetcher(this.url,init);
       }
-      if(!response.ok)throw new Error(`Il server video ha risposto con errore ${response.status}. Aggiorna le sorgenti o riprova.`);
+      if(!response.ok){
+        // A cold CDN can answer 429/5xx while it prepares a large file. Retry
+        // this window once with a bounded delay; never loop on auth/404.
+        if(attempt===0&&[429,500,502,503,504].includes(response.status)){
+          await response.body?.cancel().catch(()=>{});
+          const after=Number(response.headers.get('retry-after'));
+          await wait(Number.isFinite(after)&&after>0?Math.min(5000,after*1000):1000);
+          return this.fetchBlock(start,size,new AbortController(),1);
+        }
+        throw new Error(`Il server video ha risposto con errore ${response.status}. Aggiorna le sorgenti o riprova.`);
+      }
       const header=response.headers.get('content-range');
       if(response.status===206&&!header)throw Object.assign(new Error('Il browser non rende disponibile Content-Range dal server video. Verifica il permesso di accesso al server e riprova.'),{rangeCode:'RANGE_HEADER_MISSING'});
       const range=header?.match(/^\s*bytes\s+(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)\s*$/i);
@@ -49,6 +61,17 @@ export class RangeReader {
       this.length=total;if(response.url)this.resolvedUrl=httpUrl(response.url).href;
       this.samples.push({bytes:filled,ms:Math.max(1,performance.now()-began)});if(this.samples.length>4)this.samples.shift();
       return {start,data};
+    }catch(error){
+      if(timedOut&&attempt===0&&!this.closed){
+        // Large remuxes and cold links can exceed the normal block timeout
+        // while the server starts the range. Retry a smaller window once and
+        // keep using it for this session instead of failing the whole film.
+        await wait(250);
+        const block=await this.fetchBlock(start,Math.min(size,MiB),new AbortController(),1);
+        this.chunkSize=Math.min(this.chunkSize,MiB);
+        return block;
+      }
+      throw error;
     }finally{controller.abort();clearTimeout(timer);this.controllers.delete(controller);}
   }
   cancelNext(){this.next?.controller.abort();this.next=null;}

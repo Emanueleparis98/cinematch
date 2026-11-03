@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.1.5
+# CineMatch - estensione browser 3.1.6
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.1.5.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.1.6.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -102,6 +102,13 @@ La 3.1.5 limita anche le richieste dopo un seek alla fine fisica del file e
 gestisce i server che annunciano intervalli oltre EOF: corregge l’errore
 «intervallo video non valido» durante l’apertura di MKV grandi.
 [Prova prima/dopo su server reale](../../docs/estensione-3.1.5-eof.md).
+La 3.1.6 corregge l’avvio dei flussi pesanti e lenti: il riconoscimento del
+contenitore attende più a lungo, un MKV senza estensione non viene più passato
+al player nativo, i blocchi in timeout vengono ritentati con una finestra più
+piccola e una risposta 429/5xx viene riprovata una volta. Il limite di avvio dei
+decoder integrati passa da 25 a 90 secondi; se un remux contiene una traccia
+TrueHD non decodificabile ma anche AC3/E-AC3, viene scelta quella compatibile.
+[Correzione avvio, 3.1.6](../../docs/estensione-3.1.6-avvio.md).
 
 ## Costi, dati e permessi
 

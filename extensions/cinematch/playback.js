@@ -8,6 +8,25 @@ export function declaredCodecs(stream){
   return {video:/\b(?:hevc|[hx][. ]?265)\b/i.test(text)?'hevc':/\b(?:avc|[hx][. ]?264)\b/i.test(text)?'h264':null,
     audio:/\b(?:e[. -]?ac[. -]?3|ddp)\b|\bdd\+/i.test(text)?'eac3':/\b(?:ac[. -]?3|dolby digital)\b/i.test(text)?'ac3':/\btruehd\b/i.test(text)?'truehd':/\bdts(?:[. -]?hd)?\b/i.test(text)?'dts':/\baac\b/i.test(text)?'aac':null};
 }
+const containers=['mkv','webm','avi','mp4','m4v','mov','flv','ts','mpg','mpeg'];
+function pathExtension(value=''){
+  try{return decodeURIComponent(new URL(value).pathname).toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1]??'';}catch{return '';}
+}
+// Prefer the bytes actually received, then the addon URL, then the resolved
+// CDN URL. Addon endpoints often hide the container behind /play?id=... and
+// the final signed CDN URL is the only place where .mkv or .mp4 appears.
+export function containerExtension(stream,probe={}){
+  if(probe.kind==='matroska')return 'mkv';
+  for(const value of [stream?.url,probe?.url]){
+    const ext=pathExtension(value);if(containers.includes(ext))return ext;
+  }
+  const declared=declaredCodecs(stream??{});
+  if(declared.video==='hevc'||['ac3','eac3','dts','truehd'].includes(declared.audio))return 'mkv';
+  return '';
+}
+export function likelyMatroska(stream,probe={}){
+  const ext=containerExtension(stream,probe);return probe.kind==='matroska'||ext==='mkv'||ext==='webm'||ext==='avi';
+}
 export function compatibility(codecs,canPlayType){
   const supports=c=>!mimes[c]||mimes[c].some(m=>Boolean(canPlayType(m))),audios=codecs.audios??[codecs.audio].filter(Boolean);
   const unsupported=[...(codecs.video&&!supports(codecs.video)?[codecs.video]:[]),...(audios.length&&!audios.some(supports)?audios:[])];
@@ -31,8 +50,8 @@ export function inspectPrefix(bytes,mime=''){
   }
   return {kind:/mpegurl/i.test(mime)?'hls':'video',codecs};
 }
-export async function probePlayback(url,{fetcher=mediaFetch,signal}={}){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000),abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)controller.abort();
+export async function probePlayback(url,{fetcher=mediaFetch,signal,timeout=20000}={}){
+  const controller=new AbortController();let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort()},Math.max(250,Number(timeout)||20000)),abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)controller.abort();
   try{
     // Addon playback endpoints often reject HEAD or redirect to a CDN.
     const response=await fetcher(httpUrl(url).href,{method:'GET',headers:{Range:'bytes=0-65535'},credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'follow',signal:controller.signal});
@@ -40,7 +59,7 @@ export async function probePlayback(url,{fetcher=mediaFetch,signal}={}){
     const reader=response.body.getReader(),prefix=new Uint8Array(65536);let size=0;
     try{while(size<prefix.length){const {value,done}=await reader.read();if(done)break;const take=Math.min(value.length,prefix.length-size);prefix.set(value.subarray(0,take),size);size+=take;}}finally{controller.abort();await reader.cancel().catch(()=>{});}
     return {...inspectPrefix(prefix.subarray(0,size),response.headers.get('content-type')??''),url:response.url||url};
-  }catch(error){if(error.playback||error.mediaOrigin||error.networkCode)throw error;if(signal?.aborted)throw new DOMException('Aborted','AbortError');return {kind:'unknown',codecs:{},url};}
+  }catch(error){if(error.playback||error.mediaOrigin||error.networkCode)throw error;if(signal?.aborted)throw new DOMException('Aborted','AbortError');return {kind:'unknown',codecs:{},url,timedOut};}
   finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }
 export function nativePlaybackError(code){

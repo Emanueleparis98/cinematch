@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {declaredCodecs,compatibility,inspectPrefix,probePlayback,nativePlaybackError} from '../extensions/cinematch/playback.js';
+import {declaredCodecs,compatibility,inspectPrefix,probePlayback,containerExtension,likelyMatroska,nativePlaybackError} from '../extensions/cinematch/playback.js';
 import {mediaFetch,mediaPermission,playbackPermissions,RD_DOWNLOADS} from '../extensions/cinematch/media-access.js';
 import {RangeReader} from '../extensions/cinematch/range-reader.js';
 const text=value=>new TextEncoder().encode(value);
@@ -23,6 +23,20 @@ test('Matroska codec IDs are read only from EBML CodecID elements',()=>{
   // HEVC ID is 16 bytes; malformed or arbitrary release text is not enough.
   bytes[5]=0x80+text('V_MPEGH/ISO/HEVC').length;
   assert.deepEqual(inspectPrefix(bytes).codecs,{video:'hevc',audio:'ac3'});assert.deepEqual(inspectPrefix(text('V_MPEGH/ISO/HEVC A_AC3')).codecs,{});
+});
+test('container choice survives extensionless addon URLs and slow probes',()=>{
+  assert.equal(containerExtension({url:'https://cdn.test/movie.mkv'}),'mkv');
+  assert.equal(containerExtension({url:'https://cdn.test/play?id=1'},{kind:'matroska'}),'mkv');
+  assert.equal(containerExtension({url:'https://cdn.test/play?id=1'},{kind:'unknown',url:'https://23-4.download.real-debrid.com/private/movie.MKV?token=x'}),'mkv');
+  assert.equal(containerExtension({url:'https://cdn.test/play?id=1',description:'2160p HEVC DDP5.1'},{kind:'unknown'}),'mkv');
+  assert.equal(containerExtension({url:'https://cdn.test/play?id=1',name:'H.264 AAC'},{kind:'unknown'}),'');
+  assert.equal(containerExtension({url:'https://cdn.test/movie.mp4'}),'mp4');
+  assert.equal(likelyMatroska({url:'https://cdn.test/movie.mkv'},{kind:'unknown'}),true);
+  assert.equal(likelyMatroska({url:'https://cdn.test/movie.mp4'},{kind:'video'}),false);
+});
+test('a timed-out probe stays uncertain instead of becoming a codec failure',async()=>{
+  const began=Date.now(),result=await probePlayback('https://slow.test/play',{timeout:20,fetcher:(_,init)=>new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('Stopped','AbortError')),{once:true}))});
+  assert.equal(result.kind,'unknown');assert.equal(result.timedOut,true);assert.ok(Date.now()-began<2000);assert.deepEqual(result.codecs,{});
 });
 test('playback probe uses bounded GET/Range, follows playback redirects and cancels oversized bodies',async()=>{
   let init,cancelled=false;const result=await probePlayback('https://example.org/private/play',{fetcher:async(_,opts)=>{init=opts;return new Response(new ReadableStream({start(c){c.enqueue(text('#EXTM3U\n'+ 'a'.repeat(100000)));},cancel(){cancelled=true;}}));}});

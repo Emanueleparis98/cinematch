@@ -10,15 +10,22 @@ export async function createCodecPlayer({container,url,kind='video',ext='mkv',on
   const reader=['hls','dash'].includes(kind)?null:new RangeReader(url,{ext});
   const player=new AVPlayer({container,enableWorker:false,enableAudioWorklet:false,enableWebGPU:false,enableWebCodecs:!forceSoftware,enableHardware:!forceSoftware,checkUseMSE:()=>false,preLoadTime:6,enableJitterBuffer:false,getWasm:(type,id)=>{try{return chrome.runtime.getURL('vendor/libmedia/'+decoderPath(type,id));}catch{return null;}}});
   let destroyed=false,loaded=false,playing=false,timer=null,pausedPosition=null;
+  const decodable=id=>{try{decoderPath('decoder',id);return true;}catch{return false;}};
   const duration=()=>Number(player.getDuration())/1000,currentTime=()=>pausedPosition??Number(player.currentTime)/1000;
-  const tracks=()=>{const streams=player.getStreams();return {selectedAudio:player.getSelectedAudioStreamId(),audio:streams.filter(s=>s.mediaType==='audio'||s.codecparProxy?.codecType===1).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Audio ${s.id+1}`})),subtitles:streams.filter(s=>s.mediaType==='subtitle'||s.codecparProxy?.codecType===3).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Sottotitoli ${s.id+1}`}))};};
+  const tracks=()=>{const streams=player.getStreams();return {selectedAudio:player.getSelectedAudioStreamId(),audio:streams.filter(s=>s.mediaType==='audio'||s.codecparProxy?.codecType===1).map(s=>({id:s.id,codec:s.codecparProxy?.codecId,label:s.metadata?.title||s.metadata?.language||`Audio ${s.id+1}`})),subtitles:streams.filter(s=>s.mediaType==='subtitle'||s.codecparProxy?.codecType===3).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Sottotitoli ${s.id+1}`}))};};
   for(const [event,state]of [['playing','loading'],['played','playing'],['paused','paused'],['ended','ended']])player.on(event,()=>{if(destroyed)return;playing=state==='playing';if(playing)pausedPosition=null;onState(state);});
   player.on('firstAudioRendered',()=>{if(!destroyed)onFrame('audio');});player.on('firstVideoRendered',()=>{if(!destroyed)onFrame('video');});
   player.on('error',()=>{if(!destroyed)onError(reader?.lastError??new Error('Il motore integrato non riesce a riprodurre questa sorgente. Prova un altro flusso.'));});
   const adapter={reader,player,get playing(){return playing;},get currentTime(){return currentTime();},get duration(){return duration();},
     async start(){try{
       await player.load(reader?loaderFor(AVPlayer.IOLoader.CustomIOLoader,reader):url,{ext:kind==='dash'?'mpd':kind==='hls'?'m3u8':ext,http:{credentials:'omit',referrerPolicy:'no-referrer'},ioLoaderOptions:{preload:1024*1024,retryCount:1}});
-      if(destroyed)return;loaded=true;onTracks(tracks());onTime(currentTime(),duration());timer=setInterval(()=>{if(!destroyed)onTime(currentTime(),duration());},250);await player.play();player.setSubtitleEnable(false);
+      if(destroyed)return;loaded=true;
+      // Remuxes often carry a lossless TrueHD/DTS-HD track first and a
+      // smaller AC3/E-AC3 compatibility track next. libmedia can decode the
+      // latter; switch to it instead of leaving the film silent.
+      const initial=tracks(),current=initial.audio.find(track=>track.id===initial.selectedAudio),alternative=initial.audio.find(track=>track.id!==current?.id&&decodable(track.codec));
+      if(current&&!decodable(current.codec)&&alternative)await player.selectAudio(alternative.id).catch(()=>{});
+      onTracks(tracks());onTime(currentTime(),duration());timer=setInterval(()=>{if(!destroyed)onTime(currentTime(),duration());},250);await player.play();player.setSubtitleEnable(false);
     }catch(error){if(!destroyed)throw reader?.lastError??new Error(error.message?.includes('decoder integrati')?error.message:'Il motore integrato non riesce ad aprire la sorgente. Controlla accesso, formato e disponibilità.');}},
     async play(){if(loaded&&!destroyed){pausedPosition=null;await player.play();}},async pause(){if(loaded&&!destroyed){await player.pause();pausedPosition=Number(player.currentTime)/1000;}},
     async seek(seconds){if(loaded&&!destroyed){const position=Math.max(0,Math.min(duration(),seconds));await player.seek(BigInt(Math.round(position*1000)));if(!playing)pausedPosition=position;onTime(position,duration());}},

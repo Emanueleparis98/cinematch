@@ -1,10 +1,10 @@
 import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from './streams.js';
 import {enhanceSelects,refreshSelects} from './controls.js';
-import {declaredCodecs,compatibility,probePlayback,nativePlaybackError} from './playback.js';
+import {declaredCodecs,compatibility,probePlayback,containerExtension,likelyMatroska,nativePlaybackError} from './playback.js';
 import {createCodecPlayer} from './codec-player.js';
 import {mediaPermission,playbackPermissions,permissionLabel} from './media-access.js';
 const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-const prefix='streamAddon:';let addons=[],movie=null,groups=[],generation=0,searchAbort=null,hls=null,selected=null,blockedUrl=null,playGeneration=0,playTimer,probeAbort,failure=null;
+const prefix='streamAddon:';let addons=[],movie=null,groups=[],generation=0,searchAbort=null,hls=null,selected=null,blockedUrl=null,playGeneration=0,playTimer,probeAbort,activeProbe=null,failure=null;
 const video=$('video');video.crossOrigin='anonymous';
 let integrated=null,engineMode='native',engineCleanup=Promise.resolve(),scrubbing=false;
 const codecCache=new Map(),checkCodecs=codecs=>compatibility(codecs,mime=>{if(!codecCache.has(mime))codecCache.set(mime,video.canPlayType(mime));return codecCache.get(mime);});
@@ -36,7 +36,7 @@ $('addon-form').onsubmit=async event=>{
     await chrome.storage.local.set({[key]:addon});$('addon-url').value='';status('addon-status',`${addon.name} collegato. Torna al player per scegliere una sorgente.`);
   }catch(error){status('addon-status',error.message,true);}finally{button.disabled=false;}
 };
-function stopVideo(){clearTimeout(playTimer);scrubbing=false;probeAbort?.abort();if(hls){hls.destroy();hls=null;}const previous=integrated;integrated=null;engineMode='native';if(previous)engineCleanup=engineCleanup.then(()=>previous.destroy()).catch(()=>{});$('codec-controls').hidden=true;$('codec-screen').hidden=true;document.querySelector('.screen').classList.remove('codec-active');delete $('codec-screen').dataset.audio;delete $('codec-screen').dataset.video;delete $('playback-stage').dataset.engine;video.pause();video.removeAttribute('src');video.replaceChildren();video.load();$('retry-play').hidden=true;$('resume-play').hidden=true;$('grant-media').hidden=true;blockedUrl=null;}
+function stopVideo(){clearTimeout(playTimer);scrubbing=false;probeAbort?.abort();activeProbe=null;if(hls){hls.destroy();hls=null;}const previous=integrated;integrated=null;engineMode='native';if(previous)engineCleanup=engineCleanup.then(()=>previous.destroy()).catch(()=>{});$('codec-controls').hidden=true;$('codec-screen').hidden=true;document.querySelector('.screen').classList.remove('codec-active');delete $('codec-screen').dataset.audio;delete $('codec-screen').dataset.video;delete $('playback-stage').dataset.engine;video.pause();video.removeAttribute('src');video.replaceChildren();video.load();$('retry-play').hidden=true;$('resume-play').hidden=true;$('grant-media').hidden=true;blockedUrl=null;}
 function renderStreams(){
   const filter=$('source-filter'),previous=filter.value;filter.replaceChildren(new Option('Tutti gli addon','all'));
   for(const g of groups)filter.append(new Option(g.name,g.key));filter.value=[...filter.options].some(o=>o.value===previous)?previous:'all';refreshSelects();$('source-filter-wrap').hidden=groups.length<2;
@@ -79,12 +79,25 @@ async function playStream(stream){
     }
     await engineCleanup;if(current!==playGeneration)return;
     if(current!==playGeneration)return;
-    const probe=await probePlayback(stream.url,{signal:probeAbort.signal});
+    let probe=await probePlayback(stream.url,{signal:probeAbort.signal,timeout:20000});
     if(current!==playGeneration)return;
-    const isHls=probe.kind==='hls'||(probe.kind==='unknown'&&stream.kind==='hls');
+    let isHls=probe.kind==='hls'||(probe.kind==='unknown'&&stream.kind==='hls');
+    // A cold addon/CDN can take longer than the normal probe. When the bytes
+    // never arrived we cannot tell MKV from MP4 yet, so retry once before
+    // handing a Matroska stream to the native <video> element, which would
+    // end immediately without an error.
+    if(probe.kind==='unknown'&&probe.timedOut&&!isHls&&!likelyMatroska(stream,probe)){
+      status('playback-status','Il server video è lento ad avviarsi. Nuovo tentativo…');
+      const retry=await probePlayback(stream.url,{signal:probeAbort.signal,timeout:30000});
+      if(current!==playGeneration)return;
+      if(retry.kind!=='unknown')probe=retry;else probe={...retry,timedOut:true};
+      isHls=probe.kind==='hls'||(probe.kind==='unknown'&&stream.kind==='hls');
+    }
+    activeProbe=probe;
     if(probe.kind==='page')throw new Error('La sorgente restituisce una pagina o un messaggio del servizio, non un video. Aggiorna le sorgenti o controlla l’addon.');
-    const actual=checkCodecs(probe.codecs);if(probe.kind==='matroska'||probe.kind==='dash'||stream.kind==='dash'||actual.unsupported.length||(!isHls&&checkCodecs(declaredCodecs(stream)).unsupported.length)){await startIntegrated(stream,current,probe);return;}
-    playTimer=setTimeout(()=>{if(current!==playGeneration)return;stopVideo();playbackError('La sorgente non risponde. Riprova o scegli un altro flusso.');},25000);
+    const actual=checkCodecs(probe.codecs),declared=checkCodecs(declaredCodecs(stream));
+    if(probe.kind==='matroska'||probe.kind==='dash'||stream.kind==='dash'||actual.unsupported.length||(!isHls&&declared.unsupported.length)||(!isHls&&likelyMatroska(stream,probe))){await startIntegrated(stream,current,probe);return;}
+    playTimer=setTimeout(()=>{if(current!==playGeneration)return;stopVideo();playbackError('La sorgente non risponde. Riprova o scegli un altro flusso.');},45000);
     document.querySelector('.screen').classList.add('active');
     for(const sub of stream.subtitles){if(/\.vtt(?:\?|$)/i.test(sub.url)){const track=el('track');track.kind='subtitles';track.label=sub.lang;track.srclang=/^[a-z]{2,3}(?:-[a-z]{2})?$/i.test(sub.lang)?sub.lang:'und';track.src=sub.url;video.append(track);}}
     if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){
@@ -103,11 +116,15 @@ async function playStream(stream){
 }
 const clock=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;};
 async function startIntegrated(stream,current,probe={}){
-  if(current!==playGeneration||engineMode==='integrated')return;engineMode='integrated';clearTimeout(playTimer);hls?.destroy();hls=null;video.pause();video.removeAttribute('src');video.load();failure=null;
+  if(current!==playGeneration||engineMode==='integrated')return;probe=probe?.kind?probe:activeProbe??probe;engineMode='integrated';clearTimeout(playTimer);hls?.destroy();hls=null;video.pause();video.removeAttribute('src');video.load();failure=null;
   $('codec-screen').hidden=false;$('codec-controls').hidden=false;document.querySelector('.screen').classList.add('active','codec-active');$('playback-stage').dataset.engine='integrated';status('playback-status','Avvio dei decoder integrati…');
   const active=()=>current===playGeneration&&engineMode==='integrated';
-  playTimer=setTimeout(()=>{if(active()){stopVideo();playbackError('La sorgente impiega troppo tempo ad avviarsi. Riprova o scegli un altro flusso.',3);}},25000);
-  let ext=probe.kind==='matroska'?'mkv':'mp4';try{const match=new URL(stream.url).pathname.match(/\.(mkv|webm|avi|mp4|mov|flv|ts|mpg|mpeg)$/i);if(match)ext=match[1];}catch{}
+  // High-bitrate remuxes need more than the old 25 s to prefetch the first
+  // seconds. Keep the timer generous and let the I/O reader report a real
+  // server failure instead of declaring the source dead while it is buffering.
+  playTimer=setTimeout(()=>{if(active()){stopVideo();playbackError('La sorgente impiega troppo tempo ad avviarsi. Riprova o scegli un altro flusso.',3);}},90000);
+  let ext=containerExtension(stream,probe);
+  if(!ext)ext=probe.kind==='video'?'mp4':'mkv';
   const candidate=await createCodecPlayer({container:$('codec-screen'),url:stream.url,kind:probe.kind==='dash'||stream.kind==='dash'?'dash':probe.kind==='hls'||stream.kind==='hls'?'hls':'video',ext,
     onState:state=>{if(!active()||failure)return;$('codec-toggle').textContent=state==='playing'?'Pausa':'Riproduci';status('playback-status',({loading:'Caricamento del video con decoder integrati…',playing:`In riproduzione · ${stream.name} · decoder integrati`,paused:'In pausa',ended:'Riproduzione terminata.'})[state]??state);if(state==='playing'){clearTimeout(playTimer);$('retry-play').hidden=true;$('resume-play').hidden=true;}},
     onTime:(position,duration)=>{if(!active())return;$('codec-seek').max=String(Math.max(1,duration||0));if(!scrubbing)$('codec-seek').value=String(Math.max(0,position));$('codec-time').value=`${clock(position)} / ${clock(duration)}`;},
@@ -127,13 +144,21 @@ $('codec-fullscreen').onclick=()=>{const operation=document.fullscreenElement?do
 $('playback-stage').onkeydown=event=>{if(!integrated||event.target.matches('button,input,select,[role=combobox]'))return;if(event.key===' '){event.preventDefault();toggleCodec();}else if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();integrated.seek(integrated.currentTime+(event.key==='ArrowRight'?5:-5)).catch(()=>{});}else if(event.key==='f')$('codec-fullscreen').click();};
 function reportPlaybackError(error){if(error.mediaOrigin){blockedUrl=error.mediaOrigin;$('grant-media').textContent=`Consenti ${permissionLabel(blockedUrl)}`;$('grant-media').hidden=false;}playbackError(error.message,error.mediaOrigin?4:3,error.recovery);}
 function playbackError(message,priority=2,recovery='retry'){if(failure&&failure.priority>priority)return;failure={message,priority,recovery};clearTimeout(playTimer);status('playback-status',message,true);$('retry-play').textContent=recovery==='choose'?'Scegli un altro flusso':'Riprova riproduzione';$('retry-play').hidden=false;}
-async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration||engineMode==='integrated')return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')await startIntegrated(selected,current).catch(error=>{if(current===playGeneration)reportPlaybackError(error);});}}
+async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration||engineMode==='integrated')return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')await startIntegrated(selected,current,activeProbe??{}).catch(error=>{if(current===playGeneration)reportPlaybackError(error);});}}
 $('retry-play').onclick=()=>{if(failure?.recovery==='choose'){$('stream-list').scrollIntoView({block:'start'});$('stream-list').querySelector('.stream-row:not(.selected) button')?.focus({preventScroll:true});}else if(selected)playStream(selected);};$('resume-play').onclick=()=>attemptPlay();$('grant-media').onclick=async()=>{try{if(blockedUrl&&await grant(blockedUrl))await playStream(selected);else status('playback-status','Accesso non concesso. Premi Consenti per autorizzare il server video.',true);}catch{status('playback-status','Chrome non ha concesso il permesso. Riprova dal pulsante Consenti.',true);}};
 video.addEventListener('playing',()=>{if(engineMode==='integrated')return;failure=null;clearTimeout(playTimer);status('playback-status',selected?`In riproduzione · ${selected.name}`:'In riproduzione');$('retry-play').hidden=true;$('resume-play').hidden=true;});
 video.addEventListener('waiting',()=>{if(engineMode==='native'&&selected&&!failure)status('playback-status','Caricamento del video…');});
 video.addEventListener('pause',()=>{if(engineMode==='native'&&selected&&!failure&&!video.ended&&!video.error)status('playback-status','In pausa');});
-video.addEventListener('ended',()=>{if(engineMode==='native')status('playback-status','Riproduzione terminata.');});
-video.addEventListener('error',()=>{if(selected&&engineMode==='native'&&!failure)startIntegrated(selected,playGeneration).catch(error=>reportPlaybackError(error));});
+video.addEventListener('ended',()=>{
+  if(engineMode!=='native'||!selected||failure)return;
+  // Chromium accepts a Matroska source just long enough to emit ended at
+  // t=0 but never fires an error. Treat that as an unsupported container and
+  // finish the playback with the integrated decoders instead of a dead UI.
+  const empty=video.currentTime<.05&&(!Number.isFinite(video.duration)||video.duration<.05);
+  if(empty){status('playback-status','Il formato richiede i decoder integrati. Avvio…');startIntegrated(selected,playGeneration,activeProbe??{}).catch(error=>{if(!error?.name||error.name!=='AbortError')reportPlaybackError(error);});return;}
+  status('playback-status','Riproduzione terminata.');
+});
+video.addEventListener('error',()=>{if(selected&&engineMode==='native'&&!failure)startIntegrated(selected,playGeneration,activeProbe??{}).catch(error=>reportPlaybackError(error));});
 async function importStreams(data,name){const streams=parseStreams(data);if(!streams.length)throw new Error('La lista non contiene flussi riconoscibili.');groups=groups.filter(g=>g.key!=='import');groups.push({key:'import',name,streams,imported:true});renderStreams();status('import-status',`${streams.length} flussi importati per questa sessione. La lista non viene salvata.`);}
 $('stream-file').onchange=async()=>{const file=$('stream-file').files[0];if(!file)return;try{if(file.size>MAX_JSON)throw new Error('File troppo grande: massimo 2 MB.');let data;try{data=JSON.parse(await file.text());}catch{throw new Error('Il file non contiene JSON valido.');}await importStreams(data,file.name);}catch(error){status('import-status',error.message,true);}finally{$('stream-file').value='';}};
 $('json-url-form').onsubmit=async event=>{event.preventDefault();const button=event.submitter;try{const url=httpUrl($('json-url').value).href;button.disabled=true;if(!await grant(url))throw new Error('Accesso al sito non concesso.');await importStreams(await fetchJson(url),'Lista JSON');$('json-url').value='';}catch(error){status('import-status',error.message,true);}finally{button.disabled=false;}};
