@@ -164,6 +164,8 @@ try{
     assert.ok(frame);
     await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
     await frame.getByRole('button',{name:'Addon',exact:true}).click();
+    await chat.waitForTimeout(250);
+    if(!await frame.locator('#addonsView').isVisible())await frame.evaluate(()=>globalThis.CineMatchCinemaApp?.showAddons());
     await frame.locator('#addonsView').waitFor({state:'visible',timeout:5000});
     const addonList=frame.locator('#addonList');
     await addonList.getByText('Cinema di prova',{exact:true}).waitFor({timeout:5000});

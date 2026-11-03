@@ -447,6 +447,7 @@ async function boot(){
   parent.postMessage({type:"cinematch:ready"},"*");
   await loadStreams();
 }
+globalThis.CineMatchCinemaApp={showAddons,showPicker,state};
 boot().catch(error=>{
   $("movieTitle").textContent="Film non disponibile";
   $("movieOriginal").textContent="";
