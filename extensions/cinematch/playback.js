@@ -1,4 +1,5 @@
 import {httpUrl} from './streams.js';
+import {mediaFetch} from './media-access.js';
 const mimes={hevc:['video/mp4; codecs="hvc1.1.6.L93.B0"','video/mp4; codecs="hev1.1.6.L93.B0"'],h264:['video/mp4; codecs="avc1.42E01E"'],ac3:['audio/mp4; codecs="ac-3"'],eac3:['audio/mp4; codecs="ec-3"'],aac:['audio/mp4; codecs="mp4a.40.2"'],dts:['audio/mp4; codecs="dtsc"'],truehd:['audio/mp4; codecs="mlpa"']};
 const labels={hevc:'H.265/HEVC',h264:'H.264/AVC',ac3:'AC3',eac3:'E-AC3',aac:'AAC',dts:'DTS',truehd:'TrueHD'};
 export function declaredCodecs(stream){
@@ -30,7 +31,7 @@ export function inspectPrefix(bytes,mime=''){
   }
   return {kind:/mpegurl/i.test(mime)?'hls':'video',codecs};
 }
-export async function probePlayback(url,{fetcher=fetch,signal}={}){
+export async function probePlayback(url,{fetcher=mediaFetch,signal}={}){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000),abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)controller.abort();
   try{
     // Addon playback endpoints often reject HEAD or redirect to a CDN.
@@ -39,7 +40,7 @@ export async function probePlayback(url,{fetcher=fetch,signal}={}){
     const reader=response.body.getReader(),prefix=new Uint8Array(65536);let size=0;
     try{while(size<prefix.length){const {value,done}=await reader.read();if(done)break;const take=Math.min(value.length,prefix.length-size);prefix.set(value.subarray(0,take),size);size+=take;}}finally{controller.abort();await reader.cancel().catch(()=>{});}
     return {...inspectPrefix(prefix.subarray(0,size),response.headers.get('content-type')??''),url:response.url||url};
-  }catch(error){if(error.playback)throw error;if(signal?.aborted)throw new DOMException('Aborted','AbortError');return {kind:'unknown',codecs:{},url};}
+  }catch(error){if(error.playback||error.mediaOrigin||error.networkCode)throw error;if(signal?.aborted)throw new DOMException('Aborted','AbortError');return {kind:'unknown',codecs:{},url};}
   finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }
 export function nativePlaybackError(code){

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {declaredCodecs,compatibility,inspectPrefix,probePlayback,nativePlaybackError} from '../extensions/cinematch/playback.js';
+import {mediaFetch} from '../extensions/cinematch/media-access.js';
+import {RangeReader} from '../extensions/cinematch/range-reader.js';
 const text=value=>new TextEncoder().encode(value);
 test('Comet release labels identify HEVC/AC3 and do not confuse EAC3 with AC3',()=>{
   assert.deepEqual(declaredCodecs({description:'Pacific Rim (2013) 1080p H265 ita eng AC3 5.1 sub ita eng Licdom.mkv · hevc'}),{video:'hevc',audio:'ac3'});
@@ -33,4 +35,33 @@ test('HTTP failures stay specific and never echo signed URLs or private server b
 test('network/CORS failure remains uncertain instead of being falsely called a codec failure',async()=>{
   assert.equal((await probePlayback('https://example.org/private',{fetcher:async()=>{throw new TypeError('private-url');}})).kind,'unknown');
   const controller=new AbortController();controller.abort();await assert.rejects(probePlayback('https://example.org',{signal:controller.signal,fetcher:async()=>{throw new TypeError('aborted');}}),error=>error.name==='AbortError');
+});
+
+test('redirect permission recovery is scoped to this request and never reveals signed paths',async()=>{
+  let listener,removed=false;
+  const api={runtime:{getURL:()=> 'chrome-extension://test/'},webRequest:{onBeforeRedirect:{addListener:fn=>listener=fn,removeListener:fn=>{assert.equal(fn,listener);removed=true;}}},permissions:{contains:async({origins})=>origins[0]==='https://addon.test/*'}};
+  await assert.rejects(mediaFetch('https://addon.test/play?key=private',{}, {api,fetcher:async()=>{
+    listener({initiator:'https://other.test',url:'https://addon.test/play?key=private',requestId:'other',redirectUrl:'https://unrelated.test/private'});
+    listener({initiator:'chrome-extension://test',url:'https://addon.test/play?key=private',requestId:'ours',redirectUrl:'https://cdn.test/private?signature=secret'});
+    throw new TypeError('Failed to fetch');
+  }}),e=>e.mediaOrigin==='https://cdn.test/*'&&!/private|signature|secret/.test(e.message));
+  assert.equal(removed,true);
+});
+
+test('probe propagates destination permissions and range reader preserves recovery metadata',async()=>{
+  const error=Object.assign(new Error('Consenti il server'),{mediaOrigin:'https://cdn.test/*'});
+  await assert.rejects(probePlayback('https://addon.test/play',{fetcher:async()=>{throw error;}}),e=>e===error);
+  const reader=new RangeReader('https://addon.test/play',{fetcher:async()=>{throw error;}});await assert.rejects(reader.open(),e=>e===error);assert.equal(reader.lastError,error);
+});
+
+test('browser network codes are sanitized, specific and all request listeners are removed',async()=>{
+  let failureListener;const active=new Set();const event={addListener:fn=>active.add(fn),removeListener:fn=>active.delete(fn)};
+  const api={runtime:{getURL:()=> 'chrome-extension://test/'},permissions:{contains:async()=>true},webRequest:{onBeforeRedirect:event,onErrorOccurred:{addListener:fn=>{failureListener=fn;active.add(fn);},removeListener:fn=>active.delete(fn)}}};
+  await assert.rejects(mediaFetch('https://cdn.test/private?secret=key',{}, {api,fetcher:async()=>{failureListener({initiator:'chrome-extension://test',url:'https://cdn.test/private?secret=key',requestId:'1',error:'net::ERR_CONNECTION_REFUSED'});throw new TypeError('private URL');}}),e=>e.networkCode==='ERR_CONNECTION_REFUSED'&&e.message.includes('rifiuta')&&!/secret|private/.test(e.message));assert.equal(active.size,0);
+});
+
+test('permitted redirects pass through and abort never asks for a new host',async()=>{
+  const listeners=new Set(),api={runtime:{getURL:()=> 'chrome-extension://test/'},webRequest:{onBeforeRedirect:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}},permissions:{contains:async()=>true}};
+  const response=await mediaFetch('https://addon.test/play',{}, {api,fetcher:async()=>new Response('ok')});assert.equal(await response.text(),'ok');assert.equal(listeners.size,0);
+  const abort=new AbortController();abort.abort();await assert.rejects(mediaFetch('https://addon.test/play',{signal:abort.signal},{api,fetcher:async()=>{throw new DOMException('Stopped','AbortError');}}),e=>e.name==='AbortError');assert.equal(listeners.size,0);
 });

@@ -87,12 +87,12 @@ async function playStream(stream){
         if(current!==playGeneration)return;
         const failed=data.context?.url??data.response?.url??data.url;
         if(failed){try{if(!await allowed(failed)){if(current!==playGeneration)return;clearTimeout(playTimer);blockedUrl=httpUrl(failed).href;$('grant-media').textContent=`Consenti ${httpUrl(failed).host}`;$('grant-media').hidden=false;status('playback-status','Questo flusso usa un altro server: autorizzalo per continuare.',true);hls?.stopLoad();return;}}catch{}}
-        if(data.fatal){hls?.stopLoad();startIntegrated(stream,current,{kind:'hls'}).catch(error=>{if(current===playGeneration)playbackError(error.message,3);});}
+        if(data.fatal){hls?.stopLoad();startIntegrated(stream,current,{kind:'hls'}).catch(error=>{if(current===playGeneration)reportPlaybackError(error);});}
       });
       hls.attachMedia(video);hls.loadSource(stream.url);
     }else video.src=stream.url;
     await attemptPlay(current);
-  }catch(error){if(current===playGeneration&&error.name!=='AbortError')playbackError(error.message,3,error.recovery);}
+  }catch(error){if(current===playGeneration&&error.name!=='AbortError')reportPlaybackError(error);}
 }
 const clock=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;};
 async function startIntegrated(stream,current,probe={}){
@@ -106,7 +106,7 @@ async function startIntegrated(stream,current,probe={}){
     onTime:(position,duration)=>{if(!active())return;$('codec-seek').max=String(Math.max(1,duration||0));if(!scrubbing)$('codec-seek').value=String(Math.max(0,position));$('codec-time').value=`${clock(position)} / ${clock(duration)}`;},
     onFrame:type=>{if(active())$('codec-screen').dataset[type]='decoded';},
     onTracks:tracks=>{if(!active())return;$('codec-audio').replaceChildren(...tracks.audio.map(t=>new Option(t.label,String(t.id))));$('codec-audio').value=String(tracks.selectedAudio);$('codec-audio-wrap').hidden=tracks.audio.length<2;$('codec-subtitle').replaceChildren(new Option('Disattivati','off'),...tracks.subtitles.map(t=>new Option(t.label,String(t.id))));$('codec-subtitle-wrap').hidden=!tracks.subtitles.length;refreshSelects();},
-    onError:error=>{if(active())playbackError(error.message,3);}
+    onError:error=>{if(active())reportPlaybackError(error);}
   });
   if(!active()){await candidate.destroy();return;}integrated=candidate;candidate.volume(Number($('codec-volume').value));await candidate.start();
 }
@@ -118,14 +118,15 @@ $('codec-audio').onchange=()=>integrated?.audio($('codec-audio').value).catch(()
 $('codec-subtitle').onchange=()=>integrated?.subtitle($('codec-subtitle').value).catch(()=>playbackError('Traccia sottotitoli non disponibile.',3));
 $('codec-fullscreen').onclick=()=>{const operation=document.fullscreenElement?document.exitFullscreen():$('playback-stage').requestFullscreen();operation.catch(()=>{});};
 $('playback-stage').onkeydown=event=>{if(!integrated||event.target.matches('button,input,select,[role=combobox]'))return;if(event.key===' '){event.preventDefault();toggleCodec();}else if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();integrated.seek(integrated.currentTime+(event.key==='ArrowRight'?5:-5)).catch(()=>{});}else if(event.key==='f')$('codec-fullscreen').click();};
+function reportPlaybackError(error){if(error.mediaOrigin){blockedUrl=error.mediaOrigin;$('grant-media').textContent=`Consenti ${httpUrl(blockedUrl).host}`;$('grant-media').hidden=false;}playbackError(error.message,3,error.recovery);}
 function playbackError(message,priority=2,recovery='retry'){if(failure&&failure.priority>priority)return;failure={message,priority,recovery};clearTimeout(playTimer);status('playback-status',message,true);$('retry-play').textContent=recovery==='choose'?'Scegli un altro flusso':'Riprova riproduzione';$('retry-play').hidden=false;}
-async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration||engineMode==='integrated')return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')await startIntegrated(selected,current).catch(e=>playbackError(e.message,3));}}
+async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration||engineMode==='integrated')return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')await startIntegrated(selected,current).catch(error=>{if(current===playGeneration)reportPlaybackError(error);});}}
 $('retry-play').onclick=()=>{if(failure?.recovery==='choose'){$('stream-list').scrollIntoView({block:'start'});$('stream-list').querySelector('.stream-row:not(.selected) button')?.focus({preventScroll:true});}else if(selected)playStream(selected);};$('resume-play').onclick=()=>attemptPlay();$('grant-media').onclick=async()=>{if(blockedUrl&&await grant(blockedUrl))await playStream(selected);};
 video.addEventListener('playing',()=>{if(engineMode==='integrated')return;failure=null;clearTimeout(playTimer);status('playback-status',selected?`In riproduzione · ${selected.name}`:'In riproduzione');$('retry-play').hidden=true;$('resume-play').hidden=true;});
 video.addEventListener('waiting',()=>{if(engineMode==='native'&&selected&&!failure)status('playback-status','Caricamento del video…');});
 video.addEventListener('pause',()=>{if(engineMode==='native'&&selected&&!failure&&!video.ended&&!video.error)status('playback-status','In pausa');});
 video.addEventListener('ended',()=>{if(engineMode==='native')status('playback-status','Riproduzione terminata.');});
-video.addEventListener('error',()=>{if(selected&&engineMode==='native'&&!failure)startIntegrated(selected,playGeneration).catch(error=>playbackError(error.message,3));});
+video.addEventListener('error',()=>{if(selected&&engineMode==='native'&&!failure)startIntegrated(selected,playGeneration).catch(error=>reportPlaybackError(error));});
 async function importStreams(data,name){const streams=parseStreams(data);if(!streams.length)throw new Error('La lista non contiene flussi riconoscibili.');groups=groups.filter(g=>g.key!=='import');groups.push({key:'import',name,streams,imported:true});renderStreams();status('import-status',`${streams.length} flussi importati per questa sessione. La lista non viene salvata.`);}
 $('stream-file').onchange=async()=>{const file=$('stream-file').files[0];if(!file)return;try{if(file.size>MAX_JSON)throw new Error('File troppo grande: massimo 2 MB.');let data;try{data=JSON.parse(await file.text());}catch{throw new Error('Il file non contiene JSON valido.');}await importStreams(data,file.name);}catch(error){status('import-status',error.message,true);}finally{$('stream-file').value='';}};
 $('json-url-form').onsubmit=async event=>{event.preventDefault();const button=event.submitter;try{const url=httpUrl($('json-url').value).href;button.disabled=true;if(!await grant(url))throw new Error('Accesso al sito non concesso.');await importStreams(await fetchJson(url),'Lista JSON');$('json-url').value='';}catch(error){status('import-status',error.message,true);}finally{button.disabled=false;}};

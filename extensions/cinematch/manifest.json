@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "CineMatch — Correnti del cinema",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "74 correnti del cinema, prompt per le chat AI, immagini TMDB automatiche e player integrato con addon e flussi HTTP/HLS.",
   "minimum_chrome_version": "116",
-  "permissions": ["sidePanel", "storage", "scripting", "clipboardWrite"],
+  "permissions": ["sidePanel", "storage", "scripting", "clipboardWrite", "webRequest"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.deepseek.com/*",

@@ -14,12 +14,12 @@ export async function createCodecPlayer({container,url,kind='video',ext='mkv',on
   const tracks=()=>{const streams=player.getStreams();return {selectedAudio:player.getSelectedAudioStreamId(),audio:streams.filter(s=>s.mediaType==='audio'||s.codecparProxy?.codecType===1).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Audio ${s.id+1}`})),subtitles:streams.filter(s=>s.mediaType==='subtitle'||s.codecparProxy?.codecType===3).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Sottotitoli ${s.id+1}`}))};};
   for(const [event,state]of [['playing','loading'],['played','playing'],['paused','paused'],['ended','ended']])player.on(event,()=>{if(destroyed)return;playing=state==='playing';if(playing)pausedPosition=null;onState(state);});
   player.on('firstAudioRendered',()=>{if(!destroyed)onFrame('audio');});player.on('firstVideoRendered',()=>{if(!destroyed)onFrame('video');});
-  player.on('error',()=>{if(!destroyed)onError(new Error(reader?.lastError?.message??'Il motore integrato non riesce a riprodurre questa sorgente. Prova un altro flusso.'));});
+  player.on('error',()=>{if(!destroyed)onError(reader?.lastError??new Error('Il motore integrato non riesce a riprodurre questa sorgente. Prova un altro flusso.'));});
   const adapter={reader,player,get playing(){return playing;},get currentTime(){return currentTime();},get duration(){return duration();},
     async start(){try{
       await player.load(reader?loaderFor(AVPlayer.IOLoader.CustomIOLoader,reader):url,{ext:kind==='dash'?'mpd':kind==='hls'?'m3u8':ext,http:{credentials:'omit',referrerPolicy:'no-referrer'},ioLoaderOptions:{preload:1024*1024,retryCount:1}});
       if(destroyed)return;loaded=true;onTracks(tracks());onTime(currentTime(),duration());timer=setInterval(()=>{if(!destroyed)onTime(currentTime(),duration());},250);await player.play();player.setSubtitleEnable(false);
-    }catch(error){if(!destroyed)throw new Error(reader?.lastError?.message??(error.message?.includes('decoder integrati')?error.message:'Il motore integrato non riesce ad aprire la sorgente. Controlla accesso, formato e disponibilità.'));}},
+    }catch(error){if(!destroyed)throw reader?.lastError??new Error(error.message?.includes('decoder integrati')?error.message:'Il motore integrato non riesce ad aprire la sorgente. Controlla accesso, formato e disponibilità.');}},
     async play(){if(loaded&&!destroyed){pausedPosition=null;await player.play();}},async pause(){if(loaded&&!destroyed){await player.pause();pausedPosition=Number(player.currentTime)/1000;}},
     async seek(seconds){if(loaded&&!destroyed){const position=Math.max(0,Math.min(duration(),seconds));await player.seek(BigInt(Math.round(position*1000)));if(!playing)pausedPosition=position;onTime(position,duration());}},
     volume(value){if(!destroyed)player.setVolume(Math.max(0,Math.min(1,value)));},async audio(id){if(!destroyed)await player.selectAudio(Number(id));},

@@ -57,5 +57,5 @@ test('signature changes when criteria change; invalid data never silently change
 test('manifest limits chat controls to four sites and TMDB access to official hosts',()=>{
   const manifest=JSON.parse(readFileSync(new URL('../extensions/cinematch/manifest.json',import.meta.url),'utf8'));
   assert.equal(manifest.manifest_version,3);assert.equal(manifest.host_permissions.length,6);assert.equal(manifest.content_scripts[0].matches.length,4);assert.ok(manifest.content_scripts[0].js.includes('enrich.js'));
-  assert.ok(!manifest.permissions.some(p=>['tabs','history','cookies','webRequest'].includes(p)));assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
+  assert.ok(!manifest.permissions.some(p=>['tabs','history','cookies'].includes(p)));assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
 });

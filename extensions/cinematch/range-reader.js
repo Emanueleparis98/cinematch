@@ -1,7 +1,8 @@
 import {httpUrl} from './streams.js';
+import {mediaFetch} from './media-access.js';
 const EOF=-1048576;
 export class RangeReader {
-  constructor(url,{fetcher=fetch,chunkSize=1024*1024,ext='mkv',onError=()=>{}}={}){
+  constructor(url,{fetcher=mediaFetch,chunkSize=1024*1024,ext='mkv',onError=()=>{}}={}){
     this.url=httpUrl(url).href;this.fetcher=(...args)=>fetcher(...args);this.chunkSize=Math.min(1024*1024,Math.max(65536,chunkSize));this.ext=ext;this.onError=onError;this.position=0;this.length=0;this.bytesRead=0;this.block=null;this.controller=null;this.closed=false;this.lastError=null;
   }
   async blockAt(start,size=this.chunkSize){

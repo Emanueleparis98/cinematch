@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.1.0
+# CineMatch — estensione browser 3.1.1
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.1.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.1.1.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -109,6 +109,11 @@ I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
 `sidePanel` apre il pannello, `scripting` inserisce il prompt nei quattro editor,
 `clipboardWrite` copia il testo, `storage` conserva le bozze nella sessione.
+`webRequest` osserva temporaneamente soltanto i reindirizzamenti e gli errori
+della richiesta video corrente, sui siti già autorizzati. Se un flusso passa
+a un altro server, **Consenti [server]** richiede il relativo permesso opzionale
+e riparte dalla sorgente iniziale. I link firmati restano in memoria e non
+vengono mostrati o salvati. Non intercetta le conversazioni o la navigazione.
 La credenziale può essere ricordata in `storage.local` scegliendo **Ricorda
 su questo dispositivo**, oppure in `storage.session` fino al riavvio.
 Entrambi gli storage hanno accesso TRUSTED_CONTEXTS: gli script inseriti nelle

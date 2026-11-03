@@ -7,8 +7,17 @@ const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwrig
 const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
 const calls=[],errors=[];let base,failStreams=false,passed=0;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
+const cdn=createServer((req,res)=>{
+  const file=files.get('pattern-hevc-ac3.mkv'),range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);
+  res.setHeader('Content-Type','application/octet-stream');
+  if(range){const start=Number(range[1]),end=Math.min(Number(range[2]||file.length-1),file.length-1);res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);res.setHeader('Content-Length',end-start+1);return res.end(file.subarray(start,end+1));}
+  res.setHeader('Content-Length',file.length);res.end(file);
+});
+await new Promise(r=>cdn.listen(0,'127.0.0.2',r));
+const cdnBase=`http://127.0.0.2:${cdn.address().port}`;
 const server=createServer((req,res)=>{
   calls.push({path:req.url,authorization:req.headers.authorization,cookie:req.headers.cookie});const path=new URL(req.url,base).pathname;res.setHeader('Access-Control-Allow-Origin','*');
+  if(path==='/cdn-redirect'){res.statusCode=302;res.setHeader('Location',`${cdnBase}/private/movie.mkv?signature=private-test-token`);return res.end();}
   if(path==='/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(manifest));}
   if(path==='/bad/manifest.json'){res.setHeader('Content-Type','text/html');return res.end('<html>Not JSON</html>');}
   if(path==='/comet-like'){if(req.method==='HEAD'){res.statusCode=405;return res.end();}res.statusCode=302;res.setHeader('Location','/opaque');return res.end();}
@@ -128,5 +137,19 @@ try{
     await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).uncheck();await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({state:'detached'});await manager.reload();await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).waitFor();assert.equal(await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).isChecked(),false);
     await manager.getByRole('button',{name:'Rimuovi Cinema di prova'}).click();await manager.locator('#installed-empty').waitFor();
   });
+  await check('cross-host redirect without CORS reproduces the network error and offers the exact CDN permission',async()=>{
+    assert.equal(await player.evaluate(()=>chrome.permissions.contains({origins:['http://127.0.0.2/*']})),false);
+    assert.equal(await player.evaluate(async url=>{try{await fetch(url,{headers:{Range:'bytes=0-65535'}});return false;}catch{return true;}},`${base}/cdn-redirect`),true,'unmodified fetch must reproduce the reported network failure');
+    await importSource('Redirect MKV HEVC AC3','cdn-redirect');
+    await player.locator('#grant-media').waitFor({state:'visible',timeout:12000});assert.equal(await player.locator('#grant-media').innerText(),'Consenti 127.0.0.2');assert.match(await player.locator('#playback-status').innerText(),/altro server/);assert.ok(!(await player.locator('body').innerText()).includes('private-test-token'));
+  });
+  await check('the same no-CORS HEVC/AC3 redirect decodes with the destination host granted',async()=>{
+    // Separate disposable profile supplies the optional grant that headless
+    // Chromium cannot accept through its native permission prompt.
+    extensionManifest.host_permissions.push('http://127.0.0.2/*');await writeFile(join(extension,'manifest.json'),JSON.stringify(extensionManifest));
+    const granted=await chromium.launchPersistentContext(join(profile,'granted'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
+    try{const w=granted.serviceWorkers()[0]||await granted.waitForEvent('serviceworker'),host=new URL(w.url()).host,p=await granted.newPage();await p.goto(`chrome-extension://${host}/watch.html`);await p.locator('#stream-file').setInputFiles({name:'redirect.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'CDN MKV HEVC AC3',url:`${base}/cdn-redirect`}]}))});await p.getByRole('button',{name:'Riproduci CDN MKV HEVC AC3 da redirect.json'}).click();await p.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await p.locator('#playback-status').innerText());});assert.equal(await p.locator('#grant-media').isVisible(),false);}
+    finally{await granted.close();}
+  });
   assert.deepEqual(errors,[]);console.log(`${passed} player/browser checks passed. No external accounts or AI calls.`);
-}finally{await context.close();await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true});}
+}finally{await context.close();server.closeAllConnections();cdn.closeAllConnections();await Promise.all([new Promise(resolve=>server.close(resolve)),new Promise(resolve=>cdn.close(resolve))]);await rm(profile,{recursive:true,force:true});}
