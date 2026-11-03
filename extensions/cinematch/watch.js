@@ -1,6 +1,6 @@
 import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from './streams.js';
 import {enhanceSelects,refreshSelects} from './controls.js';
-import {declaredCodecs,compatibility,probePlayback,containerExtension,likelyMatroska,nativePlaybackError} from './playback.js';
+import {declaredCodecs,compatibility,probePlayback,containerExtension,likelyIntegrated,nativePlaybackError} from './playback.js';
 import {createCodecPlayer} from './codec-player.js';
 import {mediaPermission,playbackPermissions,permissionLabel} from './media-access.js';
 const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -36,7 +36,7 @@ $('addon-form').onsubmit=async event=>{
     await chrome.storage.local.set({[key]:addon});$('addon-url').value='';status('addon-status',`${addon.name} collegato. Torna al player per scegliere una sorgente.`);
   }catch(error){status('addon-status',error.message,true);}finally{button.disabled=false;}
 };
-function stopVideo(){clearTimeout(playTimer);scrubbing=false;probeAbort?.abort();activeProbe=null;if(hls){hls.destroy();hls=null;}const previous=integrated;integrated=null;engineMode='native';if(previous)engineCleanup=engineCleanup.then(()=>previous.destroy()).catch(()=>{});$('codec-controls').hidden=true;$('codec-screen').hidden=true;document.querySelector('.screen').classList.remove('codec-active');delete $('codec-screen').dataset.audio;delete $('codec-screen').dataset.video;delete $('playback-stage').dataset.engine;video.pause();video.removeAttribute('src');video.replaceChildren();video.load();$('retry-play').hidden=true;$('resume-play').hidden=true;$('grant-media').hidden=true;blockedUrl=null;}
+function stopVideo(){clearTimeout(playTimer);scrubbing=false;probeAbort?.abort();activeProbe=null;if(hls){hls.destroy();hls=null;}const previous=integrated;integrated=null;engineMode='native';if(previous)engineCleanup=engineCleanup.then(()=>previous.destroy()).catch(()=>{});$('codec-controls').hidden=true;$('codec-screen').hidden=true;document.querySelector('.screen').classList.remove('codec-active');delete $('codec-screen').dataset.audio;delete $('codec-screen').dataset.video;delete $('playback-stage').dataset.engine;video.preload='none';video.pause();video.removeAttribute('src');video.replaceChildren();video.load();$('retry-play').hidden=true;$('resume-play').hidden=true;$('grant-media').hidden=true;blockedUrl=null;}
 function renderStreams(){
   const filter=$('source-filter'),previous=filter.value;filter.replaceChildren(new Option('Tutti gli addon','all'));
   for(const g of groups)filter.append(new Option(g.name,g.key));filter.value=[...filter.options].some(o=>o.value===previous)?previous:'all';refreshSelects();$('source-filter-wrap').hidden=groups.length<2;
@@ -86,7 +86,7 @@ async function playStream(stream){
     // never arrived we cannot tell MKV from MP4 yet, so retry once before
     // handing a Matroska stream to the native <video> element, which would
     // end immediately without an error.
-    if(probe.kind==='unknown'&&probe.timedOut&&!isHls&&!likelyMatroska(stream,probe)){
+    if(probe.kind==='unknown'&&probe.timedOut&&!isHls&&!likelyIntegrated(stream,probe)){
       status('playback-status','Il server video è lento ad avviarsi. Nuovo tentativo…');
       const retry=await probePlayback(stream.url,{signal:probeAbort.signal,timeout:30000});
       if(current!==playGeneration)return;
@@ -96,13 +96,13 @@ async function playStream(stream){
     activeProbe=probe;
     if(probe.kind==='page')throw new Error('La sorgente restituisce una pagina o un messaggio del servizio, non un video. Aggiorna le sorgenti o controlla l’addon.');
     const actual=checkCodecs(probe.codecs),declared=checkCodecs(declaredCodecs(stream));
-    if(probe.kind==='matroska'||probe.kind==='dash'||stream.kind==='dash'||actual.unsupported.length||(!isHls&&declared.unsupported.length)||(!isHls&&likelyMatroska(stream,probe))){await startIntegrated(stream,current,probe);return;}
+    if(probe.kind==='matroska'||probe.kind==='dash'||stream.kind==='dash'||actual.unsupported.length||(!isHls&&declared.unsupported.length)||(!isHls&&likelyIntegrated(stream,probe))){await startIntegrated(stream,current,probe);return;}
     playTimer=setTimeout(()=>{if(current!==playGeneration)return;stopVideo();playbackError('La sorgente non risponde. Riprova o scegli un altro flusso.');},45000);
-    document.querySelector('.screen').classList.add('active');
+    document.querySelector('.screen').classList.add('active');video.preload='auto';
     for(const sub of stream.subtitles){if(/\.vtt(?:\?|$)/i.test(sub.url)){const track=el('track');track.kind='subtitles';track.label=sub.lang;track.srclang=/^[a-z]{2,3}(?:-[a-z]{2})?$/i.test(sub.lang)?sub.lang:'und';track.src=sub.url;video.append(track);}}
     if(isHls&&!video.canPlayType('application/vnd.apple.mpegurl')){
       if(!globalThis.Hls?.isSupported())throw new Error('HLS non è supportato da questo browser. Scegli un altro flusso.');
-      hls=new Hls({enableWorker:false,maxBufferLength:30,backBufferLength:15,xhrSetup:xhr=>{xhr.withCredentials=false;}});
+      hls=new Hls({enableWorker:true,maxBufferLength:30,backBufferLength:15,xhrSetup:xhr=>{xhr.withCredentials=false;}});
       hls.on(Hls.Events.ERROR,async(_,data)=>{
         if(current!==playGeneration)return;
         const failed=data.context?.url??data.response?.url??data.url;
@@ -115,8 +115,8 @@ async function playStream(stream){
   }catch(error){if(current===playGeneration&&error.name!=='AbortError')reportPlaybackError(error);}
 }
 const clock=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;};
-async function startIntegrated(stream,current,probe={}){
-  if(current!==playGeneration||engineMode==='integrated')return;probe=probe?.kind?probe:activeProbe??probe;engineMode='integrated';clearTimeout(playTimer);hls?.destroy();hls=null;video.pause();video.removeAttribute('src');video.load();failure=null;
+async function startIntegrated(stream,current,probe={},forceSoftware=false){
+  if(current!==playGeneration||(engineMode==='integrated'&&!forceSoftware))return;probe=probe?.kind?probe:activeProbe??probe;engineMode='integrated';clearTimeout(playTimer);hls?.destroy();hls=null;video.pause();video.removeAttribute('src');video.load();failure=null;
   $('codec-screen').hidden=false;$('codec-controls').hidden=false;document.querySelector('.screen').classList.add('active','codec-active');$('playback-stage').dataset.engine='integrated';status('playback-status','Avvio dei decoder integrati…');
   const active=()=>current===playGeneration&&engineMode==='integrated';
   // High-bitrate remuxes need more than the old 25 s to prefetch the first
@@ -125,12 +125,22 @@ async function startIntegrated(stream,current,probe={}){
   playTimer=setTimeout(()=>{if(active()){stopVideo();playbackError('La sorgente impiega troppo tempo ad avviarsi. Riprova o scegli un altro flusso.',3);}},90000);
   let ext=containerExtension(stream,probe);
   if(!ext)ext=probe.kind==='video'?'mp4':'mkv';
-  const candidate=await createCodecPlayer({container:$('codec-screen'),url:stream.url,kind:probe.kind==='dash'||stream.kind==='dash'?'dash':probe.kind==='hls'||stream.kind==='hls'?'hls':'video',ext,
-    onState:state=>{if(!active()||failure)return;$('codec-toggle').textContent=state==='playing'?'Pausa':'Riproduci';status('playback-status',({loading:'Caricamento del video con decoder integrati…',playing:`In riproduzione · ${stream.name} · decoder integrati`,paused:'In pausa',ended:'Riproduzione terminata.'})[state]??state);if(state==='playing'){clearTimeout(playTimer);$('retry-play').hidden=true;$('resume-play').hidden=true;}},
+  let audioWarning=false;
+  const retrySoftware=async error=>{
+    if(current!==playGeneration||forceSoftware||error.io)return reportPlaybackError(error);
+    status('playback-status','Il decoder hardware non ha accettato il flusso. Passo ai decoder software…');
+    const previous=integrated;integrated=null;engineMode='native';
+    if(previous)await previous.destroy().catch(()=>{});
+    if(current!==playGeneration)return;
+    await startIntegrated(stream,current,probe,true).catch(failure=>{if(active())reportPlaybackError(failure);});
+  };
+  const candidate=await createCodecPlayer({container:$('codec-screen'),url:stream.url,kind:probe.kind==='dash'||stream.kind==='dash'?'dash':probe.kind==='hls'||stream.kind==='hls'?'hls':'video',ext,forceSoftware,
+    onState:state=>{if(!active()||failure)return;$('codec-toggle').textContent=state==='playing'?'Pausa':'Riproduci';status('playback-status',({loading:'Caricamento del video con decoder integrati…',playing:`In riproduzione · ${stream.name} · decoder integrati${audioWarning?' · audio non supportato':''}`,paused:'In pausa',ended:'Riproduzione terminata.'})[state]??state);if(state==='playing'){clearTimeout(playTimer);$('retry-play').hidden=true;$('resume-play').hidden=true;}},
     onTime:(position,duration)=>{if(!active())return;$('codec-seek').max=String(Math.max(1,duration||0));if(!scrubbing)$('codec-seek').value=String(Math.max(0,position));$('codec-time').value=`${clock(position)} / ${clock(duration)}`;},
     onFrame:type=>{if(active())$('codec-screen').dataset[type]='decoded';},
+    onAudioUnavailable:()=>{audioWarning=true;},
     onTracks:tracks=>{if(!active())return;$('codec-audio').replaceChildren(...tracks.audio.map(t=>new Option(t.label,String(t.id))));$('codec-audio').value=String(tracks.selectedAudio);$('codec-audio-wrap').hidden=tracks.audio.length<2;$('codec-subtitle').replaceChildren(new Option('Disattivati','off'),...tracks.subtitles.map(t=>new Option(t.label,String(t.id))));$('codec-subtitle-wrap').hidden=!tracks.subtitles.length;refreshSelects();},
-    onError:error=>{if(active())reportPlaybackError(error);}
+    onError:error=>{if(active())void retrySoftware(error);}
   });
   if(!active()){await candidate.destroy();return;}integrated=candidate;candidate.volume(Number($('codec-volume').value));await candidate.start();
 }

@@ -4,7 +4,7 @@ import {readFile,writeFile,mkdtemp,rm,mkdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,basename} from 'node:path';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
-const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
+const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4','pattern-vvc.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
 const calls=[],errors=[];let base,failStreams=false,passed=0,oversizedResponses=0,slowStartStarted=false;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
 const cdn=createServer((req,res)=>{
@@ -133,6 +133,12 @@ try{
     await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
     assert.ok(oversizedResponses>before,'fixture must actually return more bytes than requested');
     await player.locator('#codec-toggle').click();await player.locator('#codec-seek').evaluate(e=>{e.value='2.5';e.dispatchEvent(new Event('change',{bubbles:true}));});await player.waitForFunction(()=>document.querySelector('#codec-time').value.startsWith('0:02'));assert.ok(!(await player.locator('#playback-status').innerText()).includes('intervallo video non valido'));
+  });
+  await check('H.266/VVC MP4 decodes with the bundled software decoder',async()=>{
+    await importSource('VVC H.266','pattern-vvc.mp4');
+    await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    assert.equal(await player.locator('#playback-stage').getAttribute('data-engine'),'integrated');
+    await player.locator('#codec-toggle').click();
   });
   await check('audio languages and embedded subtitles can be selected in the integrated player',async()=>{
     await importSource('Tracce','pattern-tracks.mkv');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});

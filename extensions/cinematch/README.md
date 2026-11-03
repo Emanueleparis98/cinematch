@@ -1,11 +1,11 @@
-# CineMatch - estensione browser 3.1.6
+# CineMatch - estensione browser 3.2.0
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.1.6.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.2.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -71,9 +71,9 @@ L’icona video **Addon e player** nell’intestazione apre la nuova sezione.
 Collega un manifest compatibile con Stremio/Nuvio, poi clicca la locandina di un
 film nella risposta AI. Scegli il flusso nella scheda CineMatch per riprodurlo.
 Puoi importare file o indirizzi JSON anche senza addon. Video HTTP, HLS e DASH
-sono integrati. libmedia aggiunge decoder locali per MKV/AVI e audio AC3/E-AC3/DTS,
-usati automaticamente quando servono. Torrent, DRM e header senza proxy conservano
-i limiti dei rispettivi servizi.
+sono integrati. libmedia aggiunge decoder locali per MKV/AVI, HEVC, H.266/VVC
+in MP4 e audio AC3/E-AC3/DTS, usati automaticamente quando servono. Torrent,
+DRM e header senza proxy conservano i limiti dei rispettivi servizi.
 
 I sette configuratori indicati sono disponibili in una sezione espandibile:
 completa la configurazione sui loro siti e incolla il manifest personale.
@@ -109,6 +109,13 @@ piccola e una risposta 429/5xx viene riprovata una volta. Il limite di avvio dei
 decoder integrati passa da 25 a 90 secondi; se un remux contiene una traccia
 TrueHD non decodificabile ma anche AC3/E-AC3, viene scelta quella compatibile.
 [Correzione avvio, 3.1.6](../../docs/estensione-3.1.6-avvio.md).
+La 3.2.0 aggiunge il decoder H.266/VVC per i flussi MP4, instrada TS/M2TS/FLV/
+WMV/ASF/VOB/MPG/3GP ai decoder integrati, attiva il worker di hls.js e
+`preload="auto"` per il percorso nativo. Se il decoder hardware rifiuta un
+flusso, il player riprova una volta con i decoder software; gli errori di rete
+non attivano questa riprova. I remux con TrueHD senza una traccia AC3/E-AC3
+compatibile restano senza audio e lo indicano nello stato.
+[Codec e accelerazione, 3.2.0](../../docs/estensione-3.2.0-codec.md).
 
 ## Costi, dati e permessi
 

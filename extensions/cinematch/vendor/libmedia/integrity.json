@@ -54,5 +54,6 @@
   "decode/wma.wasm": "a9716efc03cadfbb44dabbb4894accf6daa6f14f9a66a04c41bb110497776e80",
   "decode/wmv.wasm": "5aa9dcec9b97ee33a691cfd5035de86fe1bbe7dbf62acfedf15f112905cfb934",
   "resample/resample.wasm": "7709e04280d6f9487872cbcfbffa747032aaa5e45a72849a1aaceb05259b347d",
-  "stretchpitch/stretchpitch.wasm": "9397d474f85fbf3d0bc6b5b78bb500d0329a7a2c4ce212c8531cd56514434a7a"
+  "stretchpitch/stretchpitch.wasm": "9397d474f85fbf3d0bc6b5b78bb500d0329a7a2c4ce212c8531cd56514434a7a",
+  "decode/vvc.wasm": "f9884d08c52e606ee627e0f5641cfea5f7b8cbbf17e7903cf6a647639a18d6cd"
 }

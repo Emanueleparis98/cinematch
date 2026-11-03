@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {declaredCodecs,compatibility,inspectPrefix,probePlayback,containerExtension,likelyMatroska,nativePlaybackError} from '../extensions/cinematch/playback.js';
+import {declaredCodecs,compatibility,inspectPrefix,probePlayback,containerExtension,likelyMatroska,likelyIntegrated,nativePlaybackError} from '../extensions/cinematch/playback.js';
 import {mediaFetch,mediaPermission,playbackPermissions,RD_DOWNLOADS} from '../extensions/cinematch/media-access.js';
 import {RangeReader} from '../extensions/cinematch/range-reader.js';
 const text=value=>new TextEncoder().encode(value);
@@ -8,6 +8,7 @@ test('Comet release labels identify HEVC/AC3 and do not confuse EAC3 with AC3',(
   assert.deepEqual(declaredCodecs({description:'Pacific Rim (2013) 1080p H265 ita eng AC3 5.1 sub ita eng Licdom.mkv · hevc'}),{video:'hevc',audio:'ac3'});
   assert.equal(declaredCodecs({filename:'Test.x264.E-AC3.mkv'}).audio,'eac3');assert.equal(declaredCodecs({name:'Test x264 DD+ 5.1'}).audio,'eac3');
   assert.deepEqual(declaredCodecs({filename:'test.H.264.AAC.mp4'}),{video:'h264',audio:'aac'});
+  assert.equal(declaredCodecs({filename:'test.H.266.VVC.mkv'}).video,'vvc');
 });
 test('codec checks query the current browser instead of assuming HEVC always fails',()=>{
   const supported=m=>m.includes('hvc1')||m.includes('avc1')||m.includes('mp4a')?'probably':'';
@@ -23,6 +24,8 @@ test('Matroska codec IDs are read only from EBML CodecID elements',()=>{
   // HEVC ID is 16 bytes; malformed or arbitrary release text is not enough.
   bytes[5]=0x80+text('V_MPEGH/ISO/HEVC').length;
   assert.deepEqual(inspectPrefix(bytes).codecs,{video:'hevc',audio:'ac3'});assert.deepEqual(inspectPrefix(text('V_MPEGH/ISO/HEVC A_AC3')).codecs,{});
+  const vvc=new Uint8Array([0x1a,0x45,0xdf,0xa3,0x86,0x80+text('V_MPEGI/ISO/VVC').length,...text('V_MPEGI/ISO/VVC')]);
+  assert.deepEqual(inspectPrefix(vvc).codecs,{video:'vvc'});
 });
 test('container choice survives extensionless addon URLs and slow probes',()=>{
   assert.equal(containerExtension({url:'https://cdn.test/movie.mkv'}),'mkv');
@@ -33,6 +36,9 @@ test('container choice survives extensionless addon URLs and slow probes',()=>{
   assert.equal(containerExtension({url:'https://cdn.test/movie.mp4'}),'mp4');
   assert.equal(likelyMatroska({url:'https://cdn.test/movie.mkv'},{kind:'unknown'}),true);
   assert.equal(likelyMatroska({url:'https://cdn.test/movie.mp4'},{kind:'video'}),false);
+  assert.equal(likelyIntegrated({url:'https://cdn.test/movie.ts'},{kind:'video'}),true);
+  assert.equal(likelyIntegrated({url:'https://cdn.test/movie.wmv'},{kind:'video'}),true);
+  assert.equal(likelyIntegrated({url:'https://cdn.test/movie.mp4'},{kind:'video'}),false);
 });
 test('a timed-out probe stays uncertain instead of becoming a codec failure',async()=>{
   const began=Date.now(),result=await probePlayback('https://slow.test/play',{timeout:20,fetcher:(_,init)=>new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('Stopped','AbortError')),{once:true}))});

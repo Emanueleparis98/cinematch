@@ -17,7 +17,7 @@ test('small complete responses work and EOF is explicit',async()=>{
   const reader=new RangeReader('https://example.org',{fetcher:async()=>new Response('test',{headers:{'content-length':'4'}})});await reader.open();const output=new Uint8Array(32);assert.equal(await reader.read(output),4);assert.equal(await reader.read(output),-1048576);await reader.stop();
 });
 test('decoder resources use local allowlisted codec IDs only',()=>{
-  assert.equal(decoderPath('decoder',173),'decode/hevc.wasm');assert.equal(decoderPath('decoder',86019),'decode/ac3.wasm');assert.equal(decoderPath('decoder',86056),'decode/eac3.wasm');assert.equal(decoderPath('decoder',86020),'decode/dca.wasm');assert.throws(()=>decoderPath('decoder',999999));
+  assert.equal(decoderPath('decoder',173),'decode/hevc.wasm');assert.equal(decoderPath('decoder',196),'decode/vvc.wasm');assert.equal(decoderPath('decoder',86019),'decode/ac3.wasm');assert.equal(decoderPath('decoder',86056),'decode/eac3.wasm');assert.equal(decoderPath('decoder',86020),'decode/dca.wasm');assert.throws(()=>decoderPath('decoder',999999));
 });
 
 const MiB=1024**2;

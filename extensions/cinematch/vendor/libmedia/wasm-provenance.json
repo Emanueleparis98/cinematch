@@ -113,5 +113,10 @@
     "file": "stretchpitch/stretchpitch.wasm",
     "url": "https://zhaohappy.github.io/libmedia/dist/stretchpitch/stretchpitch.wasm",
     "sha256": "9397d474f85fbf3d0bc6b5b78bb500d0329a7a2c4ce212c8531cd56514434a7a"
+  },
+  {
+    "file": "decode/vvc.wasm",
+    "url": "https://zhaohappy.github.io/libmedia/dist/decode/vvc.wasm",
+    "sha256": "f9884d08c52e606ee627e0f5641cfea5f7b8cbbf17e7903cf6a647639a18d6cd"
   }
 ]

@@ -15,5 +15,6 @@ Decoder regression variants, generated from the same five-second synthetic patte
 - `pattern-mpeg4-mp3.avi`: `mpeg4 -q:v 5`, `libmp3lame -b:a 64k`.
 - `pattern-tracks.mkv`: HEVC/AC3 plus the original AAC track and captions.srt, with Italian/English track metadata.
 - `pattern.mpd` and `pattern-stream*.mp4`: DASH output with `-c copy -single_file 1 -use_template 0 -use_timeline 0 -seg_duration 1 -f dash`.
+- `pattern-vvc.mp4`: H.266/VVC Main10 and AAC; `libvvenc -preset faster -qp 32`, `aac -b:a 64k`, `-movflags +faststart`.
 
 These are small test-only videos, not downloadable product content or commercial films.

@@ -1,14 +1,14 @@
 import {httpUrl} from './streams.js';
 import {mediaFetch} from './media-access.js';
-const mimes={hevc:['video/mp4; codecs="hvc1.1.6.L93.B0"','video/mp4; codecs="hev1.1.6.L93.B0"'],h264:['video/mp4; codecs="avc1.42E01E"'],ac3:['audio/mp4; codecs="ac-3"'],eac3:['audio/mp4; codecs="ec-3"'],aac:['audio/mp4; codecs="mp4a.40.2"'],dts:['audio/mp4; codecs="dtsc"'],truehd:['audio/mp4; codecs="mlpa"']};
-const labels={hevc:'H.265/HEVC',h264:'H.264/AVC',ac3:'AC3',eac3:'E-AC3',aac:'AAC',dts:'DTS',truehd:'TrueHD'};
+const mimes={hevc:['video/mp4; codecs="hvc1.1.6.L93.B0"','video/mp4; codecs="hev1.1.6.L93.B0"'],h264:['video/mp4; codecs="avc1.42E01E"'],vvc:['video/mp4; codecs="vvc1.1.6.L93.B0"','video/mp4; codecs="vvi1.1.6.L93.B0"'],ac3:['audio/mp4; codecs="ac-3"'],eac3:['audio/mp4; codecs="ec-3"'],aac:['audio/mp4; codecs="mp4a.40.2"'],dts:['audio/mp4; codecs="dtsc"'],truehd:['audio/mp4; codecs="mlpa"']};
+const labels={hevc:'H.265/HEVC',h264:'H.264/AVC',vvc:'H.266/VVC',ac3:'AC3',eac3:'E-AC3',aac:'AAC',dts:'DTS',truehd:'TrueHD'};
 export function declaredCodecs(stream){
   let path='';try{path=decodeURIComponent(new URL(stream.url).pathname);}catch{}
   const text=[stream.name,stream.description,stream.filename,path].filter(Boolean).join(' ');
-  return {video:/\b(?:hevc|[hx][. ]?265)\b/i.test(text)?'hevc':/\b(?:avc|[hx][. ]?264)\b/i.test(text)?'h264':null,
+  return {video:/\b(?:hevc|[hx][. ]?265)\b/i.test(text)?'hevc':/\b(?:vvc|[hx][. ]?266)\b/i.test(text)?'vvc':/\b(?:avc|[hx][. ]?264)\b/i.test(text)?'h264':null,
     audio:/\b(?:e[. -]?ac[. -]?3|ddp)\b|\bdd\+/i.test(text)?'eac3':/\b(?:ac[. -]?3|dolby digital)\b/i.test(text)?'ac3':/\btruehd\b/i.test(text)?'truehd':/\bdts(?:[. -]?hd)?\b/i.test(text)?'dts':/\baac\b/i.test(text)?'aac':null};
 }
-const containers=['mkv','webm','avi','mp4','m4v','mov','flv','ts','mpg','mpeg'];
+const containers=['mkv','webm','avi','mp4','m4v','mov','flv','ts','m2ts','mts','mpg','mpeg','m2v','vob','ogv','ogg','wmv','asf','3gp','3g2'];
 function pathExtension(value=''){
   try{return decodeURIComponent(new URL(value).pathname).toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1]??'';}catch{return '';}
 }
@@ -27,6 +27,12 @@ export function containerExtension(stream,probe={}){
 export function likelyMatroska(stream,probe={}){
   const ext=containerExtension(stream,probe);return probe.kind==='matroska'||ext==='mkv'||ext==='webm'||ext==='avi';
 }
+// Containers Chrome's native <video> cannot open reliably even when the
+// underlying codec is supported. Send them straight to libmedia.
+export function likelyIntegrated(stream,probe={}){
+  const ext=containerExtension(stream,probe);
+  return probe.kind==='matroska'||['mkv','webm','avi','wmv','asf','flv','ts','m2ts','mts','vob','mpg','mpeg','m2v','3gp','3g2'].includes(ext);
+}
 export function compatibility(codecs,canPlayType){
   const supports=c=>!mimes[c]||mimes[c].some(m=>Boolean(canPlayType(m))),audios=codecs.audios??[codecs.audio].filter(Boolean);
   const unsupported=[...(codecs.video&&!supports(codecs.video)?[codecs.video]:[]),...(audios.length&&!audios.some(supports)?audios:[])];
@@ -40,7 +46,7 @@ export function inspectPrefix(bytes,mime=''){
   const codecs={},audios=[];
   if(bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3){
     // Bounded EBML CodecID (0x86) inspection, not a complete demuxer.
-    const names={'V_MPEGH/ISO/HEVC':['video','hevc'],'V_MPEG4/ISO/AVC':['video','h264'],'A_AC3':['audio','ac3'],'A_EAC3':['audio','eac3'],'A_AAC':['audio','aac'],'A_DTS':['audio','dts'],'A_TRUEHD':['audio','truehd']};
+    const names={'V_MPEGH/ISO/HEVC':['video','hevc'],'V_MPEGI/ISO/VVC':['video','vvc'],'V_MPEG4/ISO/AVC':['video','h264'],'A_AC3':['audio','ac3'],'A_EAC3':['audio','eac3'],'A_AAC':['audio','aac'],'A_DTS':['audio','dts'],'A_TRUEHD':['audio','truehd']};
     for(let i=4;i<bytes.length-2;i++)if(bytes[i]===0x86){
       const first=bytes[i+1];let width=1,mask=0x80;while(width<=4&&!(first&mask)){width++;mask>>=1;}if(width>4)continue;
       let length=first&(mask-1);for(let j=1;j<width;j++)length=length*256+bytes[i+1+j];if(length<2||length>40||i+1+width+length>bytes.length)continue;

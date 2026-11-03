@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.1.6
+# CineMatch — estensione browser 3.2.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.1.6.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.2.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -47,7 +47,7 @@ Apri **Addon e player** dall’icona video nell’intestazione. Collega i tuoi
 manifest compatibili con Stremio/Nuvio, poi clicca una locandina nella chat:
 scegli una sorgente e avvia il film in una scheda CineMatch. Sono supportati
 video HTTP, HLS e DASH, con pausa, seek e schermo intero. Il motore integrato
-libmedia aggiunge decoder locali per MKV/AVI, HEVC e audio AC3/E-AC3/DTS.
+libmedia aggiunge decoder locali per MKV/AVI, HEVC, H.266/VVC in MP4 e audio AC3/E-AC3/DTS.
 La riproduzione avviene a blocchi: il film non viene convertito o salvato interamente
 prima dell’avvio. Puoi importare anche liste JSON. Torrent, DRM e header che
 richiedono un proxy restano soggetti ai limiti delle sorgenti.
@@ -61,6 +61,7 @@ richiedono un proxy restano soggetti ai limiti delle sorgenti.
 [Accesso ai server Real-Debrid, 3.1.4](docs/estensione-3.1.4-cors.md).
 [Correzione degli intervalli vicino a EOF, 3.1.5](docs/estensione-3.1.5-eof.md).
 [Avvio dei flussi lenti e dei grandi remux, 3.1.6](docs/estensione-3.1.6-avvio.md).
+[Codec e accelerazione, 3.2.0](docs/estensione-3.2.0-codec.md).
 
 ## Sviluppo dell'estensione
 
