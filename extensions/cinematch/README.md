@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.1.1
+# CineMatch — estensione browser 3.1.2
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.1.1.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.1.2.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -84,6 +84,12 @@ e salva prima il film completo. Per il motore integrato sono disponibili pausa,
 avanzamento, volume, schermo intero e selezione delle tracce audio/sottotitoli
 incorporate. I codec e il motore sono nel pacchetto, senza CDN a runtime.
 [Compatibilità e verifica](../../docs/estensione-3.1.0-decoder.md).
+Dalla 3.1.2 i file vengono letti in blocchi fino a 8 MiB con un blocco successivo
+in lettura anticipata: fino a 16 MiB di cache I/O in RAM, oltre ai buffer del
+motore e dei decoder. Il CDN risolto viene riusato nella sessione e il link
+dell’addon viene risolto di nuovo se quello del CDN scade. Il precaricamento
+del motore passa da 3 a 6 secondi. Nessun file video viene archiviato.
+[Collaudo delle prestazioni](../../docs/estensione-3.1.2-buffer.md).
 
 ## Costi, dati e permessi
 

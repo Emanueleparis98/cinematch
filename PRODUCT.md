@@ -50,7 +50,10 @@ interrogate nel browser in uso, senza dichiarare HEVC sempre supportato o sempre
 incompatibile. Il motore libmedia e i decoder locali vengono selezionati quando
 servono per MKV/AVI, HEVC, AC3/E-AC3/DTS e altri formati inclusi. I dati vengono
 letti a blocchi e decodificati durante la visione, senza convertire/salvare prima
-l’intero film. Restano le differenze di hardware, server, profili e codec inclusi;
+l’intero film. Per i file pesanti il lettore anticipa un blocco e riusa il CDN
+risolto, con due finestre fino a 8 MiB in memoria; i buffer del motore sono
+aggiuntivi. Una scadenza del CDN fa risolvere di nuovo il link dell’addon.
+Restano le differenze di hardware, server, profili e codec inclusi;
 non si promette che ogni URL HTTP sia riproducibile.
 
 La qualità e gli eventuali limiti della risposta dipendono dal servizio esterno.

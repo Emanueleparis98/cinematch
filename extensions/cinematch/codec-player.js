@@ -8,7 +8,7 @@ let library;
 export async function createCodecPlayer({container,url,kind='video',ext='mkv',onState=()=>{},onTime=()=>{},onTracks=()=>{},onFrame=()=>{},onError=()=>{},forceSoftware=false}){
   library??=import('./vendor/libmedia/avplayer.js');const {default:AVPlayer}=await library;AVPlayer.setLogLevel(6);
   const reader=['hls','dash'].includes(kind)?null:new RangeReader(url,{ext});
-  const player=new AVPlayer({container,enableWorker:false,enableAudioWorklet:false,enableWebGPU:false,enableWebCodecs:!forceSoftware,enableHardware:!forceSoftware,checkUseMSE:()=>false,preLoadTime:3,enableJitterBuffer:false,getWasm:(type,id)=>{try{return chrome.runtime.getURL('vendor/libmedia/'+decoderPath(type,id));}catch{return null;}}});
+  const player=new AVPlayer({container,enableWorker:false,enableAudioWorklet:false,enableWebGPU:false,enableWebCodecs:!forceSoftware,enableHardware:!forceSoftware,checkUseMSE:()=>false,preLoadTime:6,enableJitterBuffer:false,getWasm:(type,id)=>{try{return chrome.runtime.getURL('vendor/libmedia/'+decoderPath(type,id));}catch{return null;}}});
   let destroyed=false,loaded=false,playing=false,timer=null,pausedPosition=null;
   const duration=()=>Number(player.getDuration())/1000,currentTime=()=>pausedPosition??Number(player.currentTime)/1000;
   const tracks=()=>{const streams=player.getStreams();return {selectedAudio:player.getSelectedAudioStreamId(),audio:streams.filter(s=>s.mediaType==='audio'||s.codecparProxy?.codecType===1).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Audio ${s.id+1}`})),subtitles:streams.filter(s=>s.mediaType==='subtitle'||s.codecparProxy?.codecType===3).map(s=>({id:s.id,label:s.metadata?.title||s.metadata?.language||`Sottotitoli ${s.id+1}`}))};};

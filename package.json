@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
-  "scripts": {"test": "node --test tests/extension-core.test.mjs tests/extension-tmdb.test.mjs tests/extension-streams.test.mjs tests/extension-playback.test.mjs tests/extension-range.test.mjs", "test:browser": "node tests/extension-browser.mjs", "test:images": "node tests/extension-tmdb-browser.mjs", "test:player": "node tests/extension-player-browser.mjs", "test:codecs": "node tests/extension-codec-browser.mjs", "build": "python scripts/build-extension.py"},
+  "scripts": {"test": "node --test tests/extension-core.test.mjs tests/extension-tmdb.test.mjs tests/extension-streams.test.mjs tests/extension-playback.test.mjs tests/extension-range.test.mjs", "test:browser": "node tests/extension-browser.mjs", "test:images": "node tests/extension-tmdb-browser.mjs", "test:player": "node tests/extension-player-browser.mjs", "test:codecs": "node tests/extension-codec-browser.mjs", "test:throughput": "node tests/extension-throughput.mjs", "build": "python scripts/build-extension.py"},
   "devDependencies": {"playwright": "1.62.1"}
 }

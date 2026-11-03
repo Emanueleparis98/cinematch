@@ -20,6 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: python3 scripts/build-extension.py
       - run: pnpm test
+      - run: pnpm test:throughput
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
       - run: pnpm test:images
