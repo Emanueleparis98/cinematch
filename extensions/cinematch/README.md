@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.0.0
+# CineMatch — estensione browser 3.0.1
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.0.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.0.1.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -76,6 +76,12 @@ integrati; torrent, DASH, DRM e header senza proxy non vengono convertiti.
 I sette configuratori indicati sono disponibili in una sezione espandibile:
 completa la configurazione sui loro siti e incolla il manifest personale.
 Nessun addon è preinstallato. [Guida e collaudo](../../docs/estensione-3.0.0-player.md).
+
+La versione 3.0.1 verifica il formato con una richiesta GET/Range limitata,
+riconosce HLS anche dopo un reindirizzamento e segnala i codec non supportati
+dal browser. Le etichette H.264/AAC vengono ordinate prima delle combinazioni
+problematiche. I codec non vengono convertiti: un file AC3 non diventa AAC.
+[Dettagli e verifica](../../docs/estensione-3.0.1-codec.md).
 
 ## Costi, dati e permessi
 

@@ -43,6 +43,12 @@ I permessi opzionali vengono richiesti per gli host scelti. Nessun cookie,
 testo della chat o credenziale TMDB viene inviato agli addon. Il tema scuro,
 Manrope, i token e i controlli del sistema esistente restano invariati.
 
+Il player distingue ora gli errori HTTP dai formati non supportati. Le etichette
+dei codec guidano l’ordine e gli avvisi; all’avvio viene letto un prefisso limitato
+del flusso per riconoscere HLS e i CodecID Matroska disponibili. Le capacità sono
+interrogate nel browser in uso, senza dichiarare HEVC sempre supportato o sempre
+incompatibile. Il player non transcodifica né promette che ogni URL HTTP sia riproducibile.
+
 La qualità e gli eventuali limiti della risposta dipendono dal servizio esterno.
 Le schede includono note sui casi discussi; nessuna percentuale di infallibilità
 o promessa di completezza universale.

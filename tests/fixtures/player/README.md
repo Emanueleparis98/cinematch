@@ -6,3 +6,7 @@ Source command: `ffmpeg -f lavfi -i testsrc2=size=320x180:rate=12 -f lavfi -i si
 HLS: `ffmpeg -i pattern.mp4 -c copy -hls_time 1 -hls_list_size 0 -hls_segment_filename segment%d.ts pattern.m3u8`
 
 Test-only assets, excluded from the extension distribution.
+
+`pattern-hevc-ac3.mkv` is a one-second synthetic variant for the codec-error
+regression (no commercial film footage):
+`ffmpeg -i pattern.mp4 -t 1 -c:v libx265 -preset ultrafast -x265-params log-level=error:pools=1:frame-threads=1 -c:a ac3 -b:a 96k pattern-hevc-ac3.mkv`

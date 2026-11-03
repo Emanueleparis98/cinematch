@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CineMatch — Correnti del cinema",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "74 correnti del cinema, prompt per le chat AI, immagini TMDB automatiche e player integrato con addon e flussi HTTP/HLS.",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "storage", "scripting", "clipboardWrite"],

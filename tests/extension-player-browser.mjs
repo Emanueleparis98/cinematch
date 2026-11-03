@@ -4,16 +4,19 @@ import {readFile,writeFile,mkdtemp,rm,mkdir,cp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,basename} from 'node:path';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
-const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
+const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
 const calls=[],errors=[];let base,failStreams=false,passed=0;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
 const server=createServer((req,res)=>{
   calls.push({path:req.url,authorization:req.headers.authorization,cookie:req.headers.cookie});const path=new URL(req.url,base).pathname;res.setHeader('Access-Control-Allow-Origin','*');
   if(path==='/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(manifest));}
   if(path==='/bad/manifest.json'){res.setHeader('Content-Type','text/html');return res.end('<html>Not JSON</html>');}
+  if(path==='/comet-like'){if(req.method==='HEAD'){res.statusCode=405;return res.end();}res.statusCode=302;res.setHeader('Location','/opaque');return res.end();}
+  if(path==='/opaque'){res.setHeader('Content-Type','application/octet-stream');return res.end(files.get('pattern.m3u8'));}
+  if(path==='/forbidden'){res.statusCode=403;return res.end('private token must never be shown');}
   if(path==='/stream/movie/tt0040522.json'){
     if(failStreams){res.statusCode=503;return res.end('unavailable');}
-    res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({streams:[{name:'MP4 di prova',title:'Video sintetico · 320 × 180',url:`${base}/pattern.mp4`},{name:'HLS di prova',url:`${base}/pattern.m3u8`},{name:'HLS senza estensione',url:`${base}/play?id=test`},{name:'Torrent di prova',infoHash:'a'.repeat(40)},{name:'Header di prova',url:`${base}/headers.mp4`,behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{name:'<img onerror=alert(1)>',externalUrl:'javascript:alert(1)'}]}));
+    res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({streams:[{name:'MP4 di prova',title:'Video sintetico · H264 AAC · 320 × 180',url:`${base}/pattern.mp4`},{name:'HLS di prova',url:`${base}/pattern.m3u8`},{name:'HLS senza estensione',url:`${base}/play?id=test`},{name:'Comet redirect di prova',description:'HEVC AC3.mkv · etichetta prima della conversione',url:`${base}/comet-like`},{name:'MKV HEVC AC3 di prova',description:'HEVC · AC3 · 5.1',url:`${base}/pattern-hevc-ac3.mkv`},{name:'Torrent di prova',infoHash:'a'.repeat(40)},{name:'Header di prova',url:`${base}/headers.mp4`,behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{name:'<img onerror=alert(1)>',externalUrl:'javascript:alert(1)'}]}));
   }
   const file=files.get(path==='/play'?'pattern.m3u8':basename(path));if(file){res.setHeader('Content-Type',path.endsWith('.m3u8')||path==='/play'?'application/vnd.apple.mpegurl':path.endsWith('.ts')?'video/mp2t':'video/mp4');res.setHeader('Accept-Ranges','bytes');const range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);if(range){const start=Number(range[1]),end=range[2]?Math.min(Number(range[2]),file.length-1):file.length-1;res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);res.setHeader('Content-Length',end-start+1);return res.end(file.subarray(start,end+1));}res.setHeader('Content-Length',file.length);return res.end(file);}
   res.statusCode=404;res.end('Not found');
@@ -60,7 +63,7 @@ try{
     const opened=context.waitForEvent('page');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();player=await opened;player.on('pageerror',e=>errors.push(e.message));await player.waitForURL(`chrome-extension://${id}/watch.html?movie=5156`);await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor();assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
   });
   await check('stream output is inert text, with torrent and header-only sources explicitly unavailable',async()=>{
-    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),3);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
+    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),5);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
   });
   await check('MP4 actually decodes and plays with controls, pause and seek',async()=>{
     await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:15000});
@@ -72,6 +75,16 @@ try{
   });
   await check('extensionless HLS proxy URL is detected from its MIME type and plays',async()=>{
     await player.getByRole('button',{name:'Riproduci HLS senza estensione da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000});await player.locator('video').evaluate(v=>v.pause());
+  });
+  await check('Comet-style redirect with HEAD rejected and wrong MIME still plays HLS, ignoring outdated filename hints',async()=>{
+    await player.getByRole('button',{name:'Riproduci Comet redirect di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000});await player.locator('video').evaluate(v=>v.pause());
+  });
+  await check('real synthetic HEVC/AC3 Matroska is diagnosed from bytes, with a specific alternative action',async()=>{
+    await player.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('#playback-status').textContent.includes('Il file contiene codec non supportati'));
+    assert.match(await player.locator('#playback-status').innerText(),/AC3/);assert.equal(await player.locator('#retry-play').innerText(),'Scegli un altro flusso');await player.waitForTimeout(200);assert.match(await player.locator('#playback-status').innerText(),/AC3/);
+    for(const width of [320,1180]){await player.setViewportSize({width,height:1000});assert.ok(await player.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await player.screenshot({path:`test-results/player-codec-error-v301-${width}.png`,fullPage:true});}
+    await player.locator('#retry-play').click();assert.equal(await player.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Riproduci MP4 di prova da Cinema di prova');
+    await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5);await player.locator('video').evaluate(v=>v.pause());
   });
   await check('addon requests never receive AI conversations, TMDB credential, authorization headers or cookies',async()=>{
     assert.ok(calls.every(c=>!c.authorization&&!c.cookie&&!c.path.includes('eyJtest')&&!c.path.includes('Ladri')));
@@ -90,6 +103,9 @@ try{
     await player.locator('#stream-file').setInputFiles({name:'personal.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'Personale',url:`${base}/pattern.mp4`}]}))});await player.getByRole('button',{name:'Riproduci Personale da personal.json'}).waitFor();
     const saved=await manager.evaluate(()=>chrome.storage.local.get(null));assert.equal(Object.keys(saved).filter(k=>k.startsWith('streamAddon:')).length,1);assert.ok(!JSON.stringify(saved).includes('pattern.mp4'));
     await player.locator('#stream-file').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{bad')});await player.waitForFunction(()=>document.querySelector('#import-status').textContent.includes('JSON valido'));
+  });
+  await check('HTTP 403 remains a precise server error and is not overwritten by a generic codec error',async()=>{
+    await player.locator('#stream-file').setInputFiles({name:'blocked.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'Bloccato',url:`${base}/forbidden`}]}))});await player.getByRole('button',{name:'Riproduci Bloccato da blocked.json'}).click();await player.waitForFunction(()=>document.querySelector('#playback-status').textContent.includes('(403)'));assert.ok(!(await player.locator('body').innerText()).includes('private token must never'));
   });
   await check('disabling and removing an addon updates both pages and survives a reload',async()=>{
     await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).uncheck();await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({state:'detached'});await manager.reload();await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).waitFor();assert.equal(await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).isChecked(),false);
