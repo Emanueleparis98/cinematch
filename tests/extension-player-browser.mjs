@@ -162,6 +162,7 @@ try{
     const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
     let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
     assert.ok(frame);
+    await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
     await frame.getByRole('button',{name:'Addon',exact:true}).click();
     await frame.locator('#addonsView').waitFor({state:'visible',timeout:5000});
     const addonList=frame.locator('#addonList');
