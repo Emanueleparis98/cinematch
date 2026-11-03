@@ -18,7 +18,8 @@ export class RangeReader {
     if(this.closed)throw aborted();
     this.controllers.add(controller);const timer=setTimeout(()=>controller.abort(),20000),began=performance.now();
     try{
-      const init={headers:{Range:`bytes=${start}-${start+size-1}`},signal:controller.signal,credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'follow'};
+      const end=this.length?Math.min(start+size-1,this.length-1):start+size-1;
+      const init={headers:{Range:`bytes=${start}-${end}`},signal:controller.signal,credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'follow'};
       // Keep the signed CDN URL only for this session. On expiry resolve the
       // original addon link again, once; do not retry rate limits or permissions.
       const target=this.resolvedUrl??this.url;this.requestCount++;
@@ -31,13 +32,15 @@ export class RangeReader {
       if(response.status===206&&!header)throw Object.assign(new Error('Il browser non rende disponibile Content-Range dal server video. Verifica il permesso di accesso al server e riprova.'),{rangeCode:'RANGE_HEADER_MISSING'});
       const range=header?.match(/^\s*bytes\s+(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)\s*$/i);
       const total=range?Number(range[3]):Number(response.headers.get('content-length'));
-      if(response.status===206&&(!range||Number(range[1])!==start||!Number.isSafeInteger(Number(range[2]))||Number(range[2])<start||Number(range[2])>=total))throw new Error('Il server ha restituito un intervallo video non valido.');
+      if(response.status===206&&(!range||Number(range[1])!==start||!Number.isSafeInteger(Number(range[2]))||Number(range[2])<start||start>=total))throw new Error('Il server ha restituito un intervallo video non valido.');
       if(!Number.isSafeInteger(total)||total<1)throw new Error('Il server non comunica la dimensione necessaria alla lettura del video a blocchi.');
       if(response.status!==206&&(start!==0||total>size))throw new Error('Il server non consente la lettura a blocchi. Scegli una sorgente con supporto HTTP Range.');
       if(this.length&&this.length!==total)throw new Error('La dimensione del video è cambiata. Aggiorna le sorgenti.');
       // Some video CDNs honor the starting byte but send a larger/open-ended
       // range. Keep our own window bounded and cancel the surplus body.
-      const expected=range?Math.min(size,Number(range[2])-start+1):total;
+      // RD can echo an end past EOF (and an oversized Content-Length). Trust
+      // neither for allocation: never read beyond the resource's known size.
+      const expected=range?Math.min(size,Number(range[2])-start+1,total-start):total;
       const reader=response.body.getReader(),data=new Uint8Array(expected);let filled=0;
       try{while(filled<data.length){const {done,value}=await reader.read();if(done)break;const take=Math.min(value.length,data.length-filled);data.set(value.subarray(0,take),filled);filled+=take;this.bytesRead+=take;}}
       finally{await reader.cancel().catch(()=>{});}

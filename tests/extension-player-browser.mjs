@@ -18,6 +18,9 @@ const cdnBase=`http://127.0.0.2:${cdn.address().port}`;
 const server=createServer((req,res)=>{
   calls.push({path:req.url,authorization:req.headers.authorization,cookie:req.headers.cookie});const path=new URL(req.url,base).pathname;res.setHeader('Access-Control-Allow-Origin','*');
   if(path==='/cdn-redirect'){res.statusCode=302;res.setHeader('Location',`${cdnBase}/private/movie.mkv?signature=private-test-token`);return res.end();}
+  if(path==='/rd-large-eof'){
+    const total=80138595881,range=req.headers.range.match(/bytes=(\d+)-(\d+)/),start=Number(range[1]),end=Number(range[2]);res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${total}`);res.setHeader('Content-Length',end-start+1);return res.end(Buffer.alloc(Math.min(end,total-1)-start+1,91));
+  }
   if(path==='/manifest.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(manifest));}
   if(path==='/bad/manifest.json'){res.setHeader('Content-Type','text/html');return res.end('<html>Not JSON</html>');}
   if(path==='/comet-like'){if(req.method==='HEAD'){res.statusCode=405;return res.end();}res.statusCode=302;res.setHeader('Location','/opaque');return res.end();}
@@ -101,6 +104,13 @@ try{
     assert.ok(calls.every(c=>!c.authorization&&!c.cookie&&!c.path.includes('eyJtest')&&!c.path.includes('Ladri')));
   });
   const importSource=async(name,file)=>{await player.locator('#stream-file').setInputFiles({name:'codec.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name,url:`${base}/${file}`}]}))});await player.getByRole('button',{name:`Riproduci ${name} da codec.json`}).click();};
+  await check('RD-style virtual 80 GB file tail reads clamp ranges to EOF in the extension',async()=>{
+    const result=await player.evaluate(async url=>{
+      const {RangeReader}=await import('./range-reader.js'),reader=new RangeReader(url,{prefetch:false});
+      try{await reader.open();const total=await reader.size();await reader.seek(total-65536n);const data=new Uint8Array(65536),count=await reader.read(data);return {total:String(total),count,first:data[0],last:data.at(-1),bytes:reader.bytesRead,eof:await reader.read(data)};}finally{await reader.stop();}
+    },`${base}/rd-large-eof`);
+    assert.deepEqual(result,{total:'80138595881',count:65536,first:91,last:91,bytes:131072,eof:-1048576});
+  });
   await check('CDN responses larger than the requested range decode HEVC/AC3 and allow seeking',async()=>{
     const before=oversizedResponses;await importSource('CDN range HEVC AC3','oversized-range.mkv');
     await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});

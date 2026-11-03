@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.1.4
+# CineMatch — estensione browser 3.1.5
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.1.4.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.1.5.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -59,6 +59,7 @@ richiedono un proxy restano soggetti ai limiti delle sorgenti.
 [Lettura anticipata per flussi pesanti, 3.1.2](docs/estensione-3.1.2-buffer.md).
 [Correzione delle risposte Range estese, 3.1.3](docs/estensione-3.1.3-range.md).
 [Accesso ai server Real-Debrid, 3.1.4](docs/estensione-3.1.4-cors.md).
+[Correzione degli intervalli vicino a EOF, 3.1.5](docs/estensione-3.1.5-eof.md).
 
 ## Sviluppo dell'estensione
 

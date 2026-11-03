@@ -1,11 +1,11 @@
-# CineMatch — estensione browser 3.1.4
+# CineMatch — estensione browser 3.1.5
 
 74 voci sulle correnti del cinema, generatore locale di richieste e immagini
 automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.1.4.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.1.5.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -98,6 +98,10 @@ di download Real-Debrid delle sorgenti RD. Accetta il dialogo Chrome; se lo
 rifiuti, il player mostra **Consenti Real-Debrid** per riprovare. Il consenso
 copre i server variabili del servizio, senza richiederlo per ogni hostname.
 [Accesso e recupero CORS](../../docs/estensione-3.1.4-cors.md).
+La 3.1.5 limita anche le richieste dopo un seek alla fine fisica del file e
+gestisce i server che annunciano intervalli oltre EOF: corregge l’errore
+«intervallo video non valido» durante l’apertura di MKV grandi.
+[Prova prima/dopo su server reale](../../docs/estensione-3.1.5-eof.md).
 
 ## Costi, dati e permessi
 

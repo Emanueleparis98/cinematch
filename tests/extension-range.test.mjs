@@ -90,9 +90,29 @@ test('CDNs returning an open-ended range are read only up to the requested windo
 
 test('range syntax tolerates surrounding whitespace while impossible intervals remain rejected',async()=>{
   const reader=new RangeReader('https://cdn.test/movie',{prefetch:false,fetcher:async()=>new Response(new Uint8Array(4),{status:206,headers:{'content-range':'BYTES  0 - 3 / 4'}})});await reader.open();assert.equal(await reader.size(),4n);await reader.stop();
-  for(const range of ['bytes 0-100/100','bytes 4-3/100','bytes 0-9007199254740992/9007199254740993']){
+  for(const range of ['bytes 100-101/100','bytes 4-3/100','bytes 0-9007199254740992/9007199254740993']){
     const broken=new RangeReader('https://cdn.test/movie',{fetcher:async()=>new Response('x',{status:206,headers:{'content-range':range}})});await assert.rejects(broken.open(),/intervallo video non valido|dimensione/);await broken.stop();
   }
+});
+
+test('RD-style ranges ending beyond EOF are clipped to the file, including an oversized initial probe',async()=>{
+  const reader=new RangeReader('https://cdn.test/movie',{prefetch:false,fetcher:async(_,init)=>{
+    const [,a,b]=init.headers.Range.match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);
+    // This is the real CDN behavior: it echoes the requested end and length
+    // even though the body physically ends at the resource size.
+    return new Response(new Uint8Array(100-start).fill(73),{status:206,headers:{'content-range':`bytes ${start}-${end}/100`,'content-length':String(end-start+1)}});
+  }});
+  await reader.open();assert.equal(await reader.size(),100n);assert.equal(reader.block.data.length,100);assert.equal(reader.bytesRead,100);const out=new Uint8Array(256);assert.equal(await reader.read(out),100);assert.equal(out[99],73);assert.equal(await reader.read(out),-1048576);await reader.stop();
+});
+
+test('large MKV tail seeks clamp outgoing ranges to EOF instead of requesting an 8 MiB overrun',async()=>{
+  const total=80138595881,requests=[];
+  const reader=new RangeReader('https://cdn.test/movie',{prefetch:false,fetcher:async(_,init)=>{
+    const [,a,b]=init.headers.Range.match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);requests.push({start,end});
+    return new Response(new Uint8Array(Math.min(end,total-1)-start+1).fill(91),{status:206,headers:{'content-range':`bytes ${start}-${end}/${total}`,'content-length':String(end-start+1)}});
+  }});
+  await reader.open();await reader.seek(BigInt(total-65536));const out=new Uint8Array(65536);assert.equal(await reader.read(out),65536);assert.equal(out[0],91);assert.equal(out[65535],91);assert.equal(requests.at(-1).end,total-1);assert.equal(await reader.read(out),-1048576);
+  await reader.seek(BigInt(total-1));assert.equal(await reader.read(out),1);assert.equal(requests.at(-1).end,total-1);await reader.stop();
 });
 
 test('missing CORS-exposed range headers have a distinct diagnostic from invalid byte offsets',async()=>{
