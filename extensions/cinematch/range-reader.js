@@ -27,13 +27,15 @@ export class RangeReader {
         await response.body?.cancel().catch(()=>{});this.resolvedUrl=null;this.requestCount++;response=await this.fetcher(this.url,init);
       }
       if(!response.ok)throw new Error(`Il server video ha risposto con errore ${response.status}. Aggiorna le sorgenti o riprova.`);
-      const range=response.headers.get('content-range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/i);
+      const range=response.headers.get('content-range')?.match(/^\s*bytes\s+(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)\s*$/i);
       const total=range?Number(range[3]):Number(response.headers.get('content-length'));
-      if(response.status===206&&(!range||Number(range[1])!==start||!Number.isSafeInteger(Number(range[2]))||Number(range[2])<start||Number(range[2])>=total||Number(range[2])>start+size-1))throw new Error('Il server ha restituito un intervallo video non valido.');
+      if(response.status===206&&(!range||Number(range[1])!==start||!Number.isSafeInteger(Number(range[2]))||Number(range[2])<start||Number(range[2])>=total))throw new Error('Il server ha restituito un intervallo video non valido.');
       if(!Number.isSafeInteger(total)||total<1)throw new Error('Il server non comunica la dimensione necessaria alla lettura del video a blocchi.');
       if(response.status!==206&&(start!==0||total>size))throw new Error('Il server non consente la lettura a blocchi. Scegli una sorgente con supporto HTTP Range.');
       if(this.length&&this.length!==total)throw new Error('La dimensione del video è cambiata. Aggiorna le sorgenti.');
-      const expected=range?Number(range[2])-start+1:total;
+      // Some video CDNs honor the starting byte but send a larger/open-ended
+      // range. Keep our own window bounded and cancel the surplus body.
+      const expected=range?Math.min(size,Number(range[2])-start+1):total;
       const reader=response.body.getReader(),data=new Uint8Array(expected);let filled=0;
       try{while(filled<data.length){const {done,value}=await reader.read();if(done)break;const take=Math.min(value.length,data.length-filled);data.set(value.subarray(0,take),filled);filled+=take;this.bytesRead+=take;}}
       finally{await reader.cancel().catch(()=>{});}

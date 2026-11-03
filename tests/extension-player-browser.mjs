@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve,basename} from 'node:path';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
 const files=new Map();for(const name of ['pattern.mp4','pattern.m3u8','pattern-hevc-ac3.mkv','pattern-tracks.mkv','pattern-mpeg4-mp3.avi','pattern.mpd','pattern-stream0.mp4','pattern-stream1.mp4',...Array.from({length:5},(_,i)=>`segment${i}.ts`)])files.set(name,await readFile(resolve('tests/fixtures/player',name)));
-const calls=[],errors=[];let base,failStreams=false,passed=0;
+const calls=[],errors=[];let base,failStreams=false,passed=0,oversizedResponses=0;
 const manifest={id:'cinematch.test',name:'Cinema di prova',version:'1.0.0',resources:['stream'],types:['movie'],idPrefixes:['tt']};
 const cdn=createServer((req,res)=>{
   const file=files.get('pattern-hevc-ac3.mkv'),range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);
@@ -27,7 +27,7 @@ const server=createServer((req,res)=>{
     if(failStreams){res.statusCode=503;return res.end('unavailable');}
     res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({streams:[{name:'MP4 di prova',title:'Video sintetico · H264 AAC · 320 × 180',url:`${base}/pattern.mp4`},{name:'HLS di prova',url:`${base}/pattern.m3u8`},{name:'HLS senza estensione',url:`${base}/play?id=test`},{name:'Comet redirect di prova',description:'HEVC AC3.mkv · etichetta prima della conversione',url:`${base}/comet-like`},{name:'MKV HEVC AC3 di prova',description:'HEVC · AC3 · 5.1',url:`${base}/pattern-hevc-ac3.mkv`},{name:'Torrent di prova',infoHash:'a'.repeat(40)},{name:'Header di prova',url:`${base}/headers.mp4`,behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{name:'<img onerror=alert(1)>',externalUrl:'javascript:alert(1)'}]}));
   }
-  const file=files.get(path==='/play'?'pattern.m3u8':basename(path));if(file){res.setHeader('Content-Type',path.endsWith('.m3u8')||path==='/play'?'application/vnd.apple.mpegurl':path.endsWith('.ts')?'video/mp2t':'video/mp4');res.setHeader('Accept-Ranges','bytes');const range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);if(range){const start=Number(range[1]),end=range[2]?Math.min(Number(range[2]),file.length-1):file.length-1;res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);res.setHeader('Content-Length',end-start+1);return res.end(file.subarray(start,end+1));}res.setHeader('Content-Length',file.length);return res.end(file);}
+  const file=files.get(path==='/play'?'pattern.m3u8':path==='/oversized-range.mkv'?'pattern-hevc-ac3.mkv':basename(path));if(file){res.setHeader('Content-Type',path.endsWith('.m3u8')||path==='/play'?'application/vnd.apple.mpegurl':path.endsWith('.ts')?'video/mp2t':'video/mp4');res.setHeader('Accept-Ranges','bytes');const range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);if(range){const start=Number(range[1]),end=path==='/oversized-range.mkv'?file.length-1:range[2]?Math.min(Number(range[2]),file.length-1):file.length-1;if(path==='/oversized-range.mkv'&&end>Number(range[2]))oversizedResponses++;res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);res.setHeader('Content-Length',end-start+1);return res.end(file.subarray(start,end+1));}res.setHeader('Content-Length',file.length);return res.end(file);}
   res.statusCode=404;res.end('Not found');
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;
@@ -101,6 +101,12 @@ try{
     assert.ok(calls.every(c=>!c.authorization&&!c.cookie&&!c.path.includes('eyJtest')&&!c.path.includes('Ladri')));
   });
   const importSource=async(name,file)=>{await player.locator('#stream-file').setInputFiles({name:'codec.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name,url:`${base}/${file}`}]}))});await player.getByRole('button',{name:`Riproduci ${name} da codec.json`}).click();};
+  await check('CDN responses larger than the requested range decode HEVC/AC3 and allow seeking',async()=>{
+    const before=oversizedResponses;await importSource('CDN range HEVC AC3','oversized-range.mkv');
+    await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+    assert.ok(oversizedResponses>before,'fixture must actually return more bytes than requested');
+    await player.locator('#codec-toggle').click();await player.locator('#codec-seek').evaluate(e=>{e.value='2.5';e.dispatchEvent(new Event('change',{bubbles:true}));});await player.waitForFunction(()=>document.querySelector('#codec-time').value.startsWith('0:02'));assert.ok(!(await player.locator('#playback-status').innerText()).includes('intervallo video non valido'));
+  });
   await check('audio languages and embedded subtitles can be selected in the integrated player',async()=>{
     await importSource('Tracce','pattern-tracks.mkv');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
     assert.equal(await player.locator('#codec-audio-wrap').isVisible(),true);assert.equal(await player.locator('#codec-subtitle-wrap').isVisible(),true);assert.equal(await player.locator('#codec-audio option').count(),2);

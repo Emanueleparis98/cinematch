@@ -77,3 +77,20 @@ test('a truncated server body fails instead of silently skipping file bytes',asy
   const reader=new RangeReader('https://video.test/movie',{fetcher:async()=>new Response(new Uint8Array(8),{status:206,headers:{'content-range':'bytes 0-63/1000'}})});
   await assert.rejects(reader.open(),/interrotta/);await reader.stop();
 });
+
+test('CDNs returning an open-ended range are read only up to the requested window',async()=>{
+  const total=50*1024**3;let cancelled=0,delivered=0;
+  const reader=new RangeReader('https://cdn.test/movie',{prefetch:false,fetcher:async(_,init)=>{
+    const start=Number(init.headers.Range.match(/bytes=(\d+)-/)[1]);
+    return new Response(new ReadableStream({pull(c){const data=new Uint8Array(65536).fill(Math.floor(start/65536)%251);delivered+=data.length;c.enqueue(data);},cancel(){cancelled++;}}),{status:206,headers:{'content-range':`bytes ${start}-${total-1}/${total}`,'content-length':String(total-start)}});
+  }});
+  await reader.open();assert.equal(reader.block.data.length,65536);assert.equal(await reader.size(),BigInt(total));assert.ok(delivered<=3*65536);assert.equal(cancelled,1);
+  await reader.seek(6*1024**3);const out=new Uint8Array(32);assert.equal(await reader.read(out),32);assert.equal(out[0],Math.floor(6*1024**3/65536)%251);assert.equal(reader.block.data.length,8*MiB);assert.ok(delivered<9*MiB);assert.equal(cancelled,2);await reader.stop();
+});
+
+test('range syntax tolerates surrounding whitespace while impossible intervals remain rejected',async()=>{
+  const reader=new RangeReader('https://cdn.test/movie',{prefetch:false,fetcher:async()=>new Response(new Uint8Array(4),{status:206,headers:{'content-range':'BYTES  0 - 3 / 4'}})});await reader.open();assert.equal(await reader.size(),4n);await reader.stop();
+  for(const range of ['bytes 0-100/100','bytes 4-3/100','bytes 0-9007199254740992/9007199254740993']){
+    const broken=new RangeReader('https://cdn.test/movie',{fetcher:async()=>new Response('x',{status:206,headers:{'content-range':range}})});await assert.rejects(broken.open(),/intervallo video non valido|dimensione/);await broken.stop();
+  }
+});
