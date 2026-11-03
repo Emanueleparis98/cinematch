@@ -14,13 +14,14 @@
     <button id="expand" class="icon-button" type="button" title="Apri CineMatch in una scheda" aria-label="Apri CineMatch in una scheda"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></button>
     </div></header>
   <nav class="tabs" role="tablist" aria-label="Sezioni">
-    <button id="explore-tab" role="tab" aria-controls="explore-pane" aria-selected="true" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg>Esplora</button>
-    <button id="prompt-tab" role="tab" aria-controls="prompt-pane" aria-selected="false" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 12a3 3 0 0 1-3 3H7l-4 2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M7 7h6M7 10h4"/></svg>La tua richiesta <span id="selection-count" class="badge">1</span></button>
+    <button id="explore-tab" role="tab" aria-controls="explore-pane" aria-selected="false" tabindex="-1" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg>Esplora</button>
+    <button id="prompt-tab" role="tab" aria-controls="prompt-pane" aria-selected="true" tabindex="0" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 12a3 3 0 0 1-3 3H7l-4 2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M7 7h6M7 10h4"/></svg>Componi <span id="selection-count" class="badge" hidden>0</span></button>
   </nav>
   <main>
-    <section id="explore-pane" role="tabpanel" aria-labelledby="explore-tab">
+    <section id="explore-pane" role="tabpanel" aria-labelledby="explore-tab" hidden>
       <div id="browser">
-        <h1>Il cinema,<br>per correnti.</h1><p class="muted intro">74 voci per esplorare movimenti, tendenze e tradizioni. Trova il tuo prossimo percorso.</p>
+        <h1>Il cinema,<br>per correnti.</h1><p class="muted intro">74 voci per esplorare movimenti, tendenze e tradizioni. Scegline fino a quattro, oppure scrivi una richiesta libera.</p>
+        <div class="free-shortcut"><div><strong>Non hai una corrente in mente?</strong><p>Scrivi liberamente: CineMatch prepara la richiesta senza obbligarti a scegliere una corrente.</p></div><button id="free-shortcut" type="button">Richiesta libera →</button></div>
         <label class="sr-only" for="search">Cerca una corrente, un autore o un film</label>
         <input id="search" type="search" placeholder="Cerca corrente, autore o film…" autocomplete="off">
         <details class="filter-disclosure"><summary>Filtri e ordinamento</summary><div class="filters">
@@ -41,18 +42,31 @@
       </aside>
       <article id="detail" hidden></article>
     </section>
-    <section id="prompt-pane" role="tabpanel" aria-labelledby="prompt-tab" hidden>
-      <h1>Da un’idea,<br>al prossimo film.</h1><p class="muted intro">Scegli cosa ti incuriosisce. Prepara la richiesta e portala nella tua chat.</p>
-      <div id="selected" class="selected-list" aria-label="Voci selezionate"></div>
+    <section id="prompt-pane" role="tabpanel" aria-labelledby="prompt-tab">
+      <div class="mode-switch" role="radiogroup" aria-label="Modalità della richiesta">
+        <button id="mode-current" type="button" role="radio" aria-checked="false" tabindex="-1"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg>Con una corrente</button>
+        <button id="mode-free" type="button" role="radio" aria-checked="true" tabindex="0"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 12a3 3 0 0 1-3 3H7l-4 2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M7 7h6M7 10h4"/></svg>Richiesta libera</button>
+      </div>
+      <h1 id="prompt-title">Da un’idea,<br>al prossimo film.</h1><p id="prompt-intro" class="muted intro">Scrivi come parli. CineMatch trasforma la tua richiesta in un prompt chiaro per la chat, senza corrente obbligatoria.</p>
       <form id="request-form">
-        <label>La tua richiesta<textarea id="question" rows="3" placeholder="Per esempio: film con comicità, non soltanto dramma, da guardare in coppia."></textarea></label>
-        <label>Che cosa vuoi chiedere?<select id="mode"></select></label>
-        <div class="quantity-row"><label class="checkbox-label"><input id="exact-count" type="checkbox"> Numero di film preciso</label><label id="count-wrap" hidden><span class="sr-only">Numero di film</span><input id="count" type="number" value="5" min="1" max="4294967295" step="1" inputmode="numeric"></label></div>
-        <div class="filters prompt-options">
-          <label>Approfondimento<select id="depth"><option value="concise">Sintetico</option><option value="detailed">Approfondito</option></select></label>
-          <label>Relazione con la corrente<select id="relation"><option value="historical">Appartenenza storica</option><option value="legacy">Anche influenze successive</option></select></label>
+        <div id="current-fields" hidden>
+          <div class="selection-head"><span>Correnti scelte</span><button id="add-current" class="text-button" type="button">+ Aggiungi</button></div>
+          <div id="selected" class="selected-list" role="group" aria-label="Voci selezionate"></div>
+          <label id="objective-field">Obiettivo<select id="mode"></select></label>
         </div>
-        <details id="preferences-section"><summary>Preferenze, esclusioni e titoli già visti</summary>
+        <div id="free-note" class="free-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.6L20 10.5l-6.1 1.9L12 18l-1.9-5.6L4 10.5l6.1-1.9z"/></svg><span id="free-note-text">Nessuna corrente necessaria. Scrivi liberamente: la chat userà la tua richiesta e i dettagli attivi.</span></div>
+        <label><span id="question-label">La tua richiesta libera</span><textarea id="question" rows="3" placeholder="Per esempio: un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia, senza scene troppo violente."></textarea></label>
+        <div id="examples" class="examples" role="group" aria-label="Esempi di richiesta libera">
+          <button class="example" type="button">Un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia.</button>
+          <button class="example" type="button">Un noir poco conosciuto degli anni ’50, senza violenza esplicita.</button>
+          <button class="example" type="button">Un percorso sul cinema muto comico, con film facili da trovare.</button>
+        </div>
+        <div class="quantity-row"><label class="checkbox-label"><input id="exact-count" type="checkbox"> Numero di film preciso</label><label id="count-wrap" hidden><span class="sr-only">Numero di film</span><input id="count" type="number" value="5" min="1" max="4294967295" step="1" inputmode="numeric"></label></div>
+        <details id="details-section"><summary><span>Dettagli</span><span class="details-right"><span id="details-summary" class="details-meta">0 impostazioni</span><svg class="details-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg></span></summary>
+          <div class="filters prompt-options">
+            <label>Approfondimento<select id="depth"><option value="concise">Sintetico</option><option value="detailed">Approfondito</option></select></label>
+            <label id="relation-field" hidden>Relazione con la corrente<select id="relation"><option value="historical">Appartenenza storica</option><option value="legacy">Anche influenze successive</option></select></label>
+          </div>
           <label>Preferenze<textarea id="preferences" rows="2" placeholder="Atmosfera, temi, durata o altre preferenze…"></textarea></label>
           <label>Da escludere<textarea id="exclusions" rows="2" placeholder="Contenuti o caratteristiche da evitare…"></textarea></label>
           <label>Già visti o già proposti<textarea id="watched" rows="3" placeholder="Un titolo per riga, oppure separati da punto e virgola."></textarea></label>
@@ -68,14 +82,15 @@
         <div class="empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 12a3 3 0 0 1-3 3H7l-4 2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7M7 7h6M7 10h4"/></svg></div>
         <p class="empty-kicker">Anteprima</p>
         <h2>Il prompt apparirà qui</h2>
-        <p>Seleziona le correnti, scrivi la tua richiesta e premi <strong>Genera il prompt</strong>.</p>
+        <p id="preview-empty-text">Scrivi la tua richiesta e premi <strong>Genera il prompt</strong>.</p>
       </aside>
     </section>
   </main>
-  <footer id="actions" hidden>
+  <footer id="actions">
     <div class="provider-row"><label for="provider">Usa con</label><select id="provider"></select><button id="open-chat" class="text-button" type="button">Apri chat</button></div>
     <p id="chat-state" class="chat-state"></p>
-    <button id="generate" class="primary" type="button">Genera il prompt</button>
+    <p id="generate-hint" class="generate-hint">Scrivi la tua richiesta per continuare.</p>
+    <button id="generate" class="primary" type="button" aria-describedby="generate-hint">Genera il prompt</button>
     <div class="send-row"><button id="copy" type="button" disabled>Copia</button><button id="insert" type="button" disabled>Inserisci nella chat</button></div>
     <div id="conflict" class="conflict" hidden><p>Nella chat c’è già una bozza. Come vuoi procedere?</p><div class="send-row"><button id="append" type="button">Aggiungi in fondo</button><button id="replace" type="button">Sostituisci la bozza</button></div><button id="cancel-conflict" class="text-button" type="button">Mantieni la bozza</button></div>
     <p id="status" class="status" role="status" aria-live="polite"></p>

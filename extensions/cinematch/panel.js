@@ -1,23 +1,85 @@
-import {KINDS,MODES,PROVIDERS,defaultRequest,generatePrompt,matches,normalize,period,providerForUrl,signature} from "./core.js";
+import {KINDS,MAX_MOVEMENTS,MODES,PROVIDERS,defaultRequest,generatePrompt,matches,normalize,period,providerForUrl,signature} from "./core.js";
 import {enhanceSelects,refreshSelects} from "./controls.js";
 
 const embed = new URL(location.href).searchParams.get("view") === "embed";
 const embedWide = () => embed && !matchMedia("(max-width: 980px)").matches;
 if (embed) document.body.classList.add("embed");
 const $ = id => document.getElementById(id);
-const state = {request:defaultRequest(),query:"",kind:"",era:"all",region:"",sort:"chronological",tab:"explore",detail:null,prompt:"",generatedSig:null,provider:"chatgpt",targetTabId:null};
+const state = {request:defaultRequest(),lastMode:"recommendations",query:"",kind:"",era:"all",region:"",sort:"chronological",tab:"prompt",detail:null,prompt:"",generatedSig:null,provider:"chatgpt",targetTabId:null};
 let catalog = [], windowId, saveTimer, conflict = null, busy = false;
 const element = (tag,className,text) => {const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;};
 function button(text,action,className="") {const el=element("button",className,text);el.type="button";el.addEventListener("click",action);return el;}
 const currentProvider = () => PROVIDERS.find(p=>p.id===state.provider) ?? PROVIDERS[0];
-const ready = () => state.prompt.trim() && state.generatedSig === signature(state.request);
+const isFree = () => state.request.mode === "free";
+const promptRequest = () => isFree() ? {...state.request,movements:[]} : state.request;
+const requestSignature = () => signature(promptRequest());
+const ready = () => state.prompt.trim() && state.generatedSig === requestSignature();
+const canGenerate = () => {
+  if (isFree()) return Boolean(state.request.question.trim());
+  if (!state.request.movements.length || state.request.movements.length > MAX_MOVEMENTS) return false;
+  if (state.request.mode === "compare" && new Set(state.request.movements).size < 2) return false;
+  return true;
+};
 function status(message="",type="") {$("status").textContent=message;$("status").className=`status ${type}`;}
 function resetConflict() {conflict=null;$("conflict").hidden=true;}
+function generateHint() {
+  if (busy) return "";
+  if (isFree()) return state.request.question.trim() ? "" : "Scrivi la tua richiesta per continuare.";
+  if (!state.request.movements.length) return "Scegli una corrente oppure passa a Richiesta libera.";
+  if (state.request.movements.length > MAX_MOVEMENTS) return `Puoi scegliere al massimo ${MAX_MOVEMENTS} correnti.`;
+  if (state.request.mode === "compare" && new Set(state.request.movements).size < 2) return "Per il confronto scegli almeno due correnti.";
+  return "";
+}
 function actionState() {
-  $("generate").disabled=busy;$("copy").disabled=busy||!ready();$("insert").disabled=busy||!ready();
+  const valid=canGenerate(),hint=generateHint();
+  $("generate").disabled=busy||!valid;$("copy").disabled=busy||!ready();$("insert").disabled=busy||!ready();
   $("stale").hidden=!state.prompt||Boolean(ready());$("preview-section").hidden=!state.prompt;
   $("prompt-length").textContent=`${state.prompt.length.toLocaleString("it-IT")} caratteri`;
   $("selection-count").textContent=String(state.request.movements.length);
+  $("selection-count").hidden=isFree()||!state.request.movements.length;
+  $("generate-hint").textContent=hint;$("generate-hint").hidden=!hint;
+  if(embed)$("preview-empty").hidden=state.tab!=="prompt"||Boolean(state.prompt);
+}
+function updateDetailsSummary() {
+  let count=0;
+  if(state.request.depth==="detailed")count++;
+  if(!isFree()&&state.request.relation==="legacy")count++;
+  if(state.request.preferences.trim())count++;
+  if(state.request.exclusions.trim())count++;
+  if(state.request.watched.length)count++;
+  $("details-summary").textContent=count===0?"0 impostazioni":`${count} impostazion${count===1?"e":"i"}`;
+}
+function renderFreeNote() {
+  const count=state.request.movements.length;
+  $("free-note-text").textContent=count===0
+    ? "Nessuna corrente necessaria. Scrivi liberamente: la chat userà la tua richiesta e i dettagli attivi."
+    : count===1
+      ? "La corrente selezionata resta salvata ma non sarà usata in questa modalità. Passa a “Con una corrente” per includerla."
+      : `Le ${count} correnti selezionate restano salvate ma non saranno usate in questa modalità. Passa a “Con una corrente” per includerle.`;
+}
+function updateModeUi() {
+  const free=isFree();
+  $("mode-current").setAttribute("aria-checked",String(!free));$("mode-free").setAttribute("aria-checked",String(free));
+  $("mode-current").tabIndex=free?-1:0;$("mode-free").tabIndex=free?0:-1;
+  $("current-fields").hidden=free;$("free-note").hidden=!free;$("examples").hidden=!free;$("relation-field").hidden=free;
+  $("question-label").textContent=free?"La tua richiesta libera":"La tua richiesta";
+  $("question").placeholder=free
+    ? "Per esempio: un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia, senza scene troppo violente."
+    : "Aggiungi un dettaglio alla richiesta: atmosfera, vincoli, ciò che hai già visto…";
+  $("prompt-title").innerHTML=free?"Da un’idea,<br>al prossimo film.":"Dalle correnti,<br>al prossimo film.";
+  $("prompt-intro").textContent=free
+    ? "Scrivi come parli. CineMatch trasforma la tua richiesta in un prompt chiaro per la chat, senza corrente obbligatoria."
+    : "Scegli una o più correnti e racconta cosa cerchi. CineMatch costruisce un prompt storico e preciso.";
+  $("preview-empty-text").textContent=free?"Scrivi la tua richiesta e premi Genera il prompt.":"Seleziona le correnti, scrivi la tua richiesta e premi Genera il prompt.";
+  $("mode").value=free?state.lastMode:state.request.mode;
+  renderFreeNote();updateDetailsSummary();
+}
+function setMode(mode) {
+  const free=mode==="free";
+  if(free===isFree())return;
+  if(free){state.lastMode=state.request.mode;state.request.mode="free";}
+  else state.request.mode=state.lastMode&&state.lastMode!=="free"?state.lastMode:"recommendations";
+  updateModeUi();criteriaChanged();
 }
 async function saveNow() {
   clearTimeout(saveTimer);
@@ -25,7 +87,7 @@ async function saveNow() {
   catch {status("La bozza resta nel pannello, ma non è stato possibile conservarla nella sessione.","error");}
 }
 function save() {clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,250);}
-function criteriaChanged() {resetConflict();status();actionState();save();}
+function criteriaChanged() {resetConflict();status();updateDetailsSummary();actionState();save();}
 function showTab(tab) {
   state.tab=tab;$("explore-pane").hidden=tab!=="explore";$("prompt-pane").hidden=tab!=="prompt";$("actions").hidden=tab!=="prompt";
   if(embed)$("preview-empty").hidden=tab!=="prompt"||Boolean(state.prompt);
@@ -33,14 +95,24 @@ function showTab(tab) {
   actionState();save();
 }
 function eraMatches(m) {const ranges={origins:[0,1919],interwar:[1920,1945],postwar:[1946,1979],recent:[1980,1999],contemporary:[2000,9999]};const r=ranges[state.era];return !r||(m.start<=r[1]&&(m.end??9999)>=r[0]);}
-function selectionChanged() {renderSelection();renderList();criteriaChanged();}
+function selectionChanged() {renderSelection();syncSelectionRows();criteriaChanged();}
+function syncSelectionRows() {
+  const selected=new Set(state.request.movements),atLimit=state.request.movements.length>=MAX_MOVEMENTS;
+  for(const row of $("movement-list").children) {
+    if(!row.dataset.id)continue;
+    const check=row.querySelector('input[type="checkbox"]');if(!check)continue;
+    check.checked=selected.has(row.dataset.id);
+    check.disabled=!check.checked&&atLimit;
+    check.title=check.disabled?`Puoi selezionare al massimo ${MAX_MOVEMENTS} correnti.`:"";
+  }
+}
 function renderList() {
   let list=catalog.filter(m=>(!state.kind||m.kind===state.kind)&&(!state.region||m.regions.includes(state.region))&&eraMatches(m)&&matches(m,state.query));
   if(state.sort==="alphabetic")list=list.toSorted((a,b)=>normalize(a.label).localeCompare(normalize(b.label),"it"));
-  const fragment=document.createDocumentFragment();
+  const fragment=document.createDocumentFragment(),atLimit=state.request.movements.length>=MAX_MOVEMENTS;
   for(const m of list) {
-    const row=element("div","movement-row"),check=document.createElement("input");check.type="checkbox";check.checked=state.request.movements.includes(m.id);check.setAttribute("aria-label",`Includi ${m.label} nel prompt`);
-    check.addEventListener("change",()=>{if(check.checked)state.request.movements.push(m.id);else state.request.movements=state.request.movements.filter(id=>id!==m.id);selectionChanged();});
+    const row=element("div","movement-row"),check=document.createElement("input");row.dataset.id=m.id;check.type="checkbox";check.checked=state.request.movements.includes(m.id);check.disabled=!check.checked&&atLimit;check.title=check.disabled?`Puoi selezionare al massimo ${MAX_MOVEMENTS} correnti.`:"";check.setAttribute("aria-label",`Includi ${m.label} nel prompt`);
+    check.addEventListener("change",()=>{if(check.checked){if(state.request.movements.length>=MAX_MOVEMENTS){check.checked=false;return;}state.request.movements.push(m.id);}else state.request.movements=state.request.movements.filter(id=>id!==m.id);selectionChanged();});
     const copy=element("div");copy.append(button(m.label,()=>showDetail(m.id),"movement-name"),element("span","movement-meta",`${period(m)} · ${KINDS[m.kind]}`));row.append(check,copy);fragment.append(row);
   }
   $("movement-list").replaceChildren(fragment);$("results-count").textContent=`${list.length} voci trovate`;
@@ -63,8 +135,14 @@ function showDetail(id) {
   if(m.original_name!==m.label)article.append(element("p","detail-subtitle",m.original_name));
   article.append(element("p","detail-meta",`${KINDS[m.kind]} · ${period(m)} · ${m.regions.join(", ")}`),element("p","detail-summary",m.summary));
   const actions=element("div","detail-actions");
-  actions.append(button("Prepara per questa voce",()=>{state.request.movements=[id];renderSelection();renderList();criteriaChanged();showTab("prompt");},"primary"));
-  const add=button(state.request.movements.includes(id)?"Già nella selezione":"Aggiungi alla selezione",()=>{if(!state.request.movements.includes(id)){state.request.movements.push(id);selectionChanged();showDetail(id);}});add.disabled=state.request.movements.includes(id);actions.append(add);article.append(actions);
+  actions.append(button("Prepara per questa voce",()=>{
+    state.request.movements=[id];
+    if(isFree())state.request.mode=state.lastMode&&state.lastMode!=="free"?state.lastMode:"recommendations";
+    updateModeUi();renderSelection();syncSelectionRows();criteriaChanged();showTab("prompt");
+  },"primary"));
+  const selected=state.request.movements.includes(id),atLimit=state.request.movements.length>=MAX_MOVEMENTS;
+  const add=button(selected?"Già nella selezione":atLimit?`Massimo ${MAX_MOVEMENTS} correnti`:"Aggiungi alla selezione",()=>{if(!selected&&!atLimit){state.request.movements.push(id);selectionChanged();showDetail(id);}});
+  add.disabled=selected||atLimit;actions.append(add);article.append(actions);
   const section=(title)=>{const node=element("section","detail-section");node.append(element("h2","",title));article.append(node);return node;};
   const traits=element("ul");for(const trait of m.traits)traits.append(element("li","",trait));section("Come riconoscerla").append(traits);
   section("Figure di riferimento").append(element("p","",m.authors.join(", ")));
@@ -78,13 +156,16 @@ function showDetail(id) {
 }
 function renderSelection() {
   const container=$("selected");container.replaceChildren();
-  for(const id of state.request.movements){const m=catalog.find(m=>m.id===id);if(m){const chip=button(m.label,()=>{state.request.movements=state.request.movements.filter(x=>x!==id);selectionChanged();});chip.setAttribute("aria-label",`Rimuovi ${m.label}`);const ns="http://www.w3.org/2000/svg",close=document.createElementNS(ns,"svg"),path=document.createElementNS(ns,"path");close.setAttribute("viewBox","0 0 16 16");close.setAttribute("aria-hidden","true");path.setAttribute("d","M4 4l8 8M12 4l-8 8");close.append(path);chip.append(close);container.append(chip);}}
-  if(!state.request.movements.length)container.append(element("p","notice","Scegli almeno una voce nell’elenco delle correnti."));
-  actionState();
+  for(const id of state.request.movements){const m=catalog.find(m=>m.id===id);if(m){const chip=button(m.label,()=>{state.request.movements=state.request.movements.filter(x=>x!==id);selectionChanged();$("add-current").focus({preventScroll:true});});chip.setAttribute("aria-label",`Rimuovi ${m.label}`);const ns="http://www.w3.org/2000/svg",close=document.createElementNS(ns,"svg"),path=document.createElementNS(ns,"path");close.setAttribute("viewBox","0 0 16 16");close.setAttribute("aria-hidden","true");path.setAttribute("d","M4 4l8 8M12 4l-8 8");close.append(path);chip.append(close);container.append(chip);}}
+  if(!state.request.movements.length)container.append(element("p","notice","Scegli almeno una voce in Esplora, oppure passa a Richiesta libera."));
+  else if(state.request.movements.length>=MAX_MOVEMENTS)container.append(element("p","notice max-hint",`Hai raggiunto il massimo di ${MAX_MOVEMENTS} correnti. Rimuovine una per aggiungerne un’altra.`));
+  $("add-current").disabled=state.request.movements.length>=MAX_MOVEMENTS;
+  renderFreeNote();actionState();
 }
 function generate() {
+  if(!canGenerate()){actionState();return;}
   try {
-    const result=generatePrompt(state.request,catalog);state.prompt=result.prompt;state.generatedSig=signature(state.request);$("prompt-preview").value=state.prompt;
+    const request=promptRequest(),result=generatePrompt(request,catalog);state.prompt=result.prompt;state.generatedSig=signature(request);$("prompt-preview").value=state.prompt;
     resetConflict();actionState();status("Richiesta pronta per la tua chat.","success");
     if(embed)$("preview-empty").hidden=true;
     save();
@@ -121,39 +202,53 @@ async function insert(mode="empty") {
   finally{busy=false;actionState();}
 }
 function fillForm() {
-  for(const key of ["mode","question","preferences","exclusions","depth","relation"])$(key).value=state.request[key];
+  for(const key of ["question","preferences","exclusions","depth","relation"])$(key).value=state.request[key];
+  $("mode").value=state.lastMode;
   $("watched").value=state.request.watched.join("\n");$("exact-count").checked=state.request.count!==null;$("count-wrap").hidden=state.request.count===null;$("count").value=String(state.request.count??5);
   for(const key of ["search","kind","era","region","sort","provider"])$(key).value=key==="search"?state.query:state[key];
   $("prompt-preview").value=state.prompt;
-  refreshSelects();
+  updateModeUi();refreshSelects();actionState();
 }
 async function boot() {
   const response=await fetch(chrome.runtime.getURL("data/movements.json"));if(!response.ok)throw new Error("Reference unavailable");catalog=await response.json();
   windowId=(await chrome.windows.getCurrent()).id;
   const saved=(await chrome.storage.session.get(`draft:${windowId}`))[`draft:${windowId}`];
   if(saved?.version===1&&saved.request){
-    const request={...defaultRequest(),...saved.request};request.movements=Array.isArray(request.movements)?request.movements.filter(id=>catalog.some(m=>m.id===id)):[];
+    const request={...defaultRequest(),...saved.request};request.movements=Array.isArray(request.movements)?request.movements.filter(id=>catalog.some(m=>m.id===id)).slice(0,MAX_MOVEMENTS):[];
     if(Array.isArray(request.watched)&&request.watched.every(s=>typeof s==="string")&&typeof request.question==="string"&&typeof request.preferences==="string"&&typeof request.exclusions==="string"){
       state.request=request;
-      for(const key of ["query","kind","era","region","sort","tab","detail","prompt","generatedSig","provider"])if(saved[key]===null||typeof saved[key]==="string")state[key]=saved[key];
+      for(const key of ["query","kind","era","region","sort","tab","detail","prompt","generatedSig","provider","lastMode"])if(saved[key]===null||typeof saved[key]==="string")state[key]=saved[key];
       if(Number.isInteger(saved.targetTabId))state.targetTabId=saved.targetTabId;
     }
   }
+  if(!Object.hasOwn(MODES,state.request.mode))state.request.mode="free";
+  if(!Object.hasOwn(MODES,state.lastMode)||state.lastMode==="free")state.lastMode="recommendations";
+  if(state.request.mode!=="free")state.lastMode=state.request.mode;
   if(!PROVIDERS.some(p=>p.id===state.provider))state.provider="chatgpt";
   for(const [value,text]of Object.entries(KINDS))$("kind").append(new Option(text,value));
-  for(const [value,text]of Object.entries(MODES))$("mode").append(new Option(text,value));
+  for(const [value,text]of Object.entries(MODES))if(value!=="free")$("mode").append(new Option(text,value));
   for(const region of [...new Set(catalog.flatMap(m=>m.regions))].sort((a,b)=>a.localeCompare(b,"it")))$("region").append(new Option(region,region));
   for(const provider of PROVIDERS)$("provider").append(new Option(provider.name,provider.id));
   fillForm();renderList();renderSelection();if(state.detail)showDetail(state.detail);showTab(state.tab==="prompt"?"prompt":"explore");
   if(embed&&!state.detail)$("detail-empty").hidden=!embedWide();
   $("explore-tab").addEventListener("click",()=>showTab("explore"));$("prompt-tab").addEventListener("click",()=>showTab("prompt"));
   document.querySelector(".tabs").addEventListener("keydown",event=>{if(["ArrowLeft","ArrowRight"].includes(event.key)){event.preventDefault();const tab=state.tab==="prompt"?"explore":"prompt";showTab(tab);$(tab+"-tab").focus();}});
+  $("mode-current").addEventListener("click",()=>setMode("current"));$("mode-free").addEventListener("click",()=>setMode("free"));
+  const moveMode=event=>{
+    if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key))return;
+    event.preventDefault();const mode=isFree()?"current":"free";setMode(mode);$(mode==="free"?"mode-free":"mode-current").focus();
+  };
+  $("mode-current").addEventListener("keydown",moveMode);$("mode-free").addEventListener("keydown",moveMode);
+  $("free-shortcut").addEventListener("click",()=>{setMode("free");showTab("prompt");$("question").focus();});
+  $("add-current").addEventListener("click",()=>{showTab("explore");$("search").focus();});
+  for(const example of document.querySelectorAll("#examples .example"))example.addEventListener("click",()=>{state.request.question=example.textContent;$("question").value=state.request.question;$("question").focus();criteriaChanged();});
   $("search").addEventListener("input",()=>{state.query=$("search").value;renderList();save();});
   for(const key of ["kind","era","region","sort"])$(key).addEventListener("change",()=>{state[key]=$(key).value;renderList();save();});
   $("reset").addEventListener("click",()=>{state.query="";state.kind="";state.era="all";state.region="";state.sort="chronological";fillForm();renderList();save();});
   $("request-form").addEventListener("submit",event=>{event.preventDefault();generate();});
   $("request-form").addEventListener("input",()=>{
-    for(const key of ["mode","question","preferences","exclusions","depth","relation"])state.request[key]=$(key).value;
+    for(const key of ["question","preferences","exclusions","depth","relation"])state.request[key]=$(key).value;
+    if(!isFree()){state.request.mode=$("mode").value;state.lastMode=state.request.mode;}
     state.request.watched=$("watched").value.split(/[\n;]/).map(s=>s.trim()).filter(Boolean);
     state.request.count=$("exact-count").checked?($("count").value===""?0:Number($("count").value)):null;$("count-wrap").hidden=!$("exact-count").checked;criteriaChanged();
   });

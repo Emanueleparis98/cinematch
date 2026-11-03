@@ -1,21 +1,27 @@
-# CineMatch - estensione browser 3.2.0
+# CineMatch - estensione browser 3.7.0
 
-74 voci sulle correnti del cinema, generatore locale di richieste e immagini
-automatiche nelle risposte di ChatGPT, DeepSeek, Claude e Gemini.
+74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
+locale di richieste e immagini automatiche nelle risposte di ChatGPT, DeepSeek,
+Claude e Gemini.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.2.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.7.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
    Estensioni, poi premi l'icona per aprire il pannello.
 
+Da una versione **3.6.0 o successiva** aggiorna da **Opzioni → Aggiornamenti**
+nella stessa cartella, senza cambiare ID né perdere TMDB e addon. Per una
+versione precedente alla 3.6.0 sostituisci invece i file della cartella già
+caricata e premi **Ricarica**.
+
 Nel repository la cartella già pronta è `dist/CineMatch-Chrome` dopo la build.
 Il sorgente `extensions/cinematch` non include i dati assemblati. Mantieni la
 cartella caricata nella stessa posizione. Chrome 116+; in Edge con sidePanel usa
 `edge://extensions`. Firefox e Safari non sono supportati da questo pacchetto.
-Distribuzione manuale, non pubblicata sullo store e senza aggiornamento automatico.
+Distribuzione manuale, non pubblicata sullo store.
 Guida Chrome: https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world.
 
 ## Esplorare e preparare una richiesta
@@ -27,15 +33,22 @@ in base allo spazio, senza essere tagliati dal bordo del pannello.
 
 In **Esplora**, cerca per corrente, sinonimo, autore o opera. I filtri per
 categoria, periodo e area sono espandibili. Apri una voce per caratteristiche,
-contesto, esempi, limiti interpretativi e fonti. Le caselle permettono selezioni
-multiple; **Prepara per questa voce** prepara una sola selezione.
+contesto, esempi, limiti interpretativi e fonti. Le caselle permettono fino a
+quattro selezioni; **Prepara per questa voce** prepara una sola selezione.
+Il collegamento **Richiesta libera** porta direttamente al composer senza
+obbligare a scegliere una corrente.
 
-In **La tua richiesta**, scrivi cosa desideri e scegli obiettivo, quantità libera
-o esatta, preferenze, esclusioni e già visti. Genera e rileggi il prompt, poi usa
-**Inserisci nella chat** o **Copia**. L'invio resta all'utente. Una bozza esistente
-richiede la scelta di aggiungere o sostituire; non viene sovrascritta in silenzio.
-Ctrl+F cerca nelle correnti; Ctrl+Invio genera la richiesta. L'icona in alto apre
-una vista ampia in una scheda del browser.
+In **Componi** scegli tra **Con una corrente** e **Richiesta libera**. La modalità
+libera è pronta senza selezioni: scrivi la richiesta, aggiungi gli esempi o i
+dettagli e genera. Nella modalità con corrente, le voci scelte restano salvate
+anche passando alla modalità libera, ma vengono ignorate finché non torni a
+**Con una corrente**. Le impostazioni di approfondimento, relazione, preferenze,
+esclusioni e già visti sono raccolte sotto **Dettagli**.
+Genera e rileggi il prompt, poi usa **Inserisci nella chat** o **Copia**. L'invio
+resta all'utente. Una bozza esistente richiede la scelta di aggiungere o
+sostituire; non viene sovrascritta in silenzio. Ctrl+F cerca nelle correnti;
+Ctrl+Invio genera la richiesta. L'icona in alto apre una vista ampia in una
+scheda del browser.
 
 ## Immagini come parte della risposta
 
@@ -170,8 +183,10 @@ ogni formato di risposta è riconoscibile; in questi casi il testo resta leggibi
 Edge non eseguito direttamente. L'inserimento diretto del prompt accetta fino a
 200.000 caratteri; restano i limiti propri della chat.
 
-Per aggiornare usa la stessa cartella e premi **Ricarica** in chrome://extensions,
-poi ricarica le schede delle chat. La credenziale già salvata viene mantenuta.
+Dalla 3.6.0 usa **Opzioni → Aggiornamenti** per scaricare, verificare con SHA-256
+e applicare la nuova versione nella stessa cartella. Per una versione precedente
+alla 3.6.0 sostituisci i file della cartella già caricata e premi **Ricarica** in
+chrome://extensions. La credenziale e gli addon già salvati vengono mantenuti.
 Per rimuovere usa **Rimuovi** nella pagina delle estensioni; la credenziale può
 essere rimossa separatamente dalla pagina di connessione. L'app Windows precedente
 non viene modificata o richiesta.

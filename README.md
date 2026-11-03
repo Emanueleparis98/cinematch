@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.6.0
+# CineMatch — estensione browser 3.7.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,28 +9,31 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.6.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.7.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l’icona per aprire il pannello. In Edge: `edge://extensions`.
 
-**Per aggiornare da una versione precedente senza perdere TMDB e addon**, non
-caricare una cartella nuova: sostituisci i file nella cartella che stai già usando
-(la vedi in `chrome://extensions` → dettagli → “caricata da”) e premi **Reload**.
-La prima 3.6.0 richiede ancora questo passaggio; dalla 3.6.0 in poi usa
-**Opzioni → Aggiornamenti**.
+**Per aggiornare senza perdere TMDB e addon**, da una versione 3.6.0 o successiva
+usa **Opzioni → Aggiornamenti**. Se arrivi da una versione precedente alla 3.6.0,
+sostituisci i file nella cartella che stai già usando (la vedi in
+`chrome://extensions` → dettagli → “caricata da”) e premi **Reload**; dalla 3.6.0
+in poi il self-updater mantiene ID, credenziali e addon.
 
 [Istruzioni complete, permessi e privacy](extensions/cinematch/README.md).
 Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato sullo store.
 
 ## Flusso nel browser
 
-1. Cerca per corrente, autore, opera o sinonimo e consulta contesto e fonti.
-2. Seleziona una o più voci e passa a **La tua richiesta**.
-3. Scegli obiettivo, quantità libera o precisa, preferenze, esclusioni e titoli già visti.
-4. Genera e modifica la richiesta. Apri la chat, poi premi **Inserisci nella chat**.
-5. Rileggi e invia dal sito. Una bozza già presente richiede la tua scelta prima
-   di essere modificata. **Copia** permette di usare qualsiasi altra chat.
+1. **Componi** si apre in **Richiesta libera**: scrivi senza scegliere una corrente.
+   Per usare il catalogo passa a **Con una corrente** e a **Esplora**.
+2. Cerca per corrente, autore, opera o sinonimo e consulta contesto e fonti.
+3. Seleziona fino a quattro voci. La modalità libera conserva le selezioni ma le
+   ignora finché non torni a **Con una corrente**.
+4. Aggiungi obiettivo o dettagli se servono. Genera e modifica la richiesta.
+5. Apri la chat, premi **Inserisci nella chat**, rileggi e invia dal sito.
+   **Copia** permette di usare qualsiasi altra chat. Una bozza già presente
+   richiede la tua scelta prima di essere modificata.
 
 Per le immagini collega TMDB una volta dal pulsante nell'intestazione del pannello.
 Le immagini appaiono da sole sotto ciascun titolo mentre la chat risponde:
@@ -53,8 +56,9 @@ Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiorname
 scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
 scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
 quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. Il primo passaggio richiede
-ancora lo ZIP 3.6.0; dopo, non serve più scaricare pacchetti manualmente.
+restano perché l’ID e la cartella non cambiano. La **3.7.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.7.0, mentre chi arriva da una
+versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
 L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
 il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
@@ -64,11 +68,15 @@ il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
 
 Un pulsante flottante **CineMatch** compare accanto alla chat. Premendolo si apre
 un pannello moderno con le **74 correnti**, ricerca, filtri, dettaglio affiancato,
-selezione e generatore di prompt. Il layout largo mostra elenco e dettaglio nello
-stesso colpo d’occhio; nella sezione **La tua richiesta** il form e l’anteprima
-del prompt stanno fianco a fianco. Puoi copiare il testo oppure inserirlo
-direttamente nel composer della chat: l’invio resta all’utente. La bozza e le
-selezioni restano nella sessione e sono condivise con il pannello laterale.
+selezione e generatore di prompt. Il pannello si apre su **Componi** in
+**Richiesta libera**: non serve scegliere una corrente. Il passaggio a
+**Con una corrente** abilita il catalogo, fino a quattro voci; la richiesta libera
+ignora le selezioni ma le conserva per quando torni all’altra modalità. Il layout
+largo mostra elenco e dettaglio nello stesso colpo d’occhio; in **Componi** il form
+e l’anteprima del prompt stanno fianco a fianco. Puoi copiare il testo oppure
+inserirlo direttamente nel composer della chat: l’invio resta all’utente. La
+bozza e le selezioni restano nella sessione e sono condivise con il pannello
+laterale.
 
 ## Addon e player integrato
 
@@ -103,6 +111,7 @@ fallback nella scheda dedicata.
 [Addon nel pannello e tema live, 3.4.0](docs/estensione-3.4.0-pannello.md).
 [Launcher correnti e prompt, 3.5.0](docs/estensione-3.5.0-launcher.md).
 [Aggiornamenti integrati, 3.6.0](docs/estensione-3.6.0-aggiornamenti.md).
+[Composer libero e correnti, 3.7.0](docs/estensione-3.7.0-composer.md).
 
 ## Sviluppo dell'estensione
 

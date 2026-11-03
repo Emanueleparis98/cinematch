@@ -22,7 +22,33 @@ try{
     assert.equal((await worker.evaluate(()=>chrome.sidePanel.getOptions({}))).path,'panel.html');
   });
   const panel=await context.newPage();panel.on('pageerror',e=>errors.push(e.message));panel.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  await panel.goto(`chrome-extension://${id}/panel.html`);await panel.locator('.movement-row').first().waitFor();
+  await panel.goto(`chrome-extension://${id}/panel.html`);await panel.locator('#question').waitFor();
+  await check('the composer opens in free mode with no preselected current',async()=>{
+    assert.equal(await panel.locator('#prompt-tab').getAttribute('aria-selected'),'true');
+    assert.equal(await panel.locator('#mode-free').getAttribute('aria-checked'),'true');
+    assert.equal(await panel.locator('#current-fields').isVisible(),false);
+    assert.equal(await panel.locator('#free-note').isVisible(),true);
+    assert.equal(await panel.locator('#examples').isVisible(),true);
+    assert.equal(await panel.locator('#selected button').count(),0);
+    assert.equal(await panel.locator('#selection-count').isHidden(),true);
+    assert.equal(await panel.locator('#generate').isDisabled(),true);
+    assert.match(await panel.locator('#generate-hint').innerText(),/Scrivi la tua richiesta/);
+    await panel.locator('#mode-free').focus();await panel.keyboard.press('ArrowLeft');assert.equal(await panel.locator('#mode-current').getAttribute('aria-checked'),'true');
+    await panel.keyboard.press('ArrowRight');assert.equal(await panel.locator('#mode-free').getAttribute('aria-checked'),'true');await panel.locator('#question').focus();
+  });
+  await check('a free request generates without a current and survives mode switches',async()=>{
+    await panel.locator('#question').fill('Spiega il cinema muto comico in pochi passaggi.');
+    await panel.locator('#generate').click();
+    const free=await panel.locator('#prompt-preview').inputValue();
+    assert.match(free,/OBIETTIVO: Richiesta libera/);assert.doesNotMatch(free,/CONTESTO DELLE VOCI SELEZIONATE/);assert.match(free,/Spiega il cinema muto comico/);
+    assert.equal(await panel.locator('#copy').isEnabled(),true);assert.equal(await panel.locator('#generate-hint').isHidden(),true);
+    await panel.locator('#mode-current').click();
+    assert.equal(await panel.locator('#current-fields').isVisible(),true);assert.equal(await panel.locator('#generate').isDisabled(),true);
+    assert.equal(await panel.locator('#copy').isEnabled(),false);assert.equal(await panel.locator('#stale').isVisible(),true);
+    await panel.locator('#mode-free').click();
+    assert.equal(await panel.locator('#copy').isEnabled(),true);assert.equal(await panel.locator('#stale').isHidden(),true);
+  });
+  await panel.locator('#explore-tab').click();await panel.locator('.movement-row').first().waitFor();
   await check('real MV3 extension loads all local reference entries',async()=>{assert.equal(await panel.locator('.movement-row').count(),74);assert.equal(await panel.locator('#boot-error').isVisible(),false);});
   await check('local fonts load with no remote font service',async()=>{
     await panel.evaluate(async()=>{await document.fonts.load('14px Manrope');await document.fonts.load('800 30px Manrope');await document.fonts.ready;});assert.equal(await panel.evaluate(()=>document.fonts.check('14px Manrope')),true);
@@ -42,6 +68,20 @@ try{
     const trigger=panel.locator('#sort').locator('..').locator('.picker-trigger');await trigger.focus();await trigger.press('ArrowDown');await trigger.press('End');await trigger.press('Enter');assert.equal(await panel.locator('#sort').inputValue(),'alphabetic');
     await trigger.press('ArrowDown');await trigger.press('Home');await trigger.press('Escape');assert.equal(await panel.locator('#sort').inputValue(),'alphabetic');assert.equal(await trigger.getAttribute('aria-expanded'),'false');
     await trigger.press('c');await trigger.press('Enter');assert.equal(await panel.locator('#sort').inputValue(),'chronological');await panel.locator('.filter-disclosure summary').click();
+  });
+  await check('current selection is capped at four and free mode ignores it',async()=>{
+    await panel.locator('#prompt-tab').click();await panel.locator('#mode-current').click();await panel.locator('#explore-tab').click();
+    const boxes=panel.locator('.movement-row input');
+    for(let i=0;i<4;i++)await boxes.nth(i).check();
+    assert.equal(await panel.locator('#selection-count').innerText(),'4');assert.equal(await panel.locator('#selection-count').isVisible(),true);
+    assert.equal(await boxes.nth(4).isDisabled(),true);
+    await panel.locator('#prompt-tab').click();await panel.locator('#mode-free').click();
+    assert.equal(await panel.locator('#selection-count').isHidden(),true);assert.match(await panel.locator('#free-note-text').innerText(),/Le 4 correnti selezionate/);
+    assert.equal(await panel.locator('#copy').isEnabled(),true);
+    await panel.locator('#mode-current').click();assert.equal(await panel.locator('#selection-count').isVisible(),true);
+    await panel.locator('#explore-tab').click();
+    for(let i=0;i<4;i++)await boxes.nth(i).uncheck();
+    assert.equal(await panel.locator('#selection-count').isHidden(),true);assert.equal(await boxes.nth(4).isDisabled(),false);
   });
   await check('search, detail and sources work',async()=>{
     await panel.locator('#search').fill('neorealismo');assert.ok(await panel.locator('.movement-row').count()>=1);

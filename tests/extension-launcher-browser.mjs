@@ -24,7 +24,14 @@ try{
   const dialog=page.locator('dialog.cm-prompt-dialog');await dialog.waitFor({state:'visible',timeout:10000});
   const iframe=dialog.locator('iframe.cm-prompt-frame');await iframe.waitFor({state:'visible',timeout:10000});
   let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await page.waitForTimeout(150);}
-  assert.ok(frame,'panel frame');await frame.locator('.movement-row').first().waitFor({timeout:20000});
+  assert.ok(frame,'panel frame');await frame.locator('#question').waitFor({timeout:20000});
+  await check('the real panel opens on the free composer',async()=>{
+    assert.equal(await frame.locator('#prompt-tab').getAttribute('aria-selected'),'true');
+    assert.equal(await frame.locator('#mode-free').getAttribute('aria-checked'),'true');
+    assert.equal(await frame.locator('#current-fields').isVisible(),false);
+    assert.equal(await frame.locator('#examples').isVisible(),true);
+  });
+  await frame.locator('#explore-tab').click();await frame.locator('.movement-row').first().waitFor({timeout:20000});
   await check('the real panel opens with the 74 currents and no loading overlay',async()=>{assert.equal(await frame.locator('.movement-row').count(),74);assert.equal(await dialog.locator('.cm-prompt-loading').isVisible(),false);});
   await page.waitForTimeout(500);
   await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/launcher-panel-v350.png'});
@@ -43,10 +50,12 @@ try{
   await check('a current can be selected and a prompt generated in the two-column view',async()=>{
     await frame.locator('.movement-row input').first().check();
     await frame.locator('#prompt-tab').click();
+    await frame.locator('#mode-current').click();
     await frame.locator('#question').fill('Un film intenso da vedere stasera, senza violenza esplicita.');
     await frame.locator('#generate').click();
     await frame.waitForFunction(()=>document.querySelector('#prompt-preview').value.length>200);
-    assert.ok((await frame.locator('#prompt-preview').inputValue()).length>200);
+    const prompt=await frame.locator('#prompt-preview').inputValue();
+    assert.ok(prompt.length>200);assert.match(prompt,/CONTESTO DELLE VOCI SELEZIONATE/);
     assert.equal(await frame.locator('#request-form').isVisible(),true);
     assert.equal(await frame.locator('#preview-section').isVisible(),true);
     assert.equal(await frame.locator('#preview-empty').isVisible(),false);

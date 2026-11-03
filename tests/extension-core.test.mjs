@@ -1,14 +1,28 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {defaultRequest,generatePrompt,matches,providerForUrl,signature,KINDS} from '../extensions/cinematch/core.js';
+import {defaultRequest,generatePrompt,matches,providerForUrl,signature,KINDS,MAX_MOVEMENTS} from '../extensions/cinematch/core.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../plugins/cinema-currents/assets/movements.json',import.meta.url),'utf8'));
-const prompt=changes=>generatePrompt({...defaultRequest(),...changes},catalog).prompt;
+const current={movements:['neorealismo'],mode:'recommendations'};
+const prompt=changes=>generatePrompt({...defaultRequest(),...current,...changes},catalog).prompt;
 
 test('reference has 74 unique, sourced entries with explicit categories',()=>{
   assert.equal(catalog.length,74);assert.equal(new Set(catalog.map(m=>m.id)).size,74);
   for(const m of catalog){assert.ok(KINDS[m.kind]);assert.ok(m.scope_note);assert.ok(m.sources.length);for(const s of m.sources)assert.equal(new URL(s.url).protocol,'https:');}
+});
+test('new requests start free and without a preselected current',()=>{
+  const request=defaultRequest();assert.equal(request.mode,'free');assert.deepEqual(request.movements,[]);assert.equal(request.question,'');
+});
+test('free requests use no current context, even when selections are still stored',()=>{
+  const bare=generatePrompt({...defaultRequest(),question:'Spiega il montaggio in tre paragrafi.'},catalog).prompt;
+  const withSelections=generatePrompt({...defaultRequest(),movements:['neorealismo',catalog[0].id],question:'Spiega il montaggio in tre paragrafi.'},catalog);
+  assert.equal(withSelections.prompt,bare);assert.doesNotMatch(bare,/CONTESTO DELLE VOCI SELEZIONATE/);assert.equal(withSelections.warnings.length,0);
+});
+test('current requests require one to four distinct currents',()=>{
+  assert.throws(()=>prompt({movements:[]}));
+  assert.throws(()=>prompt({movements:catalog.slice(0,MAX_MOVEMENTS+1).map(m=>m.id)}));
+  assert.ok(prompt({movements:catalog.slice(0,MAX_MOVEMENTS).map(m=>m.id)}).includes('CONTESTO DELLE VOCI SELEZIONATE'));
 });
 test('automatic quantity does not impose five results',()=>{
   const text=prompt({});assert.match(text,/senza un limite predefinito di cinque/);assert.doesNotMatch(text,/Quantità richiesta:/);
@@ -40,7 +54,7 @@ test('prompt includes only selected reference context and distinguishes legacy',
   assert.ok(text.includes('Neorealismo'));assert.ok(!text.includes(`- ${catalog[0].label} /`));
 });
 test('non-movement categories receive an explicit warning',()=>{
-  const m=catalog.find(m=>m.kind!=='movement');const out=generatePrompt({...defaultRequest(),movements:[m.id]},catalog);
+  const m=catalog.find(m=>m.kind!=='movement');const out=generatePrompt({...defaultRequest(),...current,movements:[m.id]},catalog);
   assert.equal(out.warnings.length,1);assert.ok(out.prompt.includes(KINDS[m.kind]));
 });
 test('search accepts aliases, author, work and accents',()=>{
