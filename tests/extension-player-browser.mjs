@@ -117,6 +117,8 @@ try{
     assert.ok(frame);
     await frame.getByRole('button',{name:'Riproduci HLS di prova da Cinema di prova'}).waitFor({timeout:20000});
     await frame.getByRole('button',{name:'Riproduci HLS di prova da Cinema di prova'}).click();
+    await frame.waitForTimeout(1000);
+    if(await frame.locator('#bigPlay').isVisible())await frame.locator('#bigPlay').click();
     await frame.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000}).catch(async()=>{throw new Error(await frame.locator('#playerMessage').innerText());});
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
   });
