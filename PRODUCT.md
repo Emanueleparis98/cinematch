@@ -32,6 +32,11 @@ alla riga del titolo, prima della descrizione anche nei paragrafi con titolo inl
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 
+Dalla 3.6.0 l’estensione può aggiornarsi da sola: scarica l’ultima release dal
+repository, verifica lo SHA-256 e scrive i file nella cartella scelta una volta,
+poi si ricarica; TMDB e addon restano. Il primo passaggio richiede ancora la
+cartella della 3.6.0. Un badge sull’icona segnala le nuove versioni.
+
 Un pulsante flottante CineMatch apre accanto alla chat un pannello con le 74
 correnti e il generatore di prompt; l’elenco e il dettaglio, il form e l’anteprima
 sono affiancati nel layout largo. Dal clic sulla locandina si apre invece il

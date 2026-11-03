@@ -89,3 +89,28 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   })().then(respond).catch(()=>respond({ok:false,code:"unavailable"}));
   return true;
 });
+
+/* Lightweight update badge. The full download/install flow lives in options. */
+const updateChannel="https://github.com/Emanueleparis98/cinematch/releases/latest/download/latest.json";
+const updateOrigins=["https://github.com/*","https://objects.githubusercontent.com/*","https://release-assets.githubusercontent.com/*"];
+function newerVersion(candidate,current){
+  const a=String(candidate).split(".").map(Number),b=String(current).split(".").map(Number);
+  if(a.length!==3||a.some(n=>!Number.isSafeInteger(n)))return false;
+  for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]>b[i];
+  return false;
+}
+async function checkUpdateBadge(){
+  try{
+    if(!await chrome.permissions.contains({origins:updateOrigins}))return;
+    const response=await fetch(updateChannel,{cache:"no-store",credentials:"omit",redirect:"follow"});
+    if(!response.ok)return;
+    const data=await response.json();
+    if(!newerVersion(data?.version,chrome.runtime.getManifest().version)){await chrome.action.setBadgeText({text:""});return;}
+    await chrome.action.setBadgeText({text:"1"});
+    await chrome.action.setBadgeBackgroundColor({color:"#315fd1"});
+    await chrome.action.setTitle({title:`CineMatch · aggiornamento ${data.version} disponibile`});
+  }catch{}
+}
+chrome.runtime.onInstalled.addListener(()=>{chrome.alarms.create("cinematch-update",{periodInMinutes:360});checkUpdateBadge();});
+chrome.runtime.onStartup.addListener(()=>{chrome.alarms.create("cinematch-update",{periodInMinutes:360});checkUpdateBadge();});
+chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name==="cinematch-update")checkUpdateBadge();});

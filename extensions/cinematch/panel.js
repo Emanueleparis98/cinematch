@@ -164,6 +164,7 @@ async function boot() {
   $("open-chat").addEventListener("click",async()=>{try{const tab=await chrome.tabs.create({url:currentProvider().url,windowId});state.targetTabId=tab.id;status("Attendi che la chat sia pronta, poi premi Inserisci nella chat.");}catch{status("Non è stato possibile aprire la chat. Puoi usare Copia.","error");}});
   $("insert").addEventListener("click",()=>insert());$("append").addEventListener("click",()=>insert("append"));$("replace").addEventListener("click",()=>insert("replace"));$("cancel-conflict").addEventListener("click",()=>{resetConflict();status("Bozza mantenuta.");});
   $("expand").addEventListener("click",async()=>{await saveNow();await chrome.tabs.create({url:chrome.runtime.getURL("panel.html?view=full"),windowId});});
+  $("updates").addEventListener("click",()=>chrome.tabs.create({url:chrome.runtime.getURL("options.html#updates")}));
   $("tmdb-settings").addEventListener("click",()=>chrome.runtime.openOptionsPage());
   chrome.runtime.sendMessage({type:"tmdb-status"}).then(result=>{$("tmdb-settings").classList.toggle("connected",Boolean(result?.configured));$("tmdb-settings").title=result?.configured?"TMDB collegato · immagini automatiche":"Collega TMDB per le immagini";}).catch(()=>{});
   chrome.tabs.onActivated.addListener(info=>{if(info.windowId===windowId)syncActive();});

@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.5.0
+# CineMatch — estensione browser 3.6.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,10 +9,16 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.5.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.6.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
-Estensioni e premi l'icona per aprire il pannello. In Edge: `edge://extensions`.
+Estensioni e premi l’icona per aprire il pannello. In Edge: `edge://extensions`.
+
+**Per aggiornare da una versione precedente senza perdere TMDB e addon**, non
+caricare una cartella nuova: sostituisci i file nella cartella che stai già usando
+(la vedi in `chrome://extensions` → dettagli → “caricata da”) e premi **Reload**.
+La prima 3.6.0 richiede ancora questo passaggio; dalla 3.6.0 in poi usa
+**Opzioni → Aggiornamenti**.
 
 [Istruzioni complete, permessi e privacy](extensions/cinematch/README.md).
 Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato sullo store.
@@ -40,6 +46,19 @@ nessuna cronologia o accesso generale iniziale ai siti. Addon e sorgenti video
 richiedono permessi opzionali per singolo host. La chiave non viene esposta alle chat.
 La bozza è conservata in memoria per la sessione del browser, senza archivio
 progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
+
+## Aggiornamenti
+
+Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiornamenti**:
+scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
+scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
+quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
+restano perché l’ID e la cartella non cambiano. Il primo passaggio richiede
+ancora lo ZIP 3.6.0; dopo, non serve più scaricare pacchetti manualmente.
+
+L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
+il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
+**Aggiornamenti** spiega anche cosa fare se viene scelta la cartella sbagliata.
 
 ## Correnti e prompt in-chat
 
@@ -83,6 +102,7 @@ fallback nella scheda dedicata.
 [Player in-chat, 3.3.0](docs/estensione-3.3.0-in-chat.md).
 [Addon nel pannello e tema live, 3.4.0](docs/estensione-3.4.0-pannello.md).
 [Launcher correnti e prompt, 3.5.0](docs/estensione-3.5.0-launcher.md).
+[Aggiornamenti integrati, 3.6.0](docs/estensione-3.6.0-aggiornamenti.md).
 
 ## Sviluppo dell'estensione
 
@@ -93,6 +113,7 @@ pnpm test
 pnpm exec playwright install chromium
 pnpm test:browser
 pnpm test:launcher
+pnpm test:updater
 pnpm test:images
 pnpm test:player
 pnpm test:codecs

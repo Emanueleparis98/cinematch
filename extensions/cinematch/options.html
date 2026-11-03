@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>CineMatch · Immagini TMDB</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script></head>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>CineMatch · Immagini TMDB</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script><script type="module" src="updater.js"></script></head>
 <body class="settings-page"><main>
   <div class="brand">CineMatch</div>
   <h1>Il cinema prende forma.</h1>
@@ -14,6 +14,15 @@
     <div class="settings-actions"><button id="save" type="submit" class="primary">Verifica e salva</button><button id="remove" type="button">Rimuovi credenziale</button></div>
     <p id="settings-status" role="status" aria-live="polite"></p>
   </form>
+  <section id="updates"><h2>Aggiornamenti</h2>
+    <p>Versione installata <strong id="update-current">…</strong>. CineMatch può scaricare l’ultima release, verificare il pacchetto e aggiornare la stessa cartella senza perdere TMDB, addon e impostazioni.</p>
+    <div class="update-card">
+      <div class="update-status-row"><p id="update-status" role="status" aria-live="polite">Controllo configurazione…</p><a id="update-release" href="#" target="_blank" rel="noopener noreferrer" hidden>Note della release</a></div>
+      <progress id="update-progress" max="100" value="0" hidden></progress>
+      <div class="update-actions"><button id="update-folder" type="button">Scegli cartella</button><button id="update-check" type="button">Controlla aggiornamenti</button><button id="update-apply" type="button" class="primary" hidden>Aggiorna ora</button></div>
+      <p class="muted small">La prima volta seleziona la cartella da cui hai caricato l’estensione, quella che contiene <code>manifest.json</code>. Dopo l’aggiornamento l’estensione si ricarica da sola; TMDB e addon restano perché l’ID non cambia.</p>
+    </div>
+  </section>
   <section><h2>Da qui, tutto automatico.</h2><p>La credenziale viene verificata e conservata nel browser. Le immagini appaiono sotto i titoli riconosciuti: nessun pulsante, modulo o impostazione dentro la risposta. Gli abbinamenti incerti vengono omessi.</p>
     <p>Il riconoscimento riguarda le risposte dell'AI, non i messaggi dell'utente. TMDB riceve titoli, anni o nomi da cercare; il testo intero della conversazione resta nella chat. Le schede vicine all'area visibile si caricano automaticamente, senza costruire un archivio locale.</p>
   </section>

@@ -84,6 +84,29 @@ jobs:
       - name: Test codec
         run: pnpm test:codecs
 
+      - name: Test aggiornamenti
+        run: pnpm test:updater
+
+      - name: Manifest aggiornamenti
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          version = os.environ["VERSION"]
+          archive = pathlib.Path("dist") / f"CineMatch-Chrome-{version}.zip"
+          data = {
+              "version": version,
+              "zip": archive.name,
+              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+              "size": archive.stat().st_size,
+              "url": f"https://github.com/Emanueleparis98/cinematch/releases/download/v{version}/{archive.name}",
+          }
+          pathlib.Path("dist/latest.json").write_text(
+              json.dumps(data, separators=(",", ":")), encoding="utf-8"
+          )
+          PY
+
       - name: Pubblica release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
@@ -95,3 +118,4 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/CineMatch-Chrome-${{ steps.version.outputs.version }}.zip
+            dist/latest.json
