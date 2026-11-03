@@ -20,7 +20,7 @@ const player=createPlayer({
   onTime:(position,duration)=>handleTime(position,duration),
   onState:name=>handlePlayerState(name),
   onTracks:tracks=>handleTracks(tracks),
-  onFrame:type=>{ $("codecScreen").dataset[type]="decoded"; },
+  onFrame:type=>{ $("codecScreen").dataset[type]="decoded";if(type==="video")setPlayerLoading(false); },
   onError:error=>showPlayerError(error)
 });
 
