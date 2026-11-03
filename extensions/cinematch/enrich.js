@@ -83,7 +83,12 @@
     figure.setAttribute('aria-label', `Immagini di ${item.title ?? item.name}`);
     if (main) {
       const poster = tmdbLink(item.type, item.id, isMovie ? `Guarda ${item.title} con CineMatch` : `Foto di ${item.name}`);
-      if(isMovie){poster.title=`Guarda ${item.title} con CineMatch`;poster.addEventListener('click',event=>{if(!event.isTrusted)return;event.preventDefault();send({type:'watch-open',id:item.id}).catch(()=>window.open(poster.href,'_blank','noopener,noreferrer'));});}
+      if(isMovie){poster.title=`Guarda ${item.title} con CineMatch`;poster.addEventListener('click',event=>{
+        if(!event.isTrusted)return;
+        event.preventDefault();
+        try{if(globalThis.CineMatchCinema?.open({id:item.id,title:item.title,poster:main,posterEl:poster})===true)return;}catch{}
+        send({type:'watch-open',id:item.id}).catch(()=>window.open(poster.href,'_blank','noopener,noreferrer'));
+      });}
       poster.append(photo(main, isMovie ? `Locandina di ${item.title}` : `Foto di ${item.name}`, 'poster'));
       figure.append(poster);
     }

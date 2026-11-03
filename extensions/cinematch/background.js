@@ -22,11 +22,12 @@ async function notifyChats(){
   await Promise.allSettled(tabs.filter(tab=>providerForUrl(tab.url)).map(tab=>chrome.tabs.sendMessage(tab.id,{type:'tmdb-preferences-changed',...status})));
 }
 const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
+const playerPage=sender=>extensionPage(sender,'watch.html')||extensionPage(sender,'cinema.html');
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id||!['watch-open','watch-movie'].includes(message?.type))return false;
   const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);
   if(message.type==='watch-open'&&!chat)return false;
-  if(message.type==='watch-movie'&&!extensionPage(sender,'watch.html'))return false;
+  if(message.type==='watch-movie'&&!playerPage(sender))return false;
   if(!Number.isSafeInteger(message.id)||message.id<1){respond({ok:false,error:'Film non valido.'});return false;}
   (async()=>{
     if(message.type==='watch-movie')return {ok:true,item:await tmdb.details('movie',message.id)};
@@ -37,7 +38,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id||!message?.type?.startsWith("tmdb-"))return false;
   const settings=extensionPage(sender,"options.html");
-  const trusted=settings||extensionPage(sender,"panel.html");
+  const trusted=settings||extensionPage(sender,"panel.html")||extensionPage(sender,"cinema.html");
   const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);
   if(!trusted&&!chat)return false;
   (async()=>{

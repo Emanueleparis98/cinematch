@@ -32,8 +32,12 @@ alla riga del titolo, prima della descrizione anche nei paragrafi con titolo inl
 L'app Windows e il CLI Rust precedenti restano nel repository come versione
 precedente e fonte dei dati; non sono necessari per l'estensione.
 
-Dal clic sulla locandina si passa ora al player in una scheda dell’estensione,
-con il film risolto tramite TMDB/IMDb e le sorgenti degli addon scelti dall’utente.
+Dal clic sulla locandina si apre ora un pannello CineMatch sopra la chat, senza
+cambiare scheda: il film viene risolto tramite TMDB/IMDb, il picker mostra le
+sorgenti degli addon scelti dall’utente e il player parte nello stesso pannello.
+Il tema del picker segue la chat, mentre il player resta scuro; la posizione di
+visione viene ricordata nella sessione. Se l’iframe non può essere incorporato,
+resta disponibile la scheda dedicata come fallback.
 La sezione Addon collega manifest compatibili con Stremio/Nuvio, senza copiare
 il codice GPL del player nativo Nuvio. HTTP, HLS e DASH sono riprodotti nel browser;
 torrent, DRM e header senza proxy conservano i limiti delle rispettive sorgenti.

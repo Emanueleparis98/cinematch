@@ -81,9 +81,103 @@ try{
     await manager.locator('#addon-url').fill(`${base}/bad/manifest.json`);await manager.getByRole('button',{name:'Aggiungi addon',exact:true}).click();await manager.waitForFunction(()=>document.querySelector('#addon-status').classList.contains('error'));assert.equal(await manager.locator('.installed-addon').count(),1);
   });
   const chat=await context.newPage();chat.on('pageerror',e=>errors.push(e.message));await chat.goto('https://chat.deepseek.com/test');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).waitFor({timeout:20000});
+  const focusedChatLabel=()=>chat.evaluate(()=>{let el=document.activeElement;while(el?.shadowRoot?.activeElement)el=el.shadowRoot.activeElement;return el?.getAttribute('aria-label')??null;});
   let player;
-  await check('trusted click on DeepSeek movie poster opens the extension player for the correct TMDB/IMDb film',async()=>{
-    const opened=context.waitForEvent('page');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();player=await opened;player.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});player.on('response',r=>{if(r.status()>=400&&r.url().includes('.wasm'))console.log('WASM ERROR',new URL(r.url()).pathname,r.status());});await player.waitForURL(`chrome-extension://${id}/watch.html?movie=5156`);await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor();assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
+  await check('trusted click on DeepSeek movie poster opens the in-chat overlay with the extension player for the correct TMDB/IMDb film',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    assert.equal(await chat.evaluate(()=>document.documentElement.style.overflow),'hidden');
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible',timeout:10000});
+    assert.ok((await iframe.getAttribute('allow')).includes('fullscreen'));
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame,'the extension player must be a real child frame');
+    await frame.waitForFunction(()=>location.href.includes('cinema.html')&&new URL(location.href).searchParams.get('movie')==='5156',{},{timeout:15000});
+    await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    assert.equal(await frame.locator('#movieTitle').innerText(),'Ladri di biciclette');
+    assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
+    assert.equal(await dialog.locator('.cm-loading').isVisible(),false);
+    await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-picker-v330.png'});
+    await frame.locator('#playBest').click();
+    await frame.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:15000});
+    await chat.screenshot({path:'test-results/overlay-player-v330.png'});
+    await frame.locator('#fullscreen').click();
+    await frame.waitForFunction(()=>document.fullscreenElement?.id==='stage',{},{timeout:5000});
+    await frame.evaluate(()=>document.exitFullscreen()).catch(()=>{});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+    assert.equal(await chat.evaluate(()=>document.documentElement.style.overflow),'');
+    assert.equal(await focusedChatLabel(),'Guarda Ladri di biciclette con CineMatch');
+  });
+  await check('the in-chat overlay plays HLS through the native HLS.js path',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    await frame.getByRole('button',{name:'Riproduci HLS di prova da Cinema di prova'}).waitFor({timeout:20000});
+    await frame.getByRole('button',{name:'Riproduci HLS di prova da Cinema di prova'}).click();
+    await frame.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000}).catch(async()=>{throw new Error(await frame.locator('#playerMessage').innerText());});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+  });
+  await check('the picker follows a dark chat theme and keeps the player dark',async()=>{
+    await chat.evaluate(()=>{document.body.style.background='#14161a';document.body.style.color='#ececec';});
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    assert.equal(await frame.evaluate(()=>document.documentElement.dataset.theme),'dark');
+    assert.equal(await frame.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(15, 20, 29)');
+    await frame.locator('#jsonFile').setInputFiles({name:'extra.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'Extra test',url:`${base}/pattern.mp4`}]}))});
+    await frame.getByRole('button',{name:'Riproduci Extra test da extra.json'}).waitFor({timeout:5000});
+    await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-dark-v330.png'});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+  });
+  await check('a saved session resume point is offered in the picker',async()=>{
+    await manager.evaluate(()=>chrome.storage.session.set({'resume:5156':42}));
+    try{
+      await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+      const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+      const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+      let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+      assert.ok(frame);
+      await frame.locator('#resumePlay').waitFor({state:'visible',timeout:10000});
+      assert.equal(await frame.locator('#resumeTime').innerText(),'0:42');
+      await frame.locator('#resumePlay').click();
+      await frame.waitForFunction(()=>!document.querySelector('#playerView').hidden&&document.querySelector('video').currentTime>4,{},{timeout:15000});
+      await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+    }finally{await manager.evaluate(()=>chrome.storage.session.remove('resume:5156'));}
+  });
+  await check('the in-chat overlay plays an integrated MKV HEVC/AC3 stream inside the same dialog',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    await frame.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    await frame.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).click();
+    await frame.waitForFunction(()=>document.querySelector('#codecScreen').dataset.audio==='decoded'&&document.querySelector('#codecScreen').dataset.video==='decoded'&&document.querySelector('#playerLoading').hidden,{},{timeout:30000}).catch(async()=>{throw new Error(await (await frame.locator('#playerMessage').count()?frame.locator('#playerMessage').innerText():frame.locator('#playerLoading').innerText()));});
+    await frame.waitForTimeout(400);
+    await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-integrated-v330.png'});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+  });
+  await check('the in-chat overlay closes with Esc from inside the iframe and restores focus without a new tab',async()=>{
+    const pagesBefore=context.pages().length;
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    await frame.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+    await dialog.waitFor({state:'hidden',timeout:5000});
+    assert.equal(await focusedChatLabel(),'Guarda Ladri di biciclette con CineMatch');
+    assert.equal(context.pages().length,pagesBefore,'overlay must not create a new tab');
+  });
+  await check('the standalone player remains available for addon management and full player checks',async()=>{
+    player=await context.newPage();player.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});player.on('response',r=>{if(r.status()>=400&&r.url().includes('.wasm'))console.log('WASM ERROR',new URL(r.url()).pathname,r.status());});
+    await player.goto(`chrome-extension://${id}/watch.html?movie=5156`);
+    await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');
   });
   await check('stream output is inert text, with torrent and header-only sources explicitly unavailable',async()=>{
     assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),5);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));

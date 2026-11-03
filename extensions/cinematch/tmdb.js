@@ -14,7 +14,7 @@ export function validateReference(value){
 }
 function person(p){return {id:p.id,name:p.name??'',role:p.character??p.job??p.known_for_department??'',photo:safeImagePath(p.profile_path)};}
 export function summarizeMovie(data){
-  return {type:'movie',id:data.id,imdbId:/^tt\d{5,12}$/.test(data.imdb_id??'')?data.imdb_id:null,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
+  return {type:'movie',id:data.id,imdbId:/^tt\d{5,12}$/.test(data.imdb_id??'')?data.imdb_id:null,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),runtime:Number.isFinite(data.runtime)&&data.runtime>0?data.runtime:null,genres:(data.genres??[]).map(g=>g.name).filter(name=>typeof name==='string').slice(0,5),overview:typeof data.overview==='string'?data.overview.slice(0,1600):'',rating:Number.isFinite(data.vote_average)&&data.vote_average>0?Math.round(data.vote_average*10)/10:null,votes:Number.isFinite(data.vote_count)?data.vote_count:null,directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
 }
 export function chooseMatch(results,ref){
   if(ref.type==='person'){
