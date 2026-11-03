@@ -27,7 +27,9 @@ export class RangeReader {
         await response.body?.cancel().catch(()=>{});this.resolvedUrl=null;this.requestCount++;response=await this.fetcher(this.url,init);
       }
       if(!response.ok)throw new Error(`Il server video ha risposto con errore ${response.status}. Aggiorna le sorgenti o riprova.`);
-      const range=response.headers.get('content-range')?.match(/^\s*bytes\s+(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)\s*$/i);
+      const header=response.headers.get('content-range');
+      if(response.status===206&&!header)throw Object.assign(new Error('Il browser non rende disponibile Content-Range dal server video. Verifica il permesso di accesso al server e riprova.'),{rangeCode:'RANGE_HEADER_MISSING'});
+      const range=header?.match(/^\s*bytes\s+(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)\s*$/i);
       const total=range?Number(range[3]):Number(response.headers.get('content-length'));
       if(response.status===206&&(!range||Number(range[1])!==start||!Number.isSafeInteger(Number(range[2]))||Number(range[2])<start||Number(range[2])>=total))throw new Error('Il server ha restituito un intervallo video non valido.');
       if(!Number.isSafeInteger(total)||total<1)throw new Error('Il server non comunica la dimensione necessaria alla lettura del video a blocchi.');

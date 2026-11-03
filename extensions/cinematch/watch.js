@@ -2,6 +2,7 @@ import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStre
 import {enhanceSelects,refreshSelects} from './controls.js';
 import {declaredCodecs,compatibility,probePlayback,nativePlaybackError} from './playback.js';
 import {createCodecPlayer} from './codec-player.js';
+import {mediaPermission,playbackPermissions,permissionLabel} from './media-access.js';
 const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const prefix='streamAddon:';let addons=[],movie=null,groups=[],generation=0,searchAbort=null,hls=null,selected=null,blockedUrl=null,playGeneration=0,playTimer,probeAbort,failure=null;
 const video=$('video');video.crossOrigin='anonymous';
@@ -9,7 +10,7 @@ let integrated=null,engineMode='native',engineCleanup=Promise.resolve(),scrubbin
 const codecCache=new Map(),checkCodecs=codecs=>compatibility(codecs,mime=>{if(!codecCache.has(mime))codecCache.set(mime,video.canPlayType(mime));return codecCache.get(mime);});
 const status=(id,text,error=false)=>{$(id).textContent=text;$(id).classList.toggle('error',error);};
 const allowed=async url=>chrome.permissions.contains({origins:[permissionOrigin(url)]});
-async function grant(url){if(await allowed(url))return true;return chrome.permissions.request({origins:[permissionOrigin(url)]});}
+function grant(url){return chrome.permissions.request({origins:[mediaPermission(url)]});}
 function tab(name){const isAddons=name==='addons';$('addons-pane').hidden=!isAddons;$('player-pane').hidden=isAddons;$('show-addons').setAttribute('aria-pressed',String(isAddons));$('show-player').setAttribute('aria-pressed',String(!isAddons));history.replaceState(null,'',location.pathname+location.search+(isAddons?'#addons':''));}
 $('show-addons').onclick=()=>tab('addons');$('setup-addons').onclick=()=>{tab('addons');$('addon-url').focus();};$('show-player').onclick=()=>tab('player');
 async function readAddons(){
@@ -69,8 +70,14 @@ $('source-filter').onchange=renderStreams;$('refresh-streams').onclick=loadStrea
 async function playStream(stream){
   const current=++playGeneration;selected=stream;stopVideo();failure=null;probeAbort=new AbortController();renderStreams();status('playback-status','Verifica della sorgente e del formato…');
   try{
+    // Request directly in the click handler, before asynchronous cleanup can
+    // expire Chrome's user activation. Known RD streams include rotating CDNs.
+    const origins=playbackPermissions(stream);
+    if(!await chrome.permissions.request({origins})){
+      for(const origin of origins)if(!await chrome.permissions.contains({origins:[origin]}))throw Object.assign(new Error(`Accesso a ${permissionLabel(origin)} non concesso. Premi Consenti per autorizzare il server video.`),{mediaOrigin:origin});
+      throw new Error('Accesso alla sorgente non concesso. Premi Riprova per consentirlo.');
+    }
     await engineCleanup;if(current!==playGeneration)return;
-    if(!await grant(stream.url))throw new Error('Accesso alla sorgente non concesso. Premi Riprova per consentirlo.');
     if(current!==playGeneration)return;
     const probe=await probePlayback(stream.url,{signal:probeAbort.signal});
     if(current!==playGeneration)return;
@@ -102,7 +109,7 @@ async function startIntegrated(stream,current,probe={}){
   playTimer=setTimeout(()=>{if(active()){stopVideo();playbackError('La sorgente impiega troppo tempo ad avviarsi. Riprova o scegli un altro flusso.',3);}},25000);
   let ext=probe.kind==='matroska'?'mkv':'mp4';try{const match=new URL(stream.url).pathname.match(/\.(mkv|webm|avi|mp4|mov|flv|ts|mpg|mpeg)$/i);if(match)ext=match[1];}catch{}
   const candidate=await createCodecPlayer({container:$('codec-screen'),url:stream.url,kind:probe.kind==='dash'||stream.kind==='dash'?'dash':probe.kind==='hls'||stream.kind==='hls'?'hls':'video',ext,
-    onState:state=>{if(!active())return;$('codec-toggle').textContent=state==='playing'?'Pausa':'Riproduci';status('playback-status',({loading:'Caricamento del video con decoder integrati…',playing:`In riproduzione · ${stream.name} · decoder integrati`,paused:'In pausa',ended:'Riproduzione terminata.'})[state]??state);if(state==='playing'){clearTimeout(playTimer);$('retry-play').hidden=true;$('resume-play').hidden=true;}},
+    onState:state=>{if(!active()||failure)return;$('codec-toggle').textContent=state==='playing'?'Pausa':'Riproduci';status('playback-status',({loading:'Caricamento del video con decoder integrati…',playing:`In riproduzione · ${stream.name} · decoder integrati`,paused:'In pausa',ended:'Riproduzione terminata.'})[state]??state);if(state==='playing'){clearTimeout(playTimer);$('retry-play').hidden=true;$('resume-play').hidden=true;}},
     onTime:(position,duration)=>{if(!active())return;$('codec-seek').max=String(Math.max(1,duration||0));if(!scrubbing)$('codec-seek').value=String(Math.max(0,position));$('codec-time').value=`${clock(position)} / ${clock(duration)}`;},
     onFrame:type=>{if(active())$('codec-screen').dataset[type]='decoded';},
     onTracks:tracks=>{if(!active())return;$('codec-audio').replaceChildren(...tracks.audio.map(t=>new Option(t.label,String(t.id))));$('codec-audio').value=String(tracks.selectedAudio);$('codec-audio-wrap').hidden=tracks.audio.length<2;$('codec-subtitle').replaceChildren(new Option('Disattivati','off'),...tracks.subtitles.map(t=>new Option(t.label,String(t.id))));$('codec-subtitle-wrap').hidden=!tracks.subtitles.length;refreshSelects();},
@@ -118,10 +125,10 @@ $('codec-audio').onchange=()=>integrated?.audio($('codec-audio').value).catch(()
 $('codec-subtitle').onchange=()=>integrated?.subtitle($('codec-subtitle').value).catch(()=>playbackError('Traccia sottotitoli non disponibile.',3));
 $('codec-fullscreen').onclick=()=>{const operation=document.fullscreenElement?document.exitFullscreen():$('playback-stage').requestFullscreen();operation.catch(()=>{});};
 $('playback-stage').onkeydown=event=>{if(!integrated||event.target.matches('button,input,select,[role=combobox]'))return;if(event.key===' '){event.preventDefault();toggleCodec();}else if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();integrated.seek(integrated.currentTime+(event.key==='ArrowRight'?5:-5)).catch(()=>{});}else if(event.key==='f')$('codec-fullscreen').click();};
-function reportPlaybackError(error){if(error.mediaOrigin){blockedUrl=error.mediaOrigin;$('grant-media').textContent=`Consenti ${httpUrl(blockedUrl).host}`;$('grant-media').hidden=false;}playbackError(error.message,3,error.recovery);}
+function reportPlaybackError(error){if(error.mediaOrigin){blockedUrl=error.mediaOrigin;$('grant-media').textContent=`Consenti ${permissionLabel(blockedUrl)}`;$('grant-media').hidden=false;}playbackError(error.message,error.mediaOrigin?4:3,error.recovery);}
 function playbackError(message,priority=2,recovery='retry'){if(failure&&failure.priority>priority)return;failure={message,priority,recovery};clearTimeout(playTimer);status('playback-status',message,true);$('retry-play').textContent=recovery==='choose'?'Scegli un altro flusso':'Riprova riproduzione';$('retry-play').hidden=false;}
 async function attemptPlay(current=playGeneration){try{await video.play();}catch(error){if(current!==playGeneration||engineMode==='integrated')return;if(error.name==='NotAllowedError'){clearTimeout(playTimer);status('playback-status','Sorgente pronta. Premi Avvia video.');$('resume-play').hidden=false;}else if(error.name!=='AbortError')await startIntegrated(selected,current).catch(error=>{if(current===playGeneration)reportPlaybackError(error);});}}
-$('retry-play').onclick=()=>{if(failure?.recovery==='choose'){$('stream-list').scrollIntoView({block:'start'});$('stream-list').querySelector('.stream-row:not(.selected) button')?.focus({preventScroll:true});}else if(selected)playStream(selected);};$('resume-play').onclick=()=>attemptPlay();$('grant-media').onclick=async()=>{if(blockedUrl&&await grant(blockedUrl))await playStream(selected);};
+$('retry-play').onclick=()=>{if(failure?.recovery==='choose'){$('stream-list').scrollIntoView({block:'start'});$('stream-list').querySelector('.stream-row:not(.selected) button')?.focus({preventScroll:true});}else if(selected)playStream(selected);};$('resume-play').onclick=()=>attemptPlay();$('grant-media').onclick=async()=>{try{if(blockedUrl&&await grant(blockedUrl))await playStream(selected);else status('playback-status','Accesso non concesso. Premi Consenti per autorizzare il server video.',true);}catch{status('playback-status','Chrome non ha concesso il permesso. Riprova dal pulsante Consenti.',true);}};
 video.addEventListener('playing',()=>{if(engineMode==='integrated')return;failure=null;clearTimeout(playTimer);status('playback-status',selected?`In riproduzione · ${selected.name}`:'In riproduzione');$('retry-play').hidden=true;$('resume-play').hidden=true;});
 video.addEventListener('waiting',()=>{if(engineMode==='native'&&selected&&!failure)status('playback-status','Caricamento del video…');});
 video.addEventListener('pause',()=>{if(engineMode==='native'&&selected&&!failure&&!video.ended&&!video.error)status('playback-status','In pausa');});

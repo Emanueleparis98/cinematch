@@ -118,8 +118,10 @@ try{
     await importSource('DASH','pattern.mpd');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});await player.locator('#codec-toggle').click();
   });
   await check('legacy AVI automatically falls back to integrated decoding and switching back stops the old player',async()=>{
-    await importSource('AVI','pattern-mpeg4-mp3.avi');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
-    await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.equal(await player.locator('#codec-controls').isVisible(),false);await player.locator('video').evaluate(v=>v.pause());
+    for(let attempt=0;attempt<3;attempt++){
+      await importSource('AVI','pattern-mpeg4-mp3.avi');await player.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:20000}).catch(async()=>{throw new Error(await player.locator('#playback-status').innerText());});
+      await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.3);assert.equal(await player.locator('#codec-controls').isVisible(),false);await player.locator('video').evaluate(v=>v.pause());
+    }
   });
   await mkdir('test-results',{recursive:true});
   await check('player and addon layouts fit 320px, 600px and desktop without horizontal overflow',async()=>{
@@ -143,6 +145,11 @@ try{
     await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).uncheck();await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({state:'detached'});await manager.reload();await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).waitFor();assert.equal(await manager.getByRole('checkbox',{name:'Attiva Cinema di prova'}).isChecked(),false);
     await manager.getByRole('button',{name:'Rimuovi Cinema di prova'}).click();await manager.locator('#installed-empty').waitFor();
   });
+  await check('RD download permission is requested in the trusted playback click before any network access',async()=>{
+    await player.evaluate(()=>{window.originalPermissionRequest=chrome.permissions.request;chrome.permissions.request=async args=>{window.requestedPlaybackPermission={...args,activation:navigator.userActivation.isActive};return false;};});
+    try{await importSource('[RD⚡] Comet di prova','pattern-hevc-ac3.mkv');await player.waitForFunction(()=>window.requestedPlaybackPermission);const request=await player.evaluate(()=>window.requestedPlaybackPermission);assert.ok(request.origins.includes('https://*.download.real-debrid.com/*'));assert.ok(request.origins.includes('http://127.0.0.1/*'));assert.equal(request.activation,true);await player.locator('#grant-media').waitFor({state:'visible'});assert.equal(await player.locator('#grant-media').innerText(),'Consenti Real-Debrid');}
+    finally{await player.evaluate(()=>{chrome.permissions.request=window.originalPermissionRequest;delete window.originalPermissionRequest;});}
+  });
   await check('cross-host redirect without CORS reproduces the network error and offers the exact CDN permission',async()=>{
     assert.equal(await player.evaluate(()=>chrome.permissions.contains({origins:['http://127.0.0.2/*']})),false);
     assert.equal(await player.evaluate(async url=>{try{await fetch(url,{headers:{Range:'bytes=0-65535'}});return false;}catch{return true;}},`${base}/cdn-redirect`),true,'unmodified fetch must reproduce the reported network failure');
@@ -152,9 +159,21 @@ try{
   await check('the same no-CORS HEVC/AC3 redirect decodes with the destination host granted',async()=>{
     // Separate disposable profile supplies the optional grant that headless
     // Chromium cannot accept through its native permission prompt.
-    extensionManifest.host_permissions.push('http://127.0.0.2/*');await writeFile(join(extension,'manifest.json'),JSON.stringify(extensionManifest));
+    extensionManifest.host_permissions.push('http://127.0.0.2/*','https://*.download.real-debrid.com/*');await writeFile(join(extension,'manifest.json'),JSON.stringify(extensionManifest));
     const granted=await chromium.launchPersistentContext(join(profile,'granted'),{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
-    try{const w=granted.serviceWorkers()[0]||await granted.waitForEvent('serviceworker'),host=new URL(w.url()).host,p=await granted.newPage();await p.goto(`chrome-extension://${host}/watch.html`);await p.locator('#stream-file').setInputFiles({name:'redirect.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'CDN MKV HEVC AC3',url:`${base}/cdn-redirect`}]}))});await p.getByRole('button',{name:'Riproduci CDN MKV HEVC AC3 da redirect.json'}).click();await p.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await p.locator('#playback-status').innerText());});assert.equal(await p.locator('#grant-media').isVisible(),false);}
+    try{const w=granted.serviceWorkers()[0]||await granted.waitForEvent('serviceworker'),host=new URL(w.url()).host,p=await granted.newPage();await p.goto(`chrome-extension://${host}/watch.html`);await p.locator('#stream-file').setInputFiles({name:'redirect.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'CDN MKV HEVC AC3',url:`${base}/cdn-redirect`}]}))});await p.getByRole('button',{name:'Riproduci CDN MKV HEVC AC3 da redirect.json'}).click();await p.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await p.locator('#playback-status').innerText());});assert.equal(await p.locator('#grant-media').isVisible(),false);
+      await granted.route('https://*.download.real-debrid.com/cinematch-fixture/**',async route=>{
+        const file=files.get('pattern-hevc-ac3.mkv'),match=route.request().headers().range?.match(/bytes=(\d+)-(\d+)/),start=match?Number(match[1]):0,end=match?Math.min(Number(match[2]),file.length-1):file.length-1;
+        await route.fulfill({status:206,headers:{'Content-Type':'application/force-download','Content-Range':`bytes ${start}-${end}/${file.length}`,'Content-Length':String(end-start+1)},body:file.subarray(start,end+1)});
+      });
+      await check('one download-domain grant covers two rotating RD hosts without server CORS headers',async()=>{
+        for(const host of ['23-4','104-4']){
+          assert.equal(await p.evaluate(host=>chrome.permissions.contains({origins:[`https://${host}.download.real-debrid.com/*`]}),host),true);
+          await p.locator('#stream-file').setInputFiles({name:'rd-fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[{name:'[RD⚡] HEVC AC3 '+host,url:`https://${host}.download.real-debrid.com/cinematch-fixture/movie.mkv`}]}))});
+          await p.getByRole('button',{name:`Riproduci [RD⚡] HEVC AC3 ${host} da rd-fixture.json`}).click();await p.waitForFunction(()=>document.querySelector('#codec-screen').dataset.audio==='decoded'&&document.querySelector('#codec-screen').dataset.video==='decoded',{},{timeout:30000}).catch(async()=>{throw new Error(await p.locator('#playback-status').innerText());});assert.equal(await p.locator('#grant-media').isVisible(),false);
+        }
+      });
+    }
     finally{await granted.close();}
   });
   assert.deepEqual(errors,[]);console.log(`${passed} player/browser checks passed. No external accounts or AI calls.`);

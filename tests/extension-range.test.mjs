@@ -94,3 +94,8 @@ test('range syntax tolerates surrounding whitespace while impossible intervals r
     const broken=new RangeReader('https://cdn.test/movie',{fetcher:async()=>new Response('x',{status:206,headers:{'content-range':range}})});await assert.rejects(broken.open(),/intervallo video non valido|dimensione/);await broken.stop();
   }
 });
+
+test('missing CORS-exposed range headers have a distinct diagnostic from invalid byte offsets',async()=>{
+  const reader=new RangeReader('https://cdn.test/movie',{fetcher:async()=>new Response('data',{status:206,headers:{'content-length':'4'}})});
+  await assert.rejects(reader.open(),e=>e.rangeCode==='RANGE_HEADER_MISSING'&&e.message.includes('Content-Range')&&!e.message.includes('intervallo video non valido'));await reader.stop();
+});

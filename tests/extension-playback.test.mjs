@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {declaredCodecs,compatibility,inspectPrefix,probePlayback,nativePlaybackError} from '../extensions/cinematch/playback.js';
-import {mediaFetch} from '../extensions/cinematch/media-access.js';
+import {mediaFetch,mediaPermission,playbackPermissions,RD_DOWNLOADS} from '../extensions/cinematch/media-access.js';
 import {RangeReader} from '../extensions/cinematch/range-reader.js';
 const text=value=>new TextEncoder().encode(value);
 test('Comet release labels identify HEVC/AC3 and do not confuse EAC3 with AC3',()=>{
@@ -64,4 +64,39 @@ test('permitted redirects pass through and abort never asks for a new host',asyn
   const listeners=new Set(),api={runtime:{getURL:()=> 'chrome-extension://test/'},webRequest:{onBeforeRedirect:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}},permissions:{contains:async()=>true}};
   const response=await mediaFetch('https://addon.test/play',{}, {api,fetcher:async()=>new Response('ok')});assert.equal(await response.text(),'ok');assert.equal(listeners.size,0);
   const abort=new AbortController();abort.abort();await assert.rejects(mediaFetch('https://addon.test/play',{signal:abort.signal},{api,fetcher:async()=>{throw new DOMException('Stopped','AbortError');}}),e=>e.name==='AbortError');assert.equal(listeners.size,0);
+});
+
+test('RD playback requests only its download subdomains and matching is not fooled by lookalike domains',()=>{
+  assert.deepEqual(playbackPermissions({url:'https://addon.test/play',name:'[RD⚡] Comet 2160p'}),['https://addon.test/*',RD_DOWNLOADS]);
+  assert.equal(mediaPermission('https://104-4.download.real-debrid.com/movie'),RD_DOWNLOADS);
+  assert.equal(mediaPermission('https://download.real-debrid.com.evil.test/movie'),'https://download.real-debrid.com.evil.test/*');
+  assert.equal(mediaPermission('http://104-4.download.real-debrid.com/movie'),'http://104-4.download.real-debrid.com/*');
+  assert.deepEqual(playbackPermissions({url:'https://addon.test/play',name:'Cinema di prova'}),['https://addon.test/*']);
+});
+
+test('missing rotating RD host grants produce one service permission before touching the network',async()=>{
+  let fetched=false;
+  await assert.rejects(mediaFetch('https://23-4.download.real-debrid.com/private',{}, {api:{permissions:{contains:async()=>false}},fetcher:async()=>{fetched=true;}}),e=>e.mediaOrigin===RD_DOWNLOADS&&!e.message.includes('private'));
+  assert.equal(fetched,false);
+});
+
+test('a CORS-failed redirect is retried directly only after the destination is authorized',async()=>{
+  let listener;const seen=[],api={runtime:{getURL:()=> 'chrome-extension://test/'},webRequest:{onBeforeRedirect:{addListener:fn=>listener=fn,removeListener:()=>{}}},permissions:{contains:async()=>true}};
+  const response=await mediaFetch('https://addon.test/play?name=A%20B',{}, {api,fetcher:async url=>{
+    seen.push(url);if(seen.length===1){listener({initiator:'chrome-extension://test',url:'https://addon.test/play?name=A+B',requestId:'a',redirectUrl:'https://cdn.test/private?token=secret'});throw new TypeError('CORS');}
+    return new Response('data',{status:206,headers:{'content-range':'bytes 0-3/4'}});
+  }});
+  assert.deepEqual(seen,['https://addon.test/play?name=A%20B','https://cdn.test/private?token=secret']);assert.equal(response.headers.get('content-range'),'bytes 0-3/4');await response.body.cancel();
+});
+
+test('CORS-filtered range headers are replaced by an authorized direct fetch and the old body is cancelled',async()=>{
+  let listener,cancelled=false;const api={runtime:{getURL:()=> 'chrome-extension://test/'},webRequest:{onBeforeRedirect:{addListener:fn=>listener=fn,removeListener:()=>{}}},permissions:{contains:async()=>true}};
+  const response=await mediaFetch('https://addon.test/play',{}, {api,fetcher:async url=>{
+    if(url==='https://addon.test/play'){
+      listener({initiator:'chrome-extension://test',url,requestId:'a',redirectUrl:'https://cdn.test/movie'});
+      return new Response(new ReadableStream({cancel(){cancelled=true;}}),{status:206,headers:{'content-length':'4'}});
+    }
+    return new Response('test',{status:206,headers:{'content-range':'bytes 0-3/4'}});
+  }});
+  assert.equal(cancelled,true);assert.equal(response.headers.get('content-range'),'bytes 0-3/4');await response.body.cancel();
 });

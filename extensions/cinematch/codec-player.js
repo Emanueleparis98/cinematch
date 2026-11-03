@@ -24,6 +24,6 @@ export async function createCodecPlayer({container,url,kind='video',ext='mkv',on
     async seek(seconds){if(loaded&&!destroyed){const position=Math.max(0,Math.min(duration(),seconds));await player.seek(BigInt(Math.round(position*1000)));if(!playing)pausedPosition=position;onTime(position,duration());}},
     volume(value){if(!destroyed)player.setVolume(Math.max(0,Math.min(1,value)));},async audio(id){if(!destroyed)await player.selectAudio(Number(id));},
     async subtitle(id){if(destroyed)return;if(id==='off')player.setSubtitleEnable(false);else{await player.selectSubtitle(Number(id));player.setSubtitleEnable(true);}},
-    async destroy(){if(destroyed)return;destroyed=true;clearInterval(timer);await reader?.stop();await player.destroy().catch(()=>{});container.replaceChildren();}
+    async destroy(){if(destroyed)return;destroyed=true;clearInterval(timer);if(loaded&&playing)await player.pause().catch(()=>{});await reader?.stop();await player.destroy().catch(()=>{});container.replaceChildren();}
   };return adapter;
 }
