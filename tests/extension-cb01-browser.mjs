@@ -186,7 +186,12 @@ try{
     await options.locator('#cb01-toggle').click();
     await options.waitForFunction(()=>document.querySelector('#cb01-status').textContent.startsWith('Disattivo'),{},{timeout:15000});
     assert.deepEqual(await worker.evaluate(async()=>await chrome.declarativeNetRequest.getEnabledRulesets()),[]);
-    assert.equal(await worker.evaluate(async()=>{const scripts=await chrome.scripting.getRegisteredContentScripts();return scripts.some(script=>script.id.startsWith('cinematch-cb01'));}),false);
+    let remaining=true;
+    for(let i=0;i<30&&remaining;i++){
+      remaining=await worker.evaluate(async()=>{const scripts=await chrome.scripting.getRegisteredContentScripts();return scripts.some(script=>script.id.startsWith('cinematch-cb01'));});
+      if(remaining)await options.waitForTimeout(100);
+    }
+    assert.equal(remaining,false);
     const page=await context.newPage();await page.goto('https://cb01one.org/');await page.waitForTimeout(700);
     assert.equal(await page.locator('.cm-cb01-card-link').count(),0);
     await page.close();

@@ -233,7 +233,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(!settings)return false;
     (async()=>{
       await chrome.storage.local.set({cb01Mode:false});
-      disableCb01().catch(()=>{});
+      await Promise.race([disableCb01().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,3000))]);
       respond({ok:true,enabled:false,allowed:await chrome.permissions.contains({origins:CB01_ORIGINS})});
     })().catch(error=>respond({ok:false,error:error.message}));
     return true;
