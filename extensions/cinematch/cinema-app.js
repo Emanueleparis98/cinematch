@@ -10,7 +10,7 @@ const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const formatTime=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
 const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(value)||value<1)return "";const h=Math.floor(value/60),m=value%60;return h?`${h}h ${m}m`:`${m}m`;};
 
-const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null};
+const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null};
 const embedded=window.parent!==window;
 const mediaPhrase=()=>state.kind==="tv"?"questa serie":"questo film";
 const episodeLabel=()=>state.kind==="tv"&&state.season!==null&&state.episode!==null?`S${state.season} E${state.episode}`:"";
@@ -104,8 +104,8 @@ function showPlayer(stream){
   state.view="player";state.selected=stream.id;
   document.body.classList.add("player-mode");document.body.classList.remove("addons-mode");
   $("pickerView").hidden=true;$("addonsView").hidden=true;$("playerView").hidden=false;
-  $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
-  $("backToPicker").textContent=state.kind==="tv"?"← Serie":"← Film";
+  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
+  $("backToPicker").textContent=state.direct?(state.kind==="tv"?"← Episodi":"← Sorgente"):state.kind==="tv"?"← Serie":"← Film";
   $("playerTitle").textContent=state.movie?.title??(state.kind==="tv"?"Serie":"Film");
   const presentation=present(stream),episode=state.kind==="tv"?`${episodeLabel()}${state.episodeTitle?` · ${state.episodeTitle}`:""}`:"";
   $("playerSource").textContent=`${episode?`${episode} · `:""}${stream.groupName??"Sorgente"} · ${presentation.quality}`;
@@ -123,13 +123,14 @@ function showPicker(){
   state.selected=null;
   document.body.classList.remove("player-mode","addons-mode");
   $("playerView").hidden=true;$("addonsView").hidden=true;$("pickerView").hidden=false;
-  $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
-  $("backToPicker").textContent=state.kind==="tv"?"← Serie":"← Film";
+  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
+  $("backToPicker").textContent=state.direct?(state.kind==="tv"?"← Episodi":"← Sorgente"):state.kind==="tv"?"← Serie":"← Film";
   closeDrawer();renderSources();
   (state.kind==="tv"?$("seasonSelect"):$("playBest")).focus({preventScroll:true});
   updateResume();
 }
 function showAddons(){
+  if(state.direct)return;
   saveResume();
   player.pause().catch(()=>{});
   state.view="addons";
@@ -230,6 +231,7 @@ function present(stream){
 }
 
 function renderChips(){
+  if(state.direct){const container=$("addonChips");container.replaceChildren();container.hidden=true;return;}
   if(state.filter!=="all"&&!state.groups.some(group=>group.key===state.filter))state.filter="all";
   const container=$("addonChips");container.replaceChildren();
   if(!state.groups.length){container.hidden=true;return;}
@@ -288,8 +290,24 @@ function renderSourceCard(stream,compact=false){
   if(stream.playable)card.addEventListener("click",event=>{if(!event.target.closest("button,a"))startStream(stream);});
   return card;
 }
+function renderDirectSources(){
+  const list=$("sourceList");list.replaceChildren();
+  const stream=state.directStream;
+  if(state.loading&&!stream){renderSkeletons();$("sourcesStatus").textContent=state.kind==="tv"?"Cerco la sorgente dell’episodio…":"Cerco la sorgente CB01…";$("playBest").disabled=true;return;}
+  if(!stream){
+    const empty=el("div",undefined,"cm-empty");
+    empty.innerHTML='<h3>Nessuna sorgente pronta</h3><p>Scegli un episodio o riprova dalla pagina CB01.</p>';
+    list.append(empty);$("sourcesStatus").textContent="Nessuna sorgente CB01 pronta.";$("playBest").disabled=true;return;
+  }
+  state.groups=[{key:"cb01",name:"CB01",streams:[stream],error:null,permission:null}];
+  state.recommended=stream;state.recommendedId=stream.id;
+  list.append(renderSourceCard(stream));
+  $("playBest").disabled=!stream.playable;
+  $("sourcesStatus").textContent=`CB01 · ${stream.name}${state.kind==="tv"&&episodeLabel()?` · ${episodeLabel()}`:""} · senza pubblicità`;
+}
 function renderSources(){
   $("sourcesStatus").classList.remove("error");
+  if(state.direct){renderDirectSources();return;}
   const list=$("sourceList");
   if(!state.addons.length){renderEmpty();$("playBest").disabled=true;return;}
   if(!state.addons.some(addon=>addon.enabled)){renderNoActiveAddons();$("playBest").disabled=true;return;}
@@ -322,6 +340,7 @@ async function loadAddons(){
   }).sort((a,b)=>a.name.localeCompare(b.name,"it"));
 }
 async function loadStreams(){
+  if(state.direct){state.loading=false;renderSources();return;}
   if(!state.movie){state.loading=false;return;}
   const series=state.kind==="tv";
   if(series&&(state.season===null||state.episode===null)){state.loading=false;return;}
@@ -361,6 +380,24 @@ async function startStream(stream,{resumeAt=0}={}){
 /* ---------- Media, episodes and poster ---------- */
 function renderMedia(){
   const item=state.movie,tv=state.kind==="tv";
+  if(state.direct){
+    const seasons=item.seasons??[];
+    $("movieTitle").textContent=item.title||(tv?"Serie":"Film");
+    $("moviePoster").alt=item.title?`Locandina di ${item.title}`:"";
+    $("movieOriginal").textContent=item.originalTitle&&item.originalTitle!==item.title?item.originalTitle:"";
+    const meta=tv?[item.year,seasons.length?`${seasons.length} stagion${seasons.length===1?"e":"i"}`:null,...(item.genres??[])]:[item.year,...(item.genres??[])];
+    $("movieMeta").replaceChildren(...meta.filter(Boolean).map(value=>el("span",value)));
+    $("movieRating").hidden=true;
+    $("movieCredits").replaceChildren("CB01 · ","pubblicità bloccata");
+    $("movieOverview").textContent="";
+    $("tmdbLink").hidden=true;
+    $("manageAddons").hidden=true;
+    $("posterFallback").textContent=(item.title||"CM").split(/\s+/).map(word=>word[0]).join("").slice(0,2).toUpperCase();
+    $("backToPicker").textContent=tv?"← Episodi":"← Sorgente";
+    $("episodeControls").hidden=!tv;
+    document.title=`${item.title??(tv?"Serie":"Film")} · CineMatch`;
+    return;
+  }
   $("movieTitle").textContent=item.title||(tv?"Serie":"Film");
   $("moviePoster").alt=item.title?`Locandina di ${item.title}`:"";
   $("movieOriginal").textContent=item.originalTitle&&item.originalTitle!==item.title?item.originalTitle:"";
@@ -372,6 +409,7 @@ function renderMedia(){
   $("movieCredits").replaceChildren(tv?"Creata da ":"Regia di ",el("strong",directors.join(", ")||"n.d."),cast.length?` · con ${cast.join(", ")}`:"");
   $("movieOverview").textContent=item.overview??"";
   $("tmdbLink").href=`https://www.themoviedb.org/${tv?"tv":"movie"}/${item.id}`;$("tmdbLink").hidden=false;
+  $("manageAddons").hidden=false;
   $("posterFallback").textContent=(item.title||"CM").split(/\s+/).map(word=>word[0]).join("").slice(0,2).toUpperCase();
   $("backToPicker").textContent=tv?"← Serie":"← Film";
   $("episodeControls").hidden=!tv;
@@ -379,12 +417,21 @@ function renderMedia(){
 }
 async function loadPoster(){
   if(!state.movie?.poster)return;
+  if(state.direct){
+    $("moviePoster").src=state.movie.poster;$("moviePoster").hidden=false;$("posterFallback").hidden=true;
+    state.poster=state.movie.poster;return;
+  }
   const result=await send({type:"tmdb-image",path:state.movie.poster,size:"w342"});
   $("moviePoster").src=result.data;$("moviePoster").hidden=false;$("posterFallback").hidden=true;
   state.poster=result.data;
 }
 function resumeKey(){
   if(!state.movie)return null;
+  if(state.direct){
+    const key=encodeURIComponent(state.directKey??state.movie.title??"cb01");
+    if(state.kind==="tv")return state.season===null||state.episode===null?null:`resume:cb01:${key}:${state.season}:${state.episode}`;
+    return `resume:cb01:${key}`;
+  }
   if(state.kind==="tv")return state.season===null||state.episode===null?null:`resume:tv:${state.movie.id}:${state.season}:${state.episode}`;
   return `resume:${state.movie.id}`;
 }
@@ -403,6 +450,7 @@ function saveResume(){
 }
 function seasonLabel(season){return season.season===0?"Speciali":`Stagione ${season.season}`;}
 async function setupEpisodes(preferredSeason,preferredEpisode){
+  if(state.direct)return setupDirectEpisodes(preferredSeason,preferredEpisode);
   const seasons=(state.movie.seasons??[]).filter(season=>season.episodes>0);
   if(!seasons.length)throw new Error("Nessun episodio disponibile per questa serie.");
   state.seasons=seasons;
@@ -414,6 +462,64 @@ async function setupEpisodes(preferredSeason,preferredEpisode){
   const selected=seasons.find(season=>season.season===preferredSeason)??seasons.find(season=>season.season===1)??seasons[0];
   seasonSelect.value=String(selected.season);
   await loadSeason(selected.season,preferredEpisode);
+}
+async function setupDirectEpisodes(preferredSeason,preferredEpisode){
+  const seasons=(state.movie.seasons??[]).filter(season=>season.episodes?.length);
+  if(!seasons.length)throw new Error("Questa serie non contiene episodi disponibili.");
+  state.seasons=seasons;
+  const seasonSelect=$("seasonSelect");
+  seasonSelect.replaceChildren(...seasons.map(season=>new Option(`${seasonLabel(season)} · ${season.episodes.length} ep.`,String(season.season))));
+  seasonSelect.disabled=false;
+  seasonSelect.onchange=()=>loadDirectSeason(Number(seasonSelect.value),null);
+  $("episodeSelect").onchange=()=>setDirectEpisode(Number($("episodeSelect").value));
+  const selected=seasons.find(season=>season.season===preferredSeason)??[...seasons].sort((a,b)=>b.season-a.season)[0];
+  seasonSelect.value=String(selected.season);
+  await loadDirectSeason(selected.season,preferredEpisode);
+}
+async function loadDirectSeason(seasonNumber,preferredEpisode){
+  if(!state.direct||!state.movie)return;
+  const season=(state.movie.seasons??[]).find(item=>item.season===seasonNumber);
+  if(!season)return;
+  const current=++state.seasonGeneration;
+  state.season=seasonNumber;state.episode=null;state.episodeTitle="";state.episodes=season.episodes;state.resume=0;
+  $("seasonSelect").value=String(seasonNumber);
+  const select=$("episodeSelect");select.disabled=false;
+  select.replaceChildren(...season.episodes.map(episode=>new Option(`Episodio ${episode.episode}${episode.title?` · ${episode.title}`:""}`,String(episode.episode))));
+  const selected=season.episodes.find(episode=>episode.episode===preferredEpisode)??season.episodes[0];
+  select.value=String(selected.episode);
+  if(current!==state.seasonGeneration)return;
+  await setDirectEpisode(selected.episode);
+}
+async function setDirectEpisode(episodeNumber){
+  const episode=state.episodes.find(item=>item.episode===episodeNumber);
+  if(!episode)return;
+  state.episode=episode.episode;state.episodeTitle=episode.title??"";
+  $("episodeSelect").value=String(episode.episode);
+  $("episodeStatus").hidden=true;$("episodeStatus").textContent="";
+  state.loading=true;state.directStream=null;state.groups=[];renderSources();
+  try{
+    let stream=null;
+    if(state.directInitial&&state.directInitial.season===state.season&&state.directInitial.episode===state.episode&&state.directInitial.stream){
+      stream=state.directInitial.stream;state.directInitial=null;
+    }else{
+      const result=await send({type:"cb01-episode",token:state.directToken,season:state.season,episode:state.episode});
+      stream=result.stream;
+    }
+    const normalized={...stream,id:"cb01:0",groupKey:"cb01",groupName:"CB01"};
+    state.loading=false;state.directStream=normalized;
+    state.groups=[{key:"cb01",name:"CB01",streams:[normalized],error:null,permission:null}];
+    document.title=`${state.movie.title} · S${state.season} E${state.episode} · CineMatch`;
+    renderSources();
+    try{await loadResume();}catch{}
+    updateResume();
+    await startStream(normalized);
+  }catch(error){
+    state.loading=false;state.directStream=null;state.groups=[];
+    $("sourcesStatus").textContent=error.message;
+    $("sourcesStatus").classList.add("error");
+    $("sourceList").replaceChildren();$("playBest").disabled=true;
+    toast(error.message);
+  }
 }
 async function loadSeason(seasonNumber,preferredEpisode){
   if(!state.movie||state.kind!=="tv")return;
@@ -458,10 +564,47 @@ function applyTheme(theme,accent){
   document.documentElement.dataset.theme=theme==="light"?"light":"dark";
   if(typeof accent==="string"&&/^#[0-9a-f]{6}$/i.test(accent))document.documentElement.style.setProperty("--accent",accent);
 }
+let directStart=null,pendingDirect=null;
 window.addEventListener("message",event=>{
   if(event.source!==parent)return;
   if(event.data?.type==="cinematch:theme")applyTheme(event.data.theme,event.data.accent);
+  else if(event.data?.type==="cinematch:direct"){
+    if(directStart){const start=directStart;directStart=null;start(event.data);}
+    else pendingDirect=event.data;
+  }
 });
+function waitForDirect(){
+  if(pendingDirect){const data=pendingDirect;pendingDirect=null;return Promise.resolve(data);}
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{if(directStart===done){directStart=null;reject(new Error("La pagina non ha inviato la sorgente CB01. Riprova."));}},20000);
+    const done=data=>{clearTimeout(timer);directStart=null;resolve(data);};
+    directStart=done;
+  });
+}
+function normalizeDirectStream(stream){
+  return {...stream,id:"cb01:0",groupKey:"cb01",groupName:"CB01"};
+}
+async function startDirect(result){
+  if(!result?.media||!result?.stream?.url)throw new Error("Sorgente CB01 non valida.");
+  state.direct=true;
+  state.directToken=result.token??state.directToken;
+  state.directKey=result.media.key??result.media.title??"cb01";
+  state.kind=result.media.kind==="tv"?"tv":"movie";
+  state.movie={...result.media,seasons:result.media.seasons??[]};
+  state.directInitial=result.episode?{...result.episode,stream:result.stream}:null;
+  state.directStream=null;state.groups=[];state.loading=true;
+  renderMedia();
+  loadPoster().catch(()=>{});
+  if(state.kind==="tv"){
+    await setupEpisodes(result.episode?.season??null,result.episode?.episode??null);
+  }else{
+    const stream=normalizeDirectStream(result.stream);
+    state.directStream=stream;state.groups=[{key:"cb01",name:"CB01",streams:[stream],error:null,permission:null}];state.loading=false;
+    try{await loadResume();}catch{}
+    updateResume();
+    await startStream(stream);
+  }
+}
 function closeOverlay(){if(embedded)parent.postMessage({type:"cinematch:close"},"*");else window.close();}
 let toastTimer;
 function toast(message){const toast=$("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2400);}
@@ -503,6 +646,17 @@ document.addEventListener("keydown",event=>{
 /* ---------- Boot ---------- */
 async function boot(){
   const params=new URL(location.href).searchParams;
+  if(params.get("direct")==="1"){
+    if(embedded)parent.postMessage({type:"cinematch:ready"},"*");
+    await startDirect(await waitForDirect());
+    return;
+  }
+  if(params.get("directToken")){
+    const token=params.get("directToken");
+    const result=await send({type:"cb01-playback",token});
+    await startDirect({...result,token});
+    return;
+  }
   const kind=params.get("kind")==="tv"?"tv":"movie";
   const id=Number(kind==="tv"?params.get("id"):params.get("movie")??params.get("id"));
   if(!Number.isSafeInteger(id)||id<1)throw new Error("Titolo non valido.");

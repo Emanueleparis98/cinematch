@@ -33,6 +33,11 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
     if(current!==generation)return;
     mode="native";
     video.hidden=false;codecContainer.hidden=true;
+    // CB01 serves a hotlink-protected MP4 with an ACAO header for its own
+    // player. The direct stream does not need CORS here, so leave the element
+    // in no-cors mode; normal addon streams keep the existing behavior.
+    if(stream.crossOrigin===false)video.removeAttribute("crossorigin");
+    else video.setAttribute("crossorigin","anonymous");
     video.querySelectorAll("track").forEach(track=>track.remove());
     for(const sub of stream.subtitles){if(/\.vtt(?:\?|$)/i.test(sub.url)){const track=document.createElement("track");track.kind="subtitles";track.label=sub.lang;track.srclang=/^[a-z]{2,3}(?:-[a-z]{2})?$/i.test(sub.lang)?sub.lang:"und";track.src=sub.url;video.append(track);}}
     nativeTracks();

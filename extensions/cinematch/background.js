@@ -1,6 +1,8 @@
 import {PROVIDERS,providerForUrl} from "./core.js";
 import {insertIntoComposer} from "./composer.js";
 import {credential,createTmdbClient} from "./tmdb.js";
+import {defaultEpisode,publicMedia} from "./cb01-resolver.js";
+import {Cb01Error,inspectArticle,resolveEpisode,resolveMovie} from "./cb01-service.js";
 
 const storageReady=Promise.all([
   chrome.storage.local.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"}),
@@ -61,6 +63,120 @@ async function notifyChats(){
   if((await tmdbSiteState()).enabled)for(const tab of tabs.filter(tab=>/^https:\/\/www\.themoviedb\.org\//.test(tab.url??'')))messages.push(chrome.tabs.sendMessage(tab.id,{type:'tmdb-preferences-changed',...status}));
   await Promise.allSettled(messages);
 }
+/* ---------- CB01 ---------- */
+const CB01_RULESET='cb01_ads';
+const CB01_SCRIPT_IDS=['cinematch-cb01-main','cinematch-cb01-site'];
+const CB01_MATCHES=['https://cb01one.org/*','https://www.cb01one.org/*'];
+const CB01_ORIGINS=[
+  'https://cb01one.org/*',
+  'https://www.cb01one.org/*',
+  'https://stayonline.pro/*',
+  'https://uprot.net/*',
+  'https://*.mxdrop.click/*',
+  'https://*.m1xdrop.net/*',
+  'https://*.mixdrop.co/*',
+  'https://*.mixdrop.ag/*',
+  'https://*.mxdrop.to/*',
+  'https://*.mixdrop.to/*',
+  'https://*.mxcontent.net/*'
+];
+const CB01_TOKEN_PREFIX='cb01Token:';
+const CB01_TOKEN_TTL=30*60*1000;
+const cb01PageSender=sender=>Boolean(sender.tab&&sender.frameId===0&&/^https:\/\/(?:www\.)?cb01one\.org\//.test(sender.url??''));
+async function cb01State(){
+  const [stored,allowed]=await Promise.all([chrome.storage.local.get('cb01Mode'),chrome.permissions.contains({origins:CB01_ORIGINS})]);
+  return {requested:stored.cb01Mode===true,allowed,enabled:stored.cb01Mode===true&&allowed};
+}
+async function setCb01Rules(enabled){
+  try{
+    if(enabled)await chrome.declarativeNetRequest.updateEnabledRulesets({enableRulesetIds:[CB01_RULESET]});
+    else await chrome.declarativeNetRequest.updateEnabledRulesets({disableRulesetIds:[CB01_RULESET]});
+  }catch{}
+}
+async function unregisterCb01(){
+  try{await chrome.scripting.unregisterContentScripts({ids:CB01_SCRIPT_IDS});}catch{}
+}
+async function registerCb01(){
+  await unregisterCb01();
+  await chrome.scripting.registerContentScripts([
+    {id:'cinematch-cb01-main',matches:CB01_MATCHES,js:['cb01-main.js'],runAt:'document_start',world:'MAIN',persistAcrossSessions:true},
+    {id:'cinematch-cb01-site',matches:CB01_MATCHES,js:['overlay.js','cb01-site.js'],css:['cb01.css'],runAt:'document_idle',persistAcrossSessions:true}
+  ]);
+}
+async function injectCb01(){
+  const tabs=await chrome.tabs.query({url:CB01_MATCHES});
+  if(!tabs.length)return;
+  const installation=Promise.allSettled(tabs.flatMap(tab=>[
+    chrome.scripting.insertCSS({target:{tabId:tab.id},files:['cb01.css']}),
+    chrome.scripting.executeScript({target:{tabId:tab.id},files:['overlay.js','cb01-site.js']}),
+    chrome.scripting.executeScript({target:{tabId:tab.id},files:['cb01-main.js'],world:'MAIN'})
+  ]));
+  await Promise.race([installation,new Promise(resolve=>setTimeout(resolve,2500))]);
+  await Promise.allSettled(tabs.map(tab=>chrome.tabs.sendMessage(tab.id,{type:'cinematch:cb01-enabled'})));
+}
+async function syncCb01({inject=false}={}){
+  const state=await cb01State();
+  if(!state.enabled){
+    await setCb01Rules(false);
+    await unregisterCb01();
+    return state;
+  }
+  await setCb01Rules(true);
+  await registerCb01();
+  if(inject)await injectCb01();
+  return state;
+}
+async function disableCb01(){
+  const tabs=await chrome.tabs.query({url:CB01_MATCHES}).catch(()=>[]);
+  const cleanup=Promise.allSettled(tabs.flatMap(tab=>[
+    chrome.tabs.sendMessage(tab.id,{type:'cinematch:cb01-disabled'}),
+    chrome.scripting.removeCSS({target:{tabId:tab.id},files:['cb01.css']})
+  ]));
+  await Promise.race([cleanup,new Promise(resolve=>setTimeout(resolve,1500))]);
+  await setCb01Rules(false);
+  await unregisterCb01();
+}
+async function pruneCb01Tokens(){
+  const all=await chrome.storage.session.get(null),now=Date.now();
+  const expired=Object.entries(all).filter(([key,value])=>key.startsWith(CB01_TOKEN_PREFIX)&&(!value?.expires||value.expires<now)).map(([key])=>key);
+  if(expired.length)await chrome.storage.session.remove(expired);
+}
+async function saveCb01Token(record){
+  await pruneCb01Tokens();
+  const token=crypto.randomUUID();
+  await chrome.storage.session.set({[CB01_TOKEN_PREFIX+token]:{...record,expires:Date.now()+CB01_TOKEN_TTL}});
+  return {token};
+}
+async function getCb01Token(token){
+  if(typeof token!=='string'||!/^[a-f0-9-]{36}$/i.test(token))throw new Cb01Error('Sessione CB01 non valida.','token');
+  const key=CB01_TOKEN_PREFIX+token,data=await chrome.storage.session.get(key),record=data[key];
+  if(!record||record.expires<Date.now()){await chrome.storage.session.remove(key);throw new Cb01Error('La sessione CB01 è scaduta. Riprova dalla pagina.','token');}
+  return record;
+}
+async function cb01Playback(token){
+  const record=await getCb01Token(token);
+  return {media:record.media,stream:record.stream??null,episode:record.episode??null};
+}
+async function cb01Episode(token,season,episode){
+  const record=await getCb01Token(token);
+  if(record.parsed?.kind!=='tv')throw new Cb01Error('Questa sessione non è una serie TV.','episode');
+  if(!Number.isSafeInteger(season)||season<0||!Number.isSafeInteger(episode)||episode<1)throw new Cb01Error('Episodio non valido.','episode');
+  const result=await resolveEpisode(record.parsed,season,episode,{manualUrl:record.media?.key??record.parsed.articleUrl});
+  return {stream:result.stream,episode:{season,episode}};
+}
+async function cb01Article(articleUrl,season=null,episode=null){
+  const parsed=await inspectArticle(articleUrl);
+  let stream=null,target=null;
+  if(parsed.kind==='movie')stream=(await resolveMovie(parsed)).stream;
+  else{
+    target=season!==null&&episode!==null?{season,episode}:defaultEpisode(parsed);
+    if(!target)throw new Cb01Error('Questa serie non contiene episodi disponibili.','no-sources',parsed.articleUrl);
+    stream=(await resolveEpisode(parsed,target.season,target.episode,{manualUrl:parsed.articleUrl})).stream;
+  }
+  const media=publicMedia(parsed);
+  const {token}=await saveCb01Token({parsed,media,stream,episode:target});
+  return {token,media,stream,episode:target};
+}
 const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
 const playerPage=sender=>extensionPage(sender,'watch.html')||extensionPage(sender,'cinema.html');
 const TMDB_SITE_ORIGIN='https://www.themoviedb.org/*';
@@ -90,6 +206,70 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     return {ok:true,item:await tmdb.details(kind,message.id)};
   })().then(respond).catch(error=>respond({ok:false,error:error.message??'Player non disponibile.'}));
   return true;
+});
+chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+  if(sender.id!==chrome.runtime.id||!message?.type?.startsWith('cb01-'))return false;
+  const settings=extensionPage(sender,'options.html');
+  if(message.type==='cb01-status'){
+    if(!settings)return false;
+    (async()=>{
+      const state=await cb01State();
+      let rules=[];
+      try{rules=await chrome.declarativeNetRequest.getEnabledRulesets();}catch{}
+      respond({ok:true,...state,rules:rules.includes(CB01_RULESET)});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  if(message.type==='cb01-sync'){
+    if(!settings)return false;
+    (async()=>{
+      await chrome.storage.local.set({cb01Mode:true});
+      const state=await syncCb01({inject:true});
+      respond({ok:true,...state});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  if(message.type==='cb01-disable'){
+    if(!settings)return false;
+    (async()=>{
+      await chrome.storage.local.set({cb01Mode:false});
+      disableCb01().catch(()=>{});
+      respond({ok:true,enabled:false,allowed:await chrome.permissions.contains({origins:CB01_ORIGINS})});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  if(message.type==='cb01-resolve'){
+    if(!cb01PageSender(sender))return false;
+    (async()=>{
+      if(!(await cb01State()).enabled)throw new Cb01Error('Modalità CB01 non attiva.','disabled');
+      const season=Number.isSafeInteger(message.season)&&message.season>=0?message.season:null;
+      const episode=Number.isSafeInteger(message.episode)&&message.episode>0?message.episode:null;
+      respond({ok:true,...await cb01Article(message.articleUrl,season,episode)});
+    })().catch(error=>respond({ok:false,error:error.message??'Sorgente CB01 non disponibile.',code:error.code,manualUrl:error.manualUrl,failures:error.failures}));
+    return true;
+  }
+  if(message.type==='cb01-episode'){
+    if(!playerPage(sender)&&!cb01PageSender(sender))return false;
+    (async()=>respond({ok:true,...await cb01Episode(message.token,message.season,message.episode)}))()
+      .catch(error=>respond({ok:false,error:error.message??'Episodio non disponibile.',code:error.code,manualUrl:error.manualUrl}));
+    return true;
+  }
+  if(message.type==='cb01-playback'){
+    if(!playerPage(sender))return false;
+    (async()=>respond({ok:true,...await cb01Playback(message.token)}))()
+      .catch(error=>respond({ok:false,error:error.message??'Sessione CB01 non disponibile.',code:error.code}));
+    return true;
+  }
+  if(message.type==='cb01-open'){
+    if(!playerPage(sender)&&!cb01PageSender(sender))return false;
+    (async()=>{
+      await getCb01Token(message.token);
+      await chrome.tabs.create({url:chrome.runtime.getURL(`cinema.html?directToken=${encodeURIComponent(message.token)}`)});
+      respond({ok:true});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  return false;
 });
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id)return false;
@@ -146,6 +326,11 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 
 chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true}).catch(()=>{});
 (async()=>{const state=await tmdbSiteState();if(state.enabled)await registerTmdbSite();else await unregisterTmdbSite();})().catch(()=>{});
+(async()=>{const state=await cb01State();if(state.enabled)await syncCb01();else{await setCb01Rules(false);await unregisterCb01();}})().catch(()=>{});
+chrome.permissions.onRemoved.addListener(permissions=>{
+  if(!permissions.origins?.some(origin=>CB01_ORIGINS.includes(origin)))return;
+  syncCb01().catch(()=>{});
+});
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id||message?.type!=="open-panel")return false;
   const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);

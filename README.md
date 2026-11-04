@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.8.0
+# CineMatch — estensione browser 3.9.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.8.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.9.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l’icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -56,12 +56,30 @@ le richieste `series` e conserva un punto di ripresa separato per ogni episodio.
 Gli addon collegati con versioni precedenti potrebbero aver conservato solo il
 tipo film: se una serie non compare, ricollega il manifest dell’addon.
 
+### Modalità CB01
+
+Dalla 3.9.0 puoi attivare **Opzioni → Modalità CB01** per aprire
+`cb01one.org` senza pubblicità e con un pulsante **Guarda con CineMatch** su
+film e serie TV. Il click sulla locandina apre il player CineMatch, risolve la
+sorgente Mixdrop disponibile e la riproduce nello stesso overlay, senza cambiare
+pagina. Nella scheda film il blocco player originale viene sostituito da una
+card pulita; per le serie è disponibile la scelta di stagione ed episodio.
+L’accesso a CB01 e ai suoi player è un permesso opzionale, richiesto solo quando
+attivi la modalità. Le sorgenti che richiedono un CAPTCHA non vengono aggirate:
+CineMatch passa alla sorgente successiva o mostra un messaggio chiaro.
+
+La modalità blocca le reti pubblicitarie e i tracker osservati con regole di
+rete e filtri cosmetici, impedisce i popunder e non carica gli iframe player
+originali nella pagina. Il player CineMatch riproduce il file diretto, quindi
+non mostra annunci. Nessun adblock è garantito al 100%: la lista viene
+aggiornata con le release.
+
 Vengono analizzate localmente le risposte dell'AI, non i messaggi dell'utente.
 TMDB riceve titoli, anni o nomi, non la conversazione. Nessun invio automatico
 di messaggi e nessuna API AI. Quattro host AI e i due host ufficiali TMDB autorizzati;
-nessuna cronologia o accesso generale iniziale ai siti. Addon, sorgenti video e
-pulsante su themoviedb.org richiedono permessi opzionali per singolo host.
-La chiave non viene esposta alle chat.
+nessuna cronologia o accesso generale iniziale ai siti. Addon, sorgenti video,
+pulsante su themoviedb.org e modalità CB01 richiedono permessi opzionali per
+singolo host. La chiave non viene esposta alle chat.
 La bozza è conservata in memoria per la sessione del browser, senza archivio
 progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
 
@@ -71,8 +89,8 @@ Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiorname
 scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
 scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
 quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. La **3.8.0** include già
-l’updater: per una nuova installazione usa lo ZIP 3.8.0, mentre chi arriva da una
+restano perché l’ID e la cartella non cambiano. La **3.9.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.9.0, mentre chi arriva da una
 versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
 L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
@@ -128,6 +146,7 @@ fallback nella scheda dedicata.
 [Aggiornamenti integrati, 3.6.0](docs/estensione-3.6.0-aggiornamenti.md).
 [Composer libero e correnti, 3.7.0](docs/estensione-3.7.0-composer.md).
 [Flussi da TMDB e serie TV, 3.8.0](docs/estensione-3.8.0-tmdb-flussi.md).
+[Modalità CB01, 3.9.0](docs/estensione-3.9.0-cb01.md).
 
 ## Sviluppo dell'estensione
 
@@ -139,6 +158,7 @@ pnpm exec playwright install chromium
 pnpm test:browser
 pnpm test:launcher
 pnpm test:tv
+pnpm test:cb01
 pnpm test:updater
 pnpm test:images
 pnpm test:player

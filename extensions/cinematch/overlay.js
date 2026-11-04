@@ -46,8 +46,9 @@
     @media(prefers-reduced-motion:reduce){.cm-dialog,.cm-dialog[open],.cm-dialog.closing{animation:none;opacity:1;transform:none}.cm-dialog::backdrop,.cm-dialog.closing::backdrop{animation:none}.cm-shimmer::after{animation:none}}
   `);
 
-  let host, shadow, dialog, frame, loading, fallback, closeButton, titleEl, posterEl, fallbackMessageEl;
+  let host, shadow, dialog, frame, loading, fallback, closeButton, titleEl, posterEl, fallbackMessageEl, retryButton;
   let readyTimer, currentId = 0, currentKind = "movie", currentSeason = null, currentEpisode = null, lastFocus = null, previousOverflow = null, closing = false, activeTheme = null;
+  let currentDirect = false, directRetry = null, directResult = null, directManualUrl = null, frameReady = false;
   let themeObserver = null, themeMedia = null, themeTimer = null;
 
   function ensureShell() {
@@ -76,6 +77,7 @@
             <p class="cm-kicker">CineMatch</p>
             <h2 id="cm-cinema-fallback-title">Player non disponibile qui</h2>
             <p data-fallback-message>Il player non può essere aperto dentro questa pagina.</p>
+            <button type="button" data-retry hidden>Riprova</button>
             <button type="button" data-open-tab>Apri in una scheda</button>
           </div>
         </div>
@@ -90,6 +92,7 @@
     titleEl = shadow.querySelector("#cm-cinema-title");
     posterEl = shadow.querySelector(".cm-loading-poster");
     fallbackMessageEl = shadow.querySelector("[data-fallback-message]");
+    retryButton = shadow.querySelector("[data-retry]");
 
     closeButton.addEventListener("click", close);
     dialog.addEventListener("cancel", event => {
@@ -101,9 +104,27 @@
     });
     dialog.addEventListener("close", cleanup);
     fallback.querySelector("[data-open-tab]").addEventListener("click", () => {
+      if (currentDirect) {
+        const token = directResult?.token;
+        close();
+        if (token) chrome.runtime.sendMessage({ type: "cb01-open", token }).catch(() => {});
+        else if (directManualUrl) window.open(directManualUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
       const id = currentId, kind = currentKind, season = currentSeason, episode = currentEpisode;
       close();
       if (id > 0) chrome.runtime.sendMessage({ type: "watch-open", id, kind, season, episode }).catch(() => {});
+    });
+    retryButton.addEventListener("click", () => {
+      if (!currentDirect || typeof directRetry !== "function") return;
+      fallback.hidden = true;
+      loading.hidden = false;
+      frame.hidden = false;
+      clearTimeout(readyTimer);
+      readyTimer = setTimeout(() => {
+        if (dialog.open && !loading.hidden) showFallback("La sorgente sta impiegando troppo tempo. Riprova o apri la scheda.");
+      }, 12000);
+      directRetry();
     });
   }
 
@@ -116,6 +137,12 @@
     currentKind = "movie";
     currentSeason = null;
     currentEpisode = null;
+    currentDirect = false;
+    directRetry = null;
+    directResult = null;
+    directManualUrl = null;
+    frameReady = false;
+    if (retryButton) retryButton.hidden = true;
     if (frame) frame.src = "about:blank";
     if (previousOverflow !== null) {
       document.documentElement.style.overflow = previousOverflow;
@@ -150,6 +177,7 @@
     frame.hidden = true;
     fallback.hidden = false;
     fallbackMessageEl.textContent = message || "Il player non può essere aperto dentro questa pagina. Puoi continuare nella scheda dedicata.";
+    if (retryButton) retryButton.hidden = !(currentDirect && typeof directRetry === "function");
   }
 
   function chatTheme() {
@@ -212,6 +240,12 @@
     const episode = kind === "tv" && Number.isSafeInteger(options.episode) && options.episode > 0 ? options.episode : null;
     ensureShell();
     const wasOpen = dialog.open;
+    currentDirect = false;
+    directRetry = null;
+    directResult = null;
+    directManualUrl = null;
+    frameReady = false;
+    retryButton.hidden = true;
     currentId = id;
     currentKind = kind;
     currentSeason = season;
@@ -262,16 +296,101 @@
     return true;
   }
 
+  function sendDirect() {
+    if (!frameReady || !directResult || !frame?.contentWindow) return;
+    try {
+      frame.contentWindow.postMessage({ type: "cinematch:direct", ...directResult }, EXTENSION_ORIGIN);
+    } catch {}
+  }
+
+  function openDirect(options = {}) {
+    ensureShell();
+    const wasOpen = dialog.open;
+    currentDirect = true;
+    currentId = 0;
+    currentKind = "movie";
+    currentSeason = null;
+    currentEpisode = null;
+    directRetry = typeof options.retry === "function" ? options.retry : null;
+    directResult = null;
+    directManualUrl = null;
+    frameReady = false;
+    lastFocus = options.posterEl instanceof HTMLElement ? options.posterEl : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    if (!wasOpen) {
+      activeTheme = chatTheme();
+      previousOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = "hidden";
+      try { dialog.showModal(); } catch {
+        document.documentElement.style.overflow = previousOverflow;
+        previousOverflow = null;
+        return false;
+      }
+      startThemeWatch();
+    }
+    closing = false;
+    dialog.classList.remove("closing");
+    loading.hidden = false;
+    fallback.hidden = true;
+    retryButton.hidden = true;
+    frame.hidden = true;
+    frame.src = "about:blank";
+    titleEl.textContent = options.title ? `Preparo ${options.title}…` : "Preparo la riproduzione…";
+    if (options.poster) {
+      posterEl.src = options.poster;
+      posterEl.alt = options.title ? `Locandina di ${options.title}` : "";
+      posterEl.hidden = false;
+    } else {
+      posterEl.removeAttribute("src");
+      posterEl.alt = "";
+      posterEl.hidden = true;
+    }
+    dialog.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      if (!dialog.open || !currentDirect) return;
+      frame.src = chrome.runtime.getURL("cinema.html?direct=1");
+      frame.hidden = false;
+      clearTimeout(readyTimer);
+      readyTimer = setTimeout(() => {
+        if (dialog.open && !loading.hidden) {
+          showFallback("La sorgente sta impiegando troppo tempo ad avviarsi. Riprova o apri la scheda dedicata.");
+        }
+      }, 12000);
+    });
+    return true;
+  }
+
+  function resolveDirect(result) {
+    if (!dialog?.open || !currentDirect) return false;
+    directResult = result;
+    directManualUrl = result?.media?.key ?? null;
+    fallback.hidden = true;
+    if (frameReady) {
+      loading.hidden = true;
+      frame.hidden = false;
+      sendDirect();
+    }
+    return true;
+  }
+
+  function failDirect(message, options = {}) {
+    if (!dialog?.open || !currentDirect) return false;
+    directManualUrl = options.manualUrl ?? directManualUrl;
+    showFallback(typeof message === "string" ? message : undefined);
+    return true;
+  }
+
   window.addEventListener("message", event => {
     if (!dialog?.open || event.source !== frame?.contentWindow) return;
     if (event.origin !== EXTENSION_ORIGIN) return;
     const data = event.data;
     if (!data || typeof data.type !== "string") return;
     if (data.type === "cinematch:ready") {
+      frameReady = true;
       clearTimeout(readyTimer);
       loading.hidden = true;
       fallback.hidden = true;
       sendTheme();
+      if (currentDirect && directResult) sendDirect();
     } else if (data.type === "cinematch:close") {
       close();
     } else if (data.type === "cinematch:error") {
@@ -281,6 +400,9 @@
 
   globalThis.CineMatchCinema = {
     open,
+    openDirect,
+    resolveDirect,
+    failDirect,
     close,
     isOpen: () => Boolean(dialog?.open)
   };

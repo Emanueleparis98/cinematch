@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>CineMatch · Immagini TMDB</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script><script type="module" src="updater.js"></script></head>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>CineMatch · Impostazioni</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="options.css"><script type="module" src="options.js"></script><script type="module" src="updater.js"></script></head>
 <body class="settings-page"><main>
   <div class="brand">CineMatch</div>
   <h1>Il cinema prende forma.</h1>
@@ -27,6 +27,11 @@
     <label class="checkbox-label remember"><input id="tmdb-site-toggle" type="checkbox"> Mostra “Flussi” sui poster di themoviedb.org</label>
     <p id="tmdb-site-status" class="muted small" role="status" aria-live="polite">Controllo l’opzione…</p>
     <p class="muted small">L’accesso a themoviedb.org è opzionale e viene richiesto solo quando attivi il pulsante. CineMatch legge il titolo e l’immagine visibili del poster per aprire il selettore delle sorgenti; non legge account, cookie o conversazioni e non invia dati a TMDB.</p>
+  </section>
+  <section id="cb01-mode"><h2>Modalità CB01</h2>
+    <label class="checkbox-label remember"><input id="cb01-toggle" type="checkbox"> Blocca pubblicità e avvia film e serie da cb01one.org</label>
+    <p id="cb01-status" class="muted small" role="status" aria-live="polite">Controllo l’opzione…</p>
+    <p class="muted small">L’accesso a cb01one.org e ai suoi player è opzionale e viene richiesto solo quando attivi questa modalità. CineMatch legge solo i collegamenti visibili della scheda, non account o cookie, e riproduce il flusso nel proprio player. La pubblicità viene bloccata con filtri di rete e cosmetici; le sorgenti che richiedono un CAPTCHA non vengono aggirate.</p>
   </section>
   <section><h2>Da qui, tutto automatico.</h2><p>La credenziale viene verificata e conservata nel browser. Le immagini appaiono sotto i titoli riconosciuti con un discreto pulsante <strong>Flussi</strong>: nessun modulo o impostazione dentro la risposta. Gli abbinamenti incerti vengono omessi.</p>
     <p>Il riconoscimento riguarda le risposte dell'AI, non i messaggi dell'utente. TMDB riceve titoli, anni o nomi da cercare; il testo intero della conversazione resta nella chat. Le schede vicine all'area visibile si caricano automaticamente, senza costruire un archivio locale.</p>

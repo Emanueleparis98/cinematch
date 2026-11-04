@@ -1,12 +1,13 @@
-# CineMatch - estensione browser 3.8.0
+# CineMatch - estensione browser 3.9.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
-Claude e Gemini e pulsante **Flussi** su TMDB per film e serie TV.
+Claude e Gemini, pulsante **Flussi** su TMDB e modalità **CB01** senza
+pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.8.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.9.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -80,6 +81,25 @@ CineMatch legge solo titolo, ID e immagine del poster per aprire il player; non
 legge account, cookie o conversazioni. Disattivando l’opzione i pulsanti vengono
 rimossi e il permesso revocato. I poster di film e serie TV, compresa la locandina
 principale, aprono lo stesso selettore sorgenti dell’estensione.
+
+## Modalità CB01
+
+Dalla 3.9.0, da **Opzioni → Modalità CB01**, puoi aprire `cb01one.org` con la
+pubblicità bloccata e un pulsante **Guarda con CineMatch** sui poster di film e
+serie TV. Un click sulla locandina apre l’overlay CineMatch, risolve la sorgente
+Mixdrop disponibile e la riproduce senza cambiare pagina. Nella scheda film il
+blocco player originale viene sostituito da una card pulita; per le serie puoi
+scegliere stagione ed episodio. Le sorgenti Maxstream che richiedono un CAPTCHA
+non vengono aggirate: CineMatch prova la sorgente successiva e, se necessario,
+mostra un messaggio chiaro.
+
+La modalità blocca le reti pubblicitarie e i tracker osservati con regole di
+rete e filtri cosmetici, impedisce i popunder e non carica gli iframe player
+originali nella pagina. Il player CineMatch riproduce il file diretto, quindi
+non mostra annunci. L’accesso a CB01, StayOnline, UpRot, Mixdrop e al CDN video
+è un permesso opzionale richiesto una sola volta; l’aggiornamento non lo impone.
+CineMatch legge solo i collegamenti visibili della scheda, non account, cookie o
+conversazioni. I token di riproduzione restano nella sessione e scadono.
 
 Emoji, numerazioni e sottotitoli vengono ripuliti per la ricerca: ad esempio
 `🌊 2. Flow - Un mondo da salvare (2024)`. Quando necessario vengono consultati
@@ -162,9 +182,11 @@ Accesso iniziale a quattro siti AI (`chatgpt.com`, `chat.deepseek.com`,
 `claude.ai`, `gemini.google.com`) e ai due host TMDB (`api.themoviedb.org`,
 `image.tmdb.org`). I siti di addon e sorgenti video richiedono autorizzazioni
 opzionali per singolo host, soltanto quando li colleghi o avvii un flusso.
-Anche il pulsante su themoviedb.org è opzionale e viene concesso solo quando lo
-attivi; non è richiesto dall’aggiornamento. Nessuna autorizzazione generale viene
-concessa in fase di installazione.
+Anche il pulsante su themoviedb.org e la modalità CB01 sono opzionali e vengono
+concessi solo quando li attivi; non sono richiesti dall’aggiornamento. La
+modalità CB01 richiede un permesso tecnico `declarativeNetRequest` per applicare
+i filtri di rete, senza accesso generale ai siti. Nessuna autorizzazione generale
+viene concessa in fase di installazione.
 Non richiede accesso a cookie o cronologia.
 Le risposte AI vengono analizzate localmente; TMDB riceve titoli, anni o nomi,
 richieste di schede e immagini, non il testo completo della conversazione.
@@ -177,6 +199,8 @@ della richiesta video corrente, sui siti già autorizzati. Se un flusso passa
 a un altro server, **Consenti [server]** richiede il relativo permesso opzionale
 e riparte dalla sorgente iniziale. I link firmati restano in memoria e non
 vengono mostrati o salvati. Non intercetta le conversazioni o la navigazione.
+`declarativeNetRequest` applica le regole pubblicitarie della modalità CB01 solo
+quando la modalità è attiva; le regole sono limitate a CB01 e ai suoi player.
 La credenziale può essere ricordata in `storage.local` scegliendo **Ricorda
 su questo dispositivo**, oppure in `storage.session` fino al riavvio.
 Entrambi gli storage hanno accesso TRUSTED_CONTEXTS: gli script inseriti nelle
