@@ -1,10 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import '../extensions/cinematch/references.js';
-import {credential,validateReference,chooseMatch,createTmdbClient,safeImagePath} from '../extensions/cinematch/tmdb.js';
+import {credential,validateReference,chooseMatch,createTmdbClient,safeImagePath,summarizeTv} from '../extensions/cinematch/tmdb.js';
 const {extract}=globalThis.CineMatchReferences;
 const ref={type:'movie',title:'Ladri di biciclette',variants:['Ladri di biciclette'],year:1948,director:''};
 const movie={id:5156,title:'Ladri di biciclette',original_title:'Ladri di biciclette',release_date:'1948-11-24',poster_path:'/poster.jpg',credits:{crew:[{id:1,name:'Vittorio De Sica',job:'Director',profile_path:'/director.jpg'}],cast:[{id:2,name:'Lamberto Maggiorani',character:'Antonio',profile_path:'/cast.jpg'}]}};
+const series={id:1399,name:'Il Trono di Spade',original_name:'Game of Thrones',first_air_date:'2011-04-17',poster_path:'/series.jpg',external_ids:{imdb_id:'tt0944947'},created_by:[{id:3,name:'David Benioff',profile_path:'/creator.jpg'}],credits:{cast:[{id:4,name:'Emilia Clarke',character:'Daenerys',profile_path:'/cast.jpg'}]},alternative_titles:{results:[{title:'Game of Thrones'}]},genres:[{name:'Dramma'}],number_of_seasons:8,number_of_episodes:73,vote_average:8.4,vote_count:24000,seasons:[{season_number:0,name:'Speciali',episode_count:2,air_date:'2011-01-01'},{season_number:1,name:'Stagione 1',episode_count:10,air_date:'2011-04-17'}]};
+const tvRef={type:'tv',title:'Il Trono di Spade',variants:['Il Trono di Spade'],year:2011,director:''};
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
 const client=fetcher=>createTmdbClient({getCredential:async()=>'a'.repeat(32),fetcher});
 test('reference parser accepts headings, bold lists, alternate titles and tables',()=>{
@@ -15,6 +17,10 @@ test('parser deduplicates titles and avoids unsupported prose and huge input',()
   assert.equal(extract('Ladri di biciclette (1948)\nLadri di biciclette (1948)').length,1);assert.deepEqual(extract('Il movimento nasce nel 1948.\nNon inventare titoli senza un anno.'),[]);assert.throws(()=>extract('a'.repeat(200001)));
 });
 test('explicit person labels are recognized',()=>{assert.equal(extract('Regista: Vittorio De Sica')[0].type,'person');});
+test('explicit series cues mark TV without promoting ordinary films',()=>{
+  const [show]=extract('# The Bear (2022)\nSerie TV · FX');assert.equal(show.type,'tv');assert.equal(show.year,2022);
+  const [film]=extract('The Thing (1982)');assert.equal(film.type,'movie');
+});
 test('director metadata does not duplicate a movie as an extra person card',()=>{const refs=extract('Ladri di biciclette (1948)\nRegista: Vittorio De Sica');assert.equal(refs.length,1);assert.equal(refs[0].director,'Vittorio De Sica');});
 test('numbered headings from the real La terrazza screenshot strip both heading and ordinal',()=>{const [ref]=extract('# 8. La terrazza (1980) — Regia: Ettore Scola');assert.equal(ref.title,'La terrazza');assert.equal(ref.director,'Ettore Scola');assert.equal(ref.year,1980);});
 test('Flow screenshot decoration is removed before searching, subtitle supplies a safe variant',()=>{const [ref]=extract('# 🌊 2. Flow - Un mondo da salvare (2024)');assert.equal(ref.title,'Flow - Un mondo da salvare');assert.ok(ref.variants.includes('Flow'));assert.equal(ref.year,2024);});
@@ -32,6 +38,24 @@ test('references and image paths are validated',()=>{
 });
 test('only unique exact titles with matching years are automatically selected',()=>{
   assert.equal(chooseMatch([movie],ref).id,5156);assert.equal(chooseMatch([movie,{...movie,id:6}],ref),null);assert.equal(chooseMatch([movie],{...ref,year:1949}),null);assert.equal(chooseMatch([movie],{...ref,year:null}),null);assert.equal(chooseMatch([{...movie,title:'Different',original_title:'Different'}],ref),null);
+});
+test('TV references use first air dates and series details',()=>{
+  assert.equal(validateReference(tvRef).type,'tv');
+  assert.equal(chooseMatch([series],tvRef).id,1399);
+  assert.equal(chooseMatch([series,{...series,id:2}],tvRef),null);
+  const summary=summarizeTv(series);
+  assert.equal(summary.type,'tv');assert.equal(summary.imdbId,'tt0944947');assert.equal(summary.title,'Il Trono di Spade');assert.equal(summary.seasons[1].episodes,10);assert.equal(summary.directors[0].name,'David Benioff');
+});
+test('TV details and season episodes use the correct TMDB endpoints',async()=>{
+  const calls=[];const api=client(async(url,opts)=>{calls.push({url,opts});
+    if(url.includes('/season/'))return response({episodes:[{episode_number:1,name:'Winter Is Coming',air_date:'2011-04-17',runtime:62,overview:'Prologo'}]});
+    if(url.includes('/search/'))return response({results:[series]});
+    return response(series);
+  });
+  const details=await api.details('tv',1399);assert.equal(details.type,'tv');assert.equal(details.title,'Il Trono di Spade');
+  assert.match(new URL(calls[0].url).pathname,/^\/3\/tv\/1399$/);assert.equal(new URL(calls[0].url).searchParams.get('append_to_response'),'credits,alternative_titles,external_ids');
+  const season=await api.season(1399,1);assert.equal(season.episodes[0].title,'Winter Is Coming');assert.match(new URL(calls.at(-1).url).pathname,/\/tv\/1399\/season\/1$/);
+  const result=await api.search(tvRef);assert.equal(result.matched.id,1399);
 });
 test('API authentication, cache and selected movie credit summary work',async()=>{
   const calls=[];const api=client(async(url,opts)=>{calls.push({url,opts});return response(url.includes('/search/')?{results:[movie]}:movie);});

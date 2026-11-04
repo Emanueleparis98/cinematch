@@ -20,16 +20,22 @@ export function permissionOrigin(value){const u=httpUrl(value);return `${u.proto
 export function parseManifest(data,url){
   if(!data||typeof data!=='object'||!text(data.id)||!text(data.name)||!Array.isArray(data.resources)||!Array.isArray(data.types))throw new Error('Manifest non valido: mancano nome, id, tipi o risorse.');
   if(data.behaviorHints?.configurationRequired)throw new Error('Configura prima questo addon sul suo sito e copia il manifest personalizzato.');
-  const resources=data.resources.filter(r=>r==='stream'||r?.name==='stream').map(r=>({types:r==='stream'?data.types:r.types,prefixes:r==='stream'?data.idPrefixes:r.idPrefixes})).map(r=>({types:Array.isArray(r.types)?r.types.filter(t=>t==='movie'):[],prefixes:Array.isArray(r.prefixes)?r.prefixes.filter(p=>typeof p==='string'&&p.length<=60):[]})).filter(r=>r.types.length);
-  if(!resources.length)throw new Error('Questo addon non offre flussi per i film.');
+  const resources=data.resources.filter(r=>r==='stream'||r?.name==='stream').map(r=>({types:r==='stream'?data.types:r.types,prefixes:r==='stream'?data.idPrefixes:r.idPrefixes})).map(r=>({types:Array.isArray(r.types)?r.types.filter(t=>t==='movie'||t==='series'):[],prefixes:Array.isArray(r.prefixes)?r.prefixes.filter(p=>typeof p==='string'&&p.length<=60):[]})).filter(r=>r.types.length);
+  if(!resources.length)throw new Error('Questo addon non offre flussi per film o serie TV.');
   return {url:manifestUrl(url),id:text(data.id,160),name:text(data.name,100),version:text(data.version,30),description:text(data.description,400),resources,enabled:true};
 }
-export function resourceUrl(addon,movie){
+export function resourceUrl(addon,media,episode=null){
   // Prefer IMDb for standard addons; use tmdb: only when explicitly supported.
-  const candidates=[movie.imdbId,`tmdb:${movie.id}`].filter(Boolean);
-  const id=candidates.find(id=>addon.resources.some(r=>r.types.includes('movie')&&(!r.prefixes.length?(id.startsWith('tt')):r.prefixes.some(p=>id.startsWith(p)))));
+  const isSeries=media?.type==='tv';
+  if(isSeries&&(!Number.isSafeInteger(episode?.season)||episode.season<0||!Number.isSafeInteger(episode?.episode)||episode.episode<1))return null;
+  const type=isSeries?'series':'movie';
+  const suffix=isSeries?`:${episode.season}:${episode.episode}`:'';
+  const candidates=isSeries
+    ? [media.imdbId?`${media.imdbId}${suffix}`:null,`tmdb:${media.id}${suffix}`].filter(Boolean)
+    : [media.imdbId,`tmdb:${media.id}`].filter(Boolean);
+  const id=candidates.find(candidate=>addon.resources.some(resource=>resource.types.includes(type)&&(!resource.prefixes.length?candidate.startsWith('tt'):resource.prefixes.some(prefix=>candidate.startsWith(prefix)))));
   if(!id)return null;
-  const url=httpUrl(addon.url);url.pathname=url.pathname.slice(0,-'manifest.json'.length)+`stream/movie/${encodeURIComponent(id)}.json`;return url.href;
+  const url=httpUrl(addon.url);url.pathname=url.pathname.slice(0,-'manifest.json'.length)+`stream/${type}/${encodeURIComponent(id)}.json`;return url.href;
 }
 export function parseStreams(data){
   const list=Array.isArray(data)?data:data?.streams;

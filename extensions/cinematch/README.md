@@ -1,12 +1,12 @@
-# CineMatch - estensione browser 3.7.0
+# CineMatch - estensione browser 3.8.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
-locale di richieste e immagini automatiche nelle risposte di ChatGPT, DeepSeek,
-Claude e Gemini.
+locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
+Claude e Gemini e pulsante **Flussi** su TMDB per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.7.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.8.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -59,11 +59,27 @@ nelle versioni precedenti viene mantenuta: non serve reinserire la credenziale.
 Locandine e foto di registi/interpreti vengono aggiunte automaticamente subito
 dopo la riga del titolo, prima della descrizione. Questo vale anche per titoli
 in grassetto e descrizioni nello stesso paragrafo, separati da un ritorno a capo.
-Le immagini seguono tipografia e colori della pagina della chat; il tema delle
-schermate proprie dell'estensione rimane sempre scuro.
-Non vengono inseriti pannelli, titoli duplicati, pulsanti, impostazioni, moduli,
-selettori, riquadri di errore o richieste di correzione. La locandina apre il player
-CineMatch; foto delle persone e attribuzione aprono TMDB. Il testo dell’AI rimane invariato.
+Le immagini seguono tipografia e colori della pagina della chat. Il pannello e
+le opzioni usano il tema scuro dell’estensione; il player in overlay segue il
+tema della pagina ospite (chat o TMDB).
+Non vengono inseriti pannelli, titoli duplicati, impostazioni, moduli, selettori,
+riquadri di errore o richieste di correzione. Ogni locandina mostra un discreto
+pulsante **Flussi**; anche la locandina apre il player CineMatch. Foto delle
+persone e attribuzione aprono TMDB. Il testo dell’AI rimane invariato.
+
+Le risposte che indicano esplicitamente una **serie TV** ricevono la locandina
+della serie e lo stesso pulsante. Il player chiede stagione ed episodio e cerca
+le sorgenti con il protocollo `series`. In caso di ambiguità non viene inserita
+alcuna immagine.
+
+## Pulsante Flussi su TMDB
+
+Dalla 3.8.0, da **Opzioni → Pulsante flussi su TMDB**, puoi mostrare il pulsante
+sui poster di themoviedb.org. L’accesso al sito è un permesso opzionale:
+CineMatch legge solo titolo, ID e immagine del poster per aprire il player; non
+legge account, cookie o conversazioni. Disattivando l’opzione i pulsanti vengono
+rimossi e il permesso revocato. I poster di film e serie TV, compresa la locandina
+principale, aprono lo stesso selettore sorgenti dell’estensione.
 
 Emoji, numerazioni e sottotitoli vengono ripuliti per la ricerca: ad esempio
 `🌊 2. Flow - Un mondo da salvare (2024)`. Quando necessario vengono consultati
@@ -146,7 +162,9 @@ Accesso iniziale a quattro siti AI (`chatgpt.com`, `chat.deepseek.com`,
 `claude.ai`, `gemini.google.com`) e ai due host TMDB (`api.themoviedb.org`,
 `image.tmdb.org`). I siti di addon e sorgenti video richiedono autorizzazioni
 opzionali per singolo host, soltanto quando li colleghi o avvii un flusso.
-Nessuna autorizzazione generale viene concessa in fase di installazione.
+Anche il pulsante su themoviedb.org è opzionale e viene concesso solo quando lo
+attivi; non è richiesto dall’aggiornamento. Nessuna autorizzazione generale viene
+concessa in fase di installazione.
 Non richiede accesso a cookie o cronologia.
 Le risposte AI vengono analizzate localmente; TMDB riceve titoli, anni o nomi,
 richieste di schede e immagini, non il testo completo della conversazione.

@@ -29,11 +29,12 @@
   sheet.replaceSync(`
     :host{display:block;container-type:inline-size;margin:12px 0 22px;color:inherit;font-family:inherit;line-height:1.4;clear:both}
     :host([hidden]){display:none}*{box-sizing:border-box}.media{display:grid;grid-template-columns:108px minmax(0,1fr);gap:24px;align-items:start;margin:0;animation:arrive 180ms cubic-bezier(.22,1,.36,1)}
-    .media.no-poster{grid-template-columns:1fr}.poster{display:block;width:108px;aspect-ratio:2/3;object-fit:cover;border-radius:11px;background:rgba(127,127,127,.12)}
+    .media.no-poster{grid-template-columns:1fr}.poster-wrap{position:relative;width:108px;flex:none;line-height:0}.poster-wrap>a{display:block;line-height:0;font-size:0}.poster{display:block;width:108px;aspect-ratio:2/3;object-fit:cover;border-radius:11px;background:rgba(127,127,127,.12)}
+    .streams-button{position:absolute;right:6px;bottom:6px;z-index:2;display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid rgba(255,255,255,.5);border-radius:999px;background:rgba(8,12,19,.84);color:#fff;font-family:inherit;font-size:9px;line-height:1;font-weight:700;letter-spacing:.01em;cursor:pointer;backdrop-filter:blur(7px);box-shadow:0 4px 14px rgba(0,0,0,.28)}.streams-button:hover,.streams-button:focus-visible{background:#315fd1;border-color:#9cbbff;color:#fff}.streams-button svg{width:9px;height:9px;fill:currentColor;flex:none}
     a{color:inherit;text-decoration:none;min-width:0}a:focus-visible{outline:2px solid #3878ed;outline-offset:5px;border-radius:8px}a:hover .name{text-decoration:underline;text-underline-offset:3px}
     .people{display:flex;flex-wrap:wrap;gap:18px 16px;align-items:start}.person{display:flex;flex-direction:column;width:104px;flex:none;font-size:12px}.portrait{width:76px;height:100px;object-fit:cover;object-position:center 25%;border-radius:9px;background:rgba(127,127,127,.12)}
     .name{font-size:12px;font-weight:550;line-height:1.45;margin-top:7px;overflow-wrap:normal;word-break:normal}.role{font-size:11px;line-height:1.4;opacity:.76;margin-top:2px}.source{display:inline-block;margin-top:9px;font-size:11px;letter-spacing:.01em;opacity:.76;text-decoration:underline;text-underline-offset:3px}
-    @container(max-width:430px){.media{grid-template-columns:78px minmax(0,1fr);gap:17px}.poster{width:78px;border-radius:9px}.people{flex-wrap:nowrap;overflow-x:auto;padding:0 3px 8px 0;gap:13px;scrollbar-width:thin;scrollbar-color:rgba(127,127,127,.35) transparent;scroll-snap-type:x proximity}.person{width:94px;scroll-snap-align:start}.portrait{width:58px;height:78px;border-radius:8px}.name{font-size:11px}.role{font-size:11px}}
+    @container(max-width:430px){.media{grid-template-columns:78px minmax(0,1fr);gap:17px}.poster-wrap{width:78px}.poster{width:78px;border-radius:9px}.streams-button{right:4px;bottom:4px;padding:4px 6px;font-size:8px}.people{flex-wrap:nowrap;overflow-x:auto;padding:0 3px 8px 0;gap:13px;scrollbar-width:thin;scrollbar-color:rgba(127,127,127,.35) transparent;scroll-snap-type:x proximity}.person{width:94px;scroll-snap-align:start}.portrait{width:58px;height:78px;border-radius:8px}.name{font-size:11px}.role{font-size:11px}}
     @keyframes arrive{from{opacity:.4;transform:translateY(3px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.media{animation:none}}
   `);
   function tmdbLink(type, id, label) {
@@ -66,12 +67,35 @@
     image.src = data; image.alt = alt; image.decoding = 'async';
     return image;
   }
+  function openMedia(item, poster, trigger) {
+    const kind = item.type === 'tv' ? 'tv' : 'movie';
+    try {
+      if (globalThis.CineMatchCinema?.open({kind, id: item.id, title: item.title, poster, posterEl: trigger}) === true) return;
+    } catch {}
+    send({type: 'watch-open', kind, id: item.id}).catch(() => {
+      window.open(`https://www.themoviedb.org/${kind}/${item.id}`, '_blank', 'noopener,noreferrer');
+    });
+  }
+  function streamsButton(item, poster) {
+    const button = element('button', undefined, 'streams-button');
+    button.type = 'button';
+    button.title = `Cerca i flussi per ${item.title}`;
+    button.setAttribute('aria-label', `Cerca i flussi per ${item.title}`);
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg>Flussi';
+    button.addEventListener('click', event => {
+      if (!event.isTrusted) return;
+      event.preventDefault(); event.stopPropagation();
+      openMedia(item, poster, button);
+    });
+    return button;
+  }
   async function mediaFor(item) {
+    const isTitle = item.type === 'movie' || item.type === 'tv';
     const isMovie = item.type === 'movie';
-    const people = isMovie
-      ? [...item.directors.map(p => ({...p, kind: 'Regia'})), ...item.cast.filter(p => !item.directors.some(d => d.id === p.id)).slice(0,4).map(p => ({...p, kind: 'Cast'}))]
+    const people = isTitle
+      ? [...(item.directors ?? []).map(p => ({...p, kind: isMovie ? 'Regia' : 'Creazione'})), ...(item.cast ?? []).filter(p => !(item.directors ?? []).some(d => d.id === p.id)).slice(0,4).map(p => ({...p, kind: 'Cast'}))]
       : [];
-    const mainPath = isMovie ? item.poster : item.photo;
+    const mainPath = isTitle ? item.poster : item.photo;
     const main = mainPath ? await imageData(mainPath, 'w342').catch(() => null) : null;
     const portraits = await Promise.all(people.filter(p => p.photo).map(async person => {
       const data = await imageData(person.photo, 'w185').catch(() => null);
@@ -82,15 +106,21 @@
     const figure = element('figure', undefined, `media${main ? '' : ' no-poster'}`);
     figure.setAttribute('aria-label', `Immagini di ${item.title ?? item.name}`);
     if (main) {
-      const poster = tmdbLink(item.type, item.id, isMovie ? `Guarda ${item.title} con CineMatch` : `Foto di ${item.name}`);
-      if(isMovie){poster.title=`Guarda ${item.title} con CineMatch`;poster.addEventListener('click',event=>{
-        if(!event.isTrusted)return;
-        event.preventDefault();
-        try{if(globalThis.CineMatchCinema?.open({id:item.id,title:item.title,poster:main,posterEl:poster})===true)return;}catch{}
-        send({type:'watch-open',id:item.id}).catch(()=>window.open(poster.href,'_blank','noopener,noreferrer'));
-      });}
-      poster.append(photo(main, isMovie ? `Locandina di ${item.title}` : `Foto di ${item.name}`, 'poster'));
-      figure.append(poster);
+      const poster = tmdbLink(item.type, item.id, isTitle ? `Guarda ${item.title} con CineMatch` : `Foto di ${item.name}`);
+      if (isTitle) {
+        poster.title = `Guarda ${item.title} con CineMatch`;
+        poster.addEventListener('click', event => {
+          if (!event.isTrusted) return;
+          event.preventDefault();
+          openMedia(item, main, poster);
+        });
+      }
+      poster.append(photo(main, isTitle ? `Locandina di ${item.title}` : `Foto di ${item.name}`, 'poster'));
+      if (isTitle) {
+        const wrap = element('div', undefined, 'poster-wrap');
+        wrap.append(poster, streamsButton(item, main));
+        figure.append(wrap);
+      } else figure.append(poster);
     }
     const caption = element('figcaption'), strip = element('div', undefined, 'people');
     for (const person of visiblePeople) {

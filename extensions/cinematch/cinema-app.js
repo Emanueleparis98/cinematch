@@ -10,7 +10,10 @@ const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const formatTime=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
 const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(value)||value<1)return "";const h=Math.floor(value/60),m=value%60;return h?`${h}h ${m}m`:`${m}m`;};
 
-const state={movie:null,addons:[],groups:[],filter:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null};
+const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null};
+const embedded=window.parent!==window;
+const mediaPhrase=()=>state.kind==="tv"?"questa serie":"questo film";
+const episodeLabel=()=>state.kind==="tv"&&state.season!==null&&state.episode!==null?`S${state.season} E${state.episode}`:"";
 
 /* ---------- Player ---------- */
 const player=createPlayer({
@@ -102,9 +105,10 @@ function showPlayer(stream){
   document.body.classList.add("player-mode");document.body.classList.remove("addons-mode");
   $("pickerView").hidden=true;$("addonsView").hidden=true;$("playerView").hidden=false;
   $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
-  $("playerTitle").textContent=state.movie?.title??"Film";
-  const presentation=present(stream);
-  $("playerSource").textContent=`${stream.groupName??"Sorgente"} · ${presentation.quality}`;
+  $("backToPicker").textContent=state.kind==="tv"?"← Serie":"← Film";
+  $("playerTitle").textContent=state.movie?.title??(state.kind==="tv"?"Serie":"Film");
+  const presentation=present(stream),episode=state.kind==="tv"?`${episodeLabel()}${state.episodeTitle?` · ${state.episodeTitle}`:""}`:"";
+  $("playerSource").textContent=`${episode?`${episode} · `:""}${stream.groupName??"Sorgente"} · ${presentation.quality}`;
   $("seek").value="0";$("seek").parentElement.style.setProperty("--progress","0%");$("time").textContent="0:00 / 0:00";
   delete $("codecScreen").dataset.audio;delete $("codecScreen").dataset.video;
   $("stage").classList.remove("hide-chrome");
@@ -120,8 +124,9 @@ function showPicker(){
   document.body.classList.remove("player-mode","addons-mode");
   $("playerView").hidden=true;$("addonsView").hidden=true;$("pickerView").hidden=false;
   $("manageAddons").textContent="Addon";$("topbarTitle").textContent="Scegli come guardarlo";
+  $("backToPicker").textContent=state.kind==="tv"?"← Serie":"← Film";
   closeDrawer();renderSources();
-  $("playBest").focus({preventScroll:true});
+  (state.kind==="tv"?$("seasonSelect"):$("playBest")).focus({preventScroll:true});
   updateResume();
 }
 function showAddons(){
@@ -130,7 +135,8 @@ function showAddons(){
   state.view="addons";
   document.body.classList.remove("player-mode");document.body.classList.add("addons-mode");
   $("pickerView").hidden=true;$("playerView").hidden=true;$("addonsView").hidden=false;
-  $("manageAddons").textContent="Film";$("topbarTitle").textContent="Addon e player";
+  $("manageAddons").textContent=state.kind==="tv"?"Serie":"Film";$("topbarTitle").textContent="Addon e player";
+  $("addonsBack").textContent=state.kind==="tv"?"← Serie":"← Film";
   renderAddons();
   $("addonsBack").focus({preventScroll:true});
 }
@@ -151,7 +157,7 @@ $("addonForm").onsubmit=async event=>{
     const key="streamAddon:"+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
     await chrome.storage.local.set({[key]:addon});
     $("addonUrl").value="";
-    setAddonStatus(`${addon.name} collegato. Torna al film per scegliere una sorgente.`,"success");
+    setAddonStatus(`${addon.name} collegato. Torna al titolo per scegliere una sorgente.`,"success");
     await loadAddons();renderAddons();await loadStreams();
   }catch(error){
     setAddonStatus(error.message??"Non è stato possibile collegare l’addon.","error");
@@ -173,7 +179,9 @@ function renderAddons(){
     };
     const main=el("div",undefined,"main");main.append(el("strong",addon.name));
     let host="";try{host=httpUrl(addon.url).host;}catch{}
-    main.append(el("span",[host,addon.version].filter(Boolean).join(" · ")));
+    const supported=new Set(addon.resources.flatMap(resource=>resource.types));
+    const kinds=[supported.has("movie")?"Film":null,supported.has("series")?"Serie TV":null].filter(Boolean).join(" · ");
+    main.append(el("span",[host,addon.version,kinds].filter(Boolean).join(" · ")));
     const remove=el("button","Rimuovi","cm-addon-remove");remove.type="button";remove.setAttribute("aria-label",`Rimuovi ${addon.name}`);
     remove.onclick=async()=>{await chrome.storage.local.remove(addon.key);await loadAddons();renderAddons();await loadStreams();};
     row.append(check,main,remove);list.append(row);
@@ -242,10 +250,10 @@ function renderEmptyState(title,message,actionLabel="Gestisci addon"){
 }
 const escapeText=value=>String(value).replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
 function renderEmpty(){
-  renderEmptyState("Nessun addon collegato","Collega un addon compatibile con Stremio o Nuvio per vedere qui le sorgenti di questo film. Puoi anche importare una lista JSON.","Collega il primo addon");
+  renderEmptyState("Nessun addon collegato",`Collega un addon compatibile con Stremio o Nuvio per vedere qui le sorgenti di ${mediaPhrase()}. Puoi anche importare una lista JSON.`,"Collega il primo addon");
 }
 function renderNoActiveAddons(){
-  renderEmptyState("Nessun addon attivo","Tutti gli addon collegati sono disattivati. Riattivane uno per vedere le sorgenti di questo film.","Gestisci addon");
+  renderEmptyState("Nessun addon attivo",`Tutti gli addon collegati sono disattivati. Riattivane uno per vedere le sorgenti di ${mediaPhrase()}.`,"Gestisci addon");
 }
 function renderErrorCard(group){
   const card=el("div",undefined,"cm-error-card");
@@ -298,8 +306,8 @@ function renderSources(){
   if(!visible.length&&!errors.length){const empty=el("div",undefined,"cm-empty");empty.innerHTML='<h3>Nessun flusso per questo filtro</h3><p>Prova un altro addon o aggiorna le sorgenti.</p>';list.append(empty);$("sourcesStatus").textContent="Nessun flusso per questo filtro.";return;}
   for(const {stream} of visible)list.append(renderSourceCard(stream));
   for(const group of errors)list.append(renderErrorCard(group));
-  const playable=all.filter(item=>item.stream.playable).length;
-  $("sourcesStatus").textContent=`${all.length} sorgenti · ${playable} riproducibili · aggiornate ora`;
+  const playable=all.filter(item=>item.stream.playable).length,episode=state.kind==="tv"?` · ${episodeLabel()}`:"";
+  $("sourcesStatus").textContent=`${all.length} sorgenti · ${playable} riproducibili${episode} · aggiornate ora`;
 }
 function renderDrawer(){
   const list=$("drawerList");list.replaceChildren();
@@ -310,11 +318,13 @@ function renderDrawer(){
 async function loadAddons(){
   const data=await chrome.storage.local.get(null);
   state.addons=Object.entries(data).filter(([key])=>key.startsWith("streamAddon:")).flatMap(([key,value])=>{
-    try{const addon=parseManifest({id:value.id,name:value.name,version:value.version,description:value.description,resources:value.resources.map(resource=>({name:"stream",types:resource.types,idPrefixes:resource.prefixes})),types:["movie"]},value.url);return [{...addon,key,enabled:value.enabled!==false}];}catch{return [];}
+    try{const addon=parseManifest({id:value.id,name:value.name,version:value.version,description:value.description,resources:value.resources.map(resource=>({name:"stream",types:resource.types,idPrefixes:resource.prefixes})),types:["movie","series"]},value.url);return [{...addon,key,enabled:value.enabled!==false}];}catch{return [];}
   }).sort((a,b)=>a.name.localeCompare(b.name,"it"));
 }
 async function loadStreams(){
   if(!state.movie){state.loading=false;return;}
+  const series=state.kind==="tv";
+  if(series&&(state.season===null||state.episode===null)){state.loading=false;return;}
   const current=++state.generation;state.loading=true;state.groups=[];state.selected=null;state.recommended=null;state.recommendedId=null;state.presented=new Map();
   renderChips();renderSources();
   const queue=state.addons.filter(addon=>addon.enabled);
@@ -323,10 +333,11 @@ async function loadStreams(){
     while(queue.length){
       const addon=queue.shift();const group={key:addon.key,name:addon.name,streams:[],error:null,permission:null};
       try{
-        const url=resourceUrl(addon,state.movie);
-        if(!url)group.error="Identificativo del film non supportato da questo addon.";
+        if(!addon.resources.some(resource=>resource.types.includes(series?"series":"movie")))throw new Error(series?"Questo addon non supporta le serie TV.":"Questo addon non supporta i film.");
+        const url=resourceUrl(addon,state.movie,series?{season:state.season,episode:state.episode}:null);
+        if(!url)group.error=series?"Identificativo della serie o dell’episodio non supportato da questo addon.":"Identificativo del film non supportato da questo addon.";
         else if(!await chrome.permissions.contains({origins:[permissionOrigin(url)]})){group.error="Il collegamento al sito deve essere autorizzato di nuovo.";group.permission=url;}
-        else{const parsed=parseStreams(await fetchJson(url));group.streams=parsed.map((stream,index)=>({...stream,id:`${addon.key}:${index}`,groupKey:addon.key,groupName:addon.name}));if(!group.streams.length)group.error="Nessun flusso disponibile per questo film.";}
+        else{const parsed=parseStreams(await fetchJson(url));group.streams=parsed.map((stream,index)=>({...stream,id:`${addon.key}:${index}`,groupKey:addon.key,groupName:addon.name}));if(!group.streams.length)group.error=series?`Nessun flusso disponibile per ${episodeLabel()}.`:"Nessun flusso disponibile per questo film.";}
       }catch(error){group.error=error.message??"Addon non disponibile.";}
       if(current!==state.generation)return;
       state.groups.push(group);state.groups.sort((a,b)=>a.name.localeCompare(b.name,"it"));renderChips();renderSources();
@@ -347,22 +358,24 @@ async function startStream(stream,{resumeAt=0}={}){
   }catch(error){showPlayerError(error);}
 }
 
-/* ---------- Movie and poster ---------- */
-function renderMovie(){
-  const movie=state.movie;
-  $("movieTitle").textContent=movie.title||"Film";
-  $("moviePoster").alt=movie.title?`Locandina di ${movie.title}`:"";
-  $("movieOriginal").textContent=movie.originalTitle&&movie.originalTitle!==movie.title?movie.originalTitle:"";
-  const meta=[movie.year,formatRuntime(movie.runtime),...(movie.genres??[])].filter(Boolean);
-  $("movieMeta").replaceChildren(...meta.map(value=>el("span",value)));
-  if(movie.rating){$("movieRating").hidden=false;$("movieRating").replaceChildren();const star=el("span","★","star");$("movieRating").append(star,` ${movie.rating.toLocaleString("it-IT")} `,el("small",`· ${movie.votes?.toLocaleString("it-IT")??"n.d."} voti TMDB`));}else $("movieRating").hidden=true;
-  const directors=(movie.directors??[]).map(person=>person.name).slice(0,2);
-  const cast=(movie.cast??[]).map(person=>person.name).filter(name=>!directors.includes(name)).slice(0,3);
-  $("movieCredits").replaceChildren("Regia di ",el("strong",directors.join(", ")||"n.d."),cast.length?` · con ${cast.join(", ")}`:"");
-  $("movieOverview").textContent=movie.overview??"";
-  $("tmdbLink").href=`https://www.themoviedb.org/movie/${movie.id}`;$("tmdbLink").hidden=false;
-  $("posterFallback").textContent=(movie.title||"CM").split(/\s+/).map(word=>word[0]).join("").slice(0,2).toUpperCase();
-  document.title=`${movie.title??"Film"} · CineMatch`;
+/* ---------- Media, episodes and poster ---------- */
+function renderMedia(){
+  const item=state.movie,tv=state.kind==="tv";
+  $("movieTitle").textContent=item.title||(tv?"Serie":"Film");
+  $("moviePoster").alt=item.title?`Locandina di ${item.title}`:"";
+  $("movieOriginal").textContent=item.originalTitle&&item.originalTitle!==item.title?item.originalTitle:"";
+  const meta=tv?[item.year,item.numberOfSeasons?`${item.numberOfSeasons} stagion${item.numberOfSeasons===1?"e":"i"}`:null,...(item.genres??[])]:[item.year,formatRuntime(item.runtime),...(item.genres??[])];
+  $("movieMeta").replaceChildren(...meta.filter(Boolean).map(value=>el("span",value)));
+  if(item.rating){$("movieRating").hidden=false;$("movieRating").replaceChildren();const star=el("span","★","star");$("movieRating").append(star,` ${item.rating.toLocaleString("it-IT")} `,el("small",`· ${item.votes?.toLocaleString("it-IT")??"n.d."} voti TMDB`));}else $("movieRating").hidden=true;
+  const directors=(item.directors??[]).map(person=>person.name).slice(0,2);
+  const cast=(item.cast??[]).map(person=>person.name).filter(name=>!directors.includes(name)).slice(0,3);
+  $("movieCredits").replaceChildren(tv?"Creata da ":"Regia di ",el("strong",directors.join(", ")||"n.d."),cast.length?` · con ${cast.join(", ")}`:"");
+  $("movieOverview").textContent=item.overview??"";
+  $("tmdbLink").href=`https://www.themoviedb.org/${tv?"tv":"movie"}/${item.id}`;$("tmdbLink").hidden=false;
+  $("posterFallback").textContent=(item.title||"CM").split(/\s+/).map(word=>word[0]).join("").slice(0,2).toUpperCase();
+  $("backToPicker").textContent=tv?"← Serie":"← Film";
+  $("episodeControls").hidden=!tv;
+  document.title=`${item.title??(tv?"Serie":"Film")} · CineMatch`;
 }
 async function loadPoster(){
   if(!state.movie?.poster)return;
@@ -370,9 +383,13 @@ async function loadPoster(){
   $("moviePoster").src=result.data;$("moviePoster").hidden=false;$("posterFallback").hidden=true;
   state.poster=result.data;
 }
+function resumeKey(){
+  if(!state.movie)return null;
+  if(state.kind==="tv")return state.season===null||state.episode===null?null:`resume:tv:${state.movie.id}:${state.season}:${state.episode}`;
+  return `resume:${state.movie.id}`;
+}
 async function loadResume(){
-  if(!state.movie)return;
-  const key=`resume:${state.movie.id}`;
+  const key=resumeKey();if(!key){state.resume=0;updateResume();return;}
   const saved=await chrome.storage.session.get(key);
   state.resume=Number(saved[key])||0;updateResume();
 }
@@ -380,9 +397,58 @@ function updateResume(){
   const visible=state.resume>5;$("resumePlay").hidden=!visible;if(visible)$("resumeTime").textContent=formatTime(state.resume);
 }
 function saveResume(){
-  if(!state.movie)return;
+  const key=resumeKey();if(!key)return;
   const position=player.currentTime;
-  if(Number.isFinite(position)&&position>5)chrome.storage.session.set({[`resume:${state.movie.id}`]:position}).catch(()=>{});
+  if(Number.isFinite(position)&&position>5)chrome.storage.session.set({[key]:position}).catch(()=>{});
+}
+function seasonLabel(season){return season.season===0?"Speciali":`Stagione ${season.season}`;}
+async function setupEpisodes(preferredSeason,preferredEpisode){
+  const seasons=(state.movie.seasons??[]).filter(season=>season.episodes>0);
+  if(!seasons.length)throw new Error("Nessun episodio disponibile per questa serie.");
+  state.seasons=seasons;
+  const seasonSelect=$("seasonSelect");
+  seasonSelect.replaceChildren(...seasons.map(season=>new Option(`${seasonLabel(season)}${season.episodes?` · ${season.episodes} ep.`:""}`,String(season.season))));
+  seasonSelect.disabled=false;
+  seasonSelect.onchange=()=>loadSeason(Number(seasonSelect.value),null);
+  $("episodeSelect").onchange=()=>setEpisode(Number($("episodeSelect").value));
+  const selected=seasons.find(season=>season.season===preferredSeason)??seasons.find(season=>season.season===1)??seasons[0];
+  seasonSelect.value=String(selected.season);
+  await loadSeason(selected.season,preferredEpisode);
+}
+async function loadSeason(seasonNumber,preferredEpisode){
+  if(!state.movie||state.kind!=="tv")return;
+  const current=++state.seasonGeneration;
+  state.season=seasonNumber;state.episode=null;state.episodeTitle="";state.episodes=[];state.resume=0;updateResume();
+  $("seasonSelect").value=String(seasonNumber);$("episodeSelect").disabled=true;
+  const episodeStatus=$("episodeStatus");episodeStatus.hidden=false;episodeStatus.textContent="Carico gli episodi…";
+  try{
+    const result=await send({type:"watch-season",id:state.movie.id,season:seasonNumber});
+    if(current!==state.seasonGeneration)return;
+    const episodes=result.item.episodes??[];
+    if(!episodes.length)throw new Error("Questa stagione non contiene episodi.");
+    state.episodes=episodes;
+    const select=$("episodeSelect");
+    select.replaceChildren(...episodes.map(episode=>new Option(`Episodio ${episode.episode}${episode.title?` · ${episode.title}`:""}`,String(episode.episode))));
+    select.disabled=false;
+    const selected=episodes.find(episode=>episode.episode===preferredEpisode)??episodes[0];
+    select.value=String(selected.episode);
+    await setEpisode(selected.episode);
+  }catch(error){
+    if(current!==state.seasonGeneration)return;
+    episodeStatus.hidden=false;episodeStatus.textContent=error.message;
+    const status=$("sourcesStatus");status.textContent=error.message;status.classList.add("error");
+    $("sourceList").replaceChildren();$("playBest").disabled=true;
+  }
+}
+async function setEpisode(episodeNumber){
+  const episode=state.episodes.find(item=>item.episode===episodeNumber);
+  if(!episode)return;
+  state.episode=episode.episode;state.episodeTitle=episode.title??"";
+  $("episodeSelect").value=String(episode.episode);
+  $("episodeStatus").hidden=true;$("episodeStatus").textContent="";
+  document.title=`${state.movie.title} · S${state.season} E${state.episode} · CineMatch`;
+  await loadResume().catch(()=>{});
+  await loadStreams();
 }
 window.addEventListener("pagehide",saveResume);
 setInterval(()=>{if(state.view==="player"&&!player.paused)saveResume();},5000);
@@ -396,7 +462,7 @@ window.addEventListener("message",event=>{
   if(event.source!==parent)return;
   if(event.data?.type==="cinematch:theme")applyTheme(event.data.theme,event.data.accent);
 });
-function closeOverlay(){parent.postMessage({type:"cinematch:close"},"*");}
+function closeOverlay(){if(embedded)parent.postMessage({type:"cinematch:close"},"*");else window.close();}
 let toastTimer;
 function toast(message){const toast=$("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2400);}
 
@@ -436,20 +502,30 @@ document.addEventListener("keydown",event=>{
 
 /* ---------- Boot ---------- */
 async function boot(){
-  const id=Number(new URL(location.href).searchParams.get("movie"));
-  if(!Number.isSafeInteger(id)||id<1)throw new Error("Film non valido.");
-  const result=await send({type:"watch-movie",id});
-  state.movie=result.item;renderMovie();
+  const params=new URL(location.href).searchParams;
+  const kind=params.get("kind")==="tv"?"tv":"movie";
+  const id=Number(kind==="tv"?params.get("id"):params.get("movie")??params.get("id"));
+  if(!Number.isSafeInteger(id)||id<1)throw new Error("Titolo non valido.");
+  const preferredSeason=kind==="tv"&&params.get("season")!==null&&Number.isSafeInteger(Number(params.get("season")))&&Number(params.get("season"))>=0?Number(params.get("season")):null;
+  const preferredEpisode=kind==="tv"&&params.get("episode")!==null&&Number.isSafeInteger(Number(params.get("episode")))&&Number(params.get("episode"))>0?Number(params.get("episode")):null;
+  const result=await send({type:"watch-media",kind,id});
+  state.kind=kind;state.movie=result.item;renderMedia();
   loadPoster().catch(()=>{});
-  loadResume().catch(()=>{});
-  await loadAddons();renderChips();renderSources();
-  updateResume();
-  parent.postMessage({type:"cinematch:ready"},"*");
-  await loadStreams();
+  await loadAddons();renderChips();
+  if(kind==="tv"){
+    state.loading=true;$("sourcesStatus").textContent="Carico gli episodi…";renderSkeletons();
+    parent.postMessage({type:"cinematch:ready"},"*");
+    await setupEpisodes(preferredSeason,preferredEpisode);
+  }else{
+    await loadResume().catch(()=>{});
+    updateResume();
+    parent.postMessage({type:"cinematch:ready"},"*");
+    await loadStreams();
+  }
 }
 globalThis.CineMatchCinemaApp={showAddons,showPicker,state};
 boot().catch(error=>{
-  $("movieTitle").textContent="Film non disponibile";
+  $("movieTitle").textContent="Titolo non disponibile";
   $("movieOriginal").textContent="";
   $("movieMeta").replaceChildren();$("movieRating").hidden=true;$("movieCredits").textContent="";$("movieOverview").textContent="";
   $("posterFallback").textContent="!";

@@ -16,6 +16,7 @@ let passed=0,requests=0,failOnceQuery='';const searches=[],errors=[];
 const check=async(name,fn)=>{await fn();console.log(`PASS ${name}`);passed++;};
 const movie={id:5156,title:'Ladri di biciclette',original_title:'Ladri di biciclette',release_date:'1948-11-24',poster_path:'/poster.jpg',credits:{crew:[{id:1,name:'Vittorio De Sica',job:'Director',profile_path:'/director.jpg'}],cast:[{id:2,name:'Lamberto Maggiorani',character:'Antonio',profile_path:'/cast.jpg'},{id:3,name:'Enzo Staiola',character:'Bruno',profile_path:null}]}};
 const films=[movie,{...movie,id:10,title:'La terrazza',original_title:'La terrazza',release_date:'1980-02-08',credits:{...movie.credits,crew:[{id:4,name:'Ettore Scola',job:'Director',profile_path:'/scola.jpg'}]}},{...movie,id:823219,title:'Flow - Un mondo da salvare',original_title:'Straume',release_date:'2024-01-01',credits:{cast:[],crew:[{id:5,name:'Gints Zilbalodis',job:'Director',profile_path:'/gints.jpg'}]}},{...movie,id:19,title:'Metropolis',original_title:'Metropolis',release_date:'1927-01-01'},{...movie,id:20,title:'Amarcord',original_title:'Amarcord',release_date:'1973-01-01'},{...movie,id:99,title:'Temporaneo',original_title:'Temporaneo'}];
+const series={id:136315,name:'The Bear',original_name:'The Bear',first_air_date:'2022-06-23',poster_path:'/bear.jpg',external_ids:{imdb_id:'tt14452776'},created_by:[{id:7,name:'Christopher Storer',profile_path:'/storer.jpg'}],credits:{cast:[{id:8,name:'Jeremy Allen White',character:'Carmy',profile_path:'/white.jpg'}]},alternative_titles:{results:[{title:'The Bear'}]},genres:[{name:'Commedia'}],number_of_seasons:2,number_of_episodes:18,vote_average:8.4,vote_count:1200,seasons:[{season_number:1,name:'Stagione 1',episode_count:8,air_date:'2022-06-23'}]};
 films.push({...movie,id:34,title:'Non aprite quella porta',original_title:'The Texas Chain Saw Massacre',release_date:'1974-01-01',credits:{...movie.credits,crew:[{id:6,name:'Tobe Hooper',job:'Director',profile_path:'/hooper.jpg'}]}});
 const answer='<h3>1. Ladri di biciclette (1948) — Regia: Vittorio De Sica</h3><p>Un classico del neorealismo da scoprire.</p><h3>🌊 2. Flow - Un mondo da salvare (2024)</h3><p>Un viaggio animato attraverso un mondo sommerso.</p><h3>8. La terrazza (1980) — Regia: Ettore Scola</h3><ul><li><strong>Titolo originale:</strong> La terrazza</li><li><strong>Attinenza:</strong> Una chiusura discussa del ciclo.</li></ul>';
 const fixture=body=>`<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI answer fixture</title><body><main>${body}</main></body></html>`;
@@ -25,11 +26,15 @@ if(!live){
   await context.route('https://api.themoviedb.org/**',async route=>{
     requests++;const url=new URL(route.request().url());assert.ok(!url.href.includes('PRIVATE_USER_CONVERSATION'));
     let data={images:{}},status=200;
-    if(url.pathname.includes('/search/')){
+    if(url.pathname.includes('/search/tv')){
+      const query=url.searchParams.get('query');searches.push(query);
+      data={results:[series].filter(show=>show.name===query||show.original_name===query)};
+    }else if(url.pathname.includes('/search/')){
       const query=url.searchParams.get('query');searches.push(query);
       data={results:query==='Ambiguous'?[{...movie,id:30,title:'Ambiguous'},{...movie,id:31,title:'Ambiguous'}]:films.filter(m=>m.title===query||m.original_title===query)};
       if(query===failOnceQuery){failOnceQuery='';status=500;}
-    }else if(url.pathname.includes('/movie/'))data=films.find(m=>m.id===Number(url.pathname.split('/').at(-1)))??movie;
+    }else if(url.pathname.includes('/tv/'))data=series;
+    else if(url.pathname.includes('/movie/'))data=films.find(m=>m.id===Number(url.pathname.split('/').at(-1)))??movie;
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
   });
   await context.route('https://image.tmdb.org/**',route=>{requests++;return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=','base64')});});
@@ -40,7 +45,7 @@ async function settle(page){await page.evaluate(async()=>{await Promise.all([...
 async function theme(page,mode='dark'){
   await page.evaluate(mode=>{const sheet=new CSSStyleSheet();sheet.replaceSync(`body{margin:0;background:${mode==='dark'?'#121212':'#fff'};color:${mode==='dark'?'#ededf0':'#22252b'};font:16px/1.7 Arial,sans-serif}main{max-width:800px;margin:auto;padding:24px}h3{font-size:22px;line-height:1.4;margin:28px 0 16px}p{margin:16px 0}li{margin:10px 0}[data-message-author-role="user"],[data-role="user"]{display:none}@media(max-width:400px){main{padding:16px}h3{font-size:20px}}`);document.adoptedStyleSheets=[sheet];},mode);
 }
-async function noControls(page){return hosts(page).evaluateAll(nodes=>nodes.every(n=>!n.shadowRoot.querySelector('button,input,select,form,details,h3')));}
+async function noControls(page){return hosts(page).evaluateAll(nodes=>nodes.every(n=>{const shadow=n.shadowRoot;return !shadow.querySelector('input,select,form,details,h3')&&[...shadow.querySelectorAll('button')].every(button=>button.classList.contains('streams-button'));}));}
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');const id=new URL(worker.url()).host;
   const options=await context.newPage();options.on('pageerror',e=>errors.push(e.message));await options.goto(`chrome-extension://${id}/options.html`);
@@ -66,6 +71,26 @@ try{
     });
     if(page!==first)await page.close();
   }
+  await check('each title poster has one explicit Flussi button outside its link',async()=>{
+    const result=await hosts(first).evaluateAll(nodes=>nodes.map(host=>{
+      const button=host.shadowRoot.querySelector('.streams-button');
+      return {poster:Boolean(host.shadowRoot.querySelector('.poster')),buttons:host.shadowRoot.querySelectorAll('.streams-button').length,nested:Boolean(button?.closest('a')),label:button?.getAttribute('aria-label')??''};
+    }));
+    assert.ok(result.length>=3);assert.ok(result.filter(item=>item.poster).every(item=>item.buttons===1&&!item.nested&&/^Cerca i flussi per /.test(item.label)));
+    const button=hosts(first).first().locator('.streams-button');
+    assert.equal(await button.innerText(),'Flussi');
+  });
+  await check('explicit TV references receive a series poster and the same Flussi action',async()=>{
+    const tv=await context.newPage();tv.on('pageerror',e=>errors.push(e.message));await tv.goto('https://chatgpt.com/tv');await theme(tv);
+    await tv.evaluate(()=>{const root=document.createElement('div');root.dataset.messageAuthorRole='assistant';root.innerHTML='<h3>7. The Bear (2022) — Serie TV</h3><p>Una serie intensa e brevissima.</p>';document.querySelector('main').append(root);});
+    const tvButton=tv.getByRole('button',{name:'Cerca i flussi per The Bear',exact:true});
+    await tvButton.waitFor({timeout:20000});
+    assert.equal(await tv.getByRole('img',{name:'Locandina di The Bear',exact:true}).isVisible(),true);
+    assert.equal(await tvButton.innerText(),'Flussi');
+    assert.ok(searches.includes('The Bear'));
+    assert.equal(await noControls(tv),true);
+    await tv.close();
+  });
   await check('light theme uses the answer typography and never introduces a boxed tool',async()=>{
     await theme(first,'light');assert.equal(await noControls(first),true);
     const style=await media(first).first().evaluate(node=>({background:getComputedStyle(node).backgroundColor,border:getComputedStyle(node).borderWidth,color:getComputedStyle(node).color}));assert.equal(style.background,'rgba(0, 0, 0, 0)');assert.equal(style.border,'0px');assert.equal(style.color,'rgb(34, 37, 43)');

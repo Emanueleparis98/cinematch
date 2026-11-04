@@ -23,7 +23,12 @@
       <p class="muted small">La prima volta seleziona la cartella da cui hai caricato l’estensione, quella che contiene <code>manifest.json</code>. Dopo l’aggiornamento l’estensione si ricarica da sola; TMDB e addon restano perché l’ID non cambia.</p>
     </div>
   </section>
-  <section><h2>Da qui, tutto automatico.</h2><p>La credenziale viene verificata e conservata nel browser. Le immagini appaiono sotto i titoli riconosciuti: nessun pulsante, modulo o impostazione dentro la risposta. Gli abbinamenti incerti vengono omessi.</p>
+  <section id="tmdb-site"><h2>Pulsante flussi su TMDB</h2>
+    <label class="checkbox-label remember"><input id="tmdb-site-toggle" type="checkbox"> Mostra “Flussi” sui poster di themoviedb.org</label>
+    <p id="tmdb-site-status" class="muted small" role="status" aria-live="polite">Controllo l’opzione…</p>
+    <p class="muted small">L’accesso a themoviedb.org è opzionale e viene richiesto solo quando attivi il pulsante. CineMatch legge il titolo e l’immagine visibili del poster per aprire il selettore delle sorgenti; non legge account, cookie o conversazioni e non invia dati a TMDB.</p>
+  </section>
+  <section><h2>Da qui, tutto automatico.</h2><p>La credenziale viene verificata e conservata nel browser. Le immagini appaiono sotto i titoli riconosciuti con un discreto pulsante <strong>Flussi</strong>: nessun modulo o impostazione dentro la risposta. Gli abbinamenti incerti vengono omessi.</p>
     <p>Il riconoscimento riguarda le risposte dell'AI, non i messaggi dell'utente. TMDB riceve titoli, anni o nomi da cercare; il testo intero della conversazione resta nella chat. Le schede vicine all'area visibile si caricano automaticamente, senza costruire un archivio locale.</p>
   </section>
   <section class="credits"><h2>Crediti</h2><a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" aria-label="The Movie Database"><img src="assets/tmdb.svg" alt="TMDB" width="120" height="48"></a><p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p><p class="muted small">L'API TMDB è gratuita per uso non commerciale con attribuzione. I limiti delle chat AI rimangono quelli dei rispettivi servizi. <a href="https://developer.themoviedb.org/docs/faq" target="_blank" rel="noopener noreferrer">Condizioni TMDB</a>.</p></section>

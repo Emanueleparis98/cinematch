@@ -1,0 +1,7 @@
+.cm-tmdb-poster-host{position:relative!important}
+.cm-tmdb-stream-button{all:unset;box-sizing:border-box;position:absolute;right:8px;bottom:8px;z-index:30;display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:28px;padding:5px 8px;border:1px solid rgba(255,255,255,.55);border-radius:999px;background:rgba(8,12,19,.86);color:#fff;font:700 10px/1 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.01em;cursor:pointer;backdrop-filter:blur(7px);box-shadow:0 5px 16px rgba(0,0,0,.32);transition:background .16s,border-color .16s,transform .16s}
+.cm-tmdb-stream-button:hover,.cm-tmdb-stream-button:focus-visible{background:#315fd1;border-color:#b7cbff;color:#fff;transform:translateY(-1px)}
+.cm-tmdb-stream-button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.cm-tmdb-stream-button svg{width:9px;height:9px;flex:none;fill:currentColor}
+@media(max-width:640px){.cm-tmdb-stream-button{right:5px;bottom:5px;min-height:25px;padding:4px 6px;font-size:9px}.cm-tmdb-stream-button svg{width:8px;height:8px}}
+@media(prefers-reduced-motion:reduce){.cm-tmdb-stream-button{transition:none}}

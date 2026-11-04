@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.7.0
+# CineMatch — estensione browser 3.8.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.7.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.8.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni e premi l’icona per aprire il pannello. In Edge: `edge://extensions`.
@@ -18,7 +18,8 @@ Estensioni e premi l’icona per aprire il pannello. In Edge: `edge://extensions
 usa **Opzioni → Aggiornamenti**. Se arrivi da una versione precedente alla 3.6.0,
 sostituisci i file nella cartella che stai già usando (la vedi in
 `chrome://extensions` → dettagli → “caricata da”) e premi **Reload**; dalla 3.6.0
-in poi il self-updater mantiene ID, credenziali e addon.
+in poi il self-updater mantiene ID, credenziali e addon. Il pulsante su TMDB
+richiede un permesso **opzionale** che attivi tu da Opzioni.
 
 [Istruzioni complete, permessi e privacy](extensions/cinematch/README.md).
 Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato sullo store.
@@ -37,16 +38,30 @@ Chrome 116+; Edge con supporto `sidePanel`. Pacchetto manuale, non pubblicato su
 
 Per le immagini collega TMDB una volta dal pulsante nell'intestazione del pannello.
 Le immagini appaiono da sole sotto ciascun titolo mentre la chat risponde:
-locandina, regista e primi interpreti. Seguono colori e caratteri della chat,
-senza pannelli, titoli duplicati, pulsanti, impostazioni o moduli di ricerca.
-Gli abbinamenti incerti vengono omessi, lasciando leggibile il testo originale.
-Emoji, numerazioni e sottotitoli tradotti vengono gestiti automaticamente.
+locandina, regista e primi interpreti. Possono mostrare un discreto pulsante
+**Flussi** per aprire il player. Seguono colori e caratteri della chat, senza
+pannelli, titoli duplicati, impostazioni o moduli di ricerca. Gli abbinamenti
+incerti vengono omessi, lasciando leggibile il testo originale. Emoji,
+numerazioni e sottotitoli tradotti vengono gestiti automaticamente.
+
+### Pulsante Flussi su TMDB
+
+Dalla 3.8.0 puoi mostrare lo stesso pulsante sui poster di **themoviedb.org**:
+film e serie TV, compresi i poster delle card e la locandina principale. Si
+attiva da **Opzioni → Pulsante flussi su TMDB** e richiede un permesso opzionale
+solo per quel sito. Non serve per le immagini nelle chat.
+
+Per le serie TV il player chiede stagione ed episodio, interroga gli addon con
+le richieste `series` e conserva un punto di ripresa separato per ogni episodio.
+Gli addon collegati con versioni precedenti potrebbero aver conservato solo il
+tipo film: se una serie non compare, ricollega il manifest dell’addon.
 
 Vengono analizzate localmente le risposte dell'AI, non i messaggi dell'utente.
 TMDB riceve titoli, anni o nomi, non la conversazione. Nessun invio automatico
 di messaggi e nessuna API AI. Quattro host AI e i due host ufficiali TMDB autorizzati;
-nessuna cronologia o accesso generale iniziale ai siti. Addon e sorgenti video
-richiedono permessi opzionali per singolo host. La chiave non viene esposta alle chat.
+nessuna cronologia o accesso generale iniziale ai siti. Addon, sorgenti video e
+pulsante su themoviedb.org richiedono permessi opzionali per singolo host.
+La chiave non viene esposta alle chat.
 La bozza è conservata in memoria per la sessione del browser, senza archivio
 progressivo di film o richieste. I limiti della chat rimangono quelli del servizio.
 
@@ -56,8 +71,8 @@ Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiorname
 scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
 scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
 quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. La **3.7.0** include già
-l’updater: per una nuova installazione usa lo ZIP 3.7.0, mentre chi arriva da una
+restano perché l’ID e la cartella non cambiano. La **3.8.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.8.0, mentre chi arriva da una
 versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
 L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
@@ -112,6 +127,7 @@ fallback nella scheda dedicata.
 [Launcher correnti e prompt, 3.5.0](docs/estensione-3.5.0-launcher.md).
 [Aggiornamenti integrati, 3.6.0](docs/estensione-3.6.0-aggiornamenti.md).
 [Composer libero e correnti, 3.7.0](docs/estensione-3.7.0-composer.md).
+[Flussi da TMDB e serie TV, 3.8.0](docs/estensione-3.8.0-tmdb-flussi.md).
 
 ## Sviluppo dell'estensione
 
@@ -122,6 +138,7 @@ pnpm test
 pnpm exec playwright install chromium
 pnpm test:browser
 pnpm test:launcher
+pnpm test:tv
 pnpm test:updater
 pnpm test:images
 pnpm test:player

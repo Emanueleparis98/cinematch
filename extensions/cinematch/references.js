@@ -39,7 +39,8 @@
       if(title&&title.length<=150&&title.split(/\s+/).length<=22&&!/^(?:nel|tra il|dal|durante|la corrente|il movimento|regia|regista|anno|durata)\b/i.test(title)){
         const variants=[...new Set([title,...title.split(/\s+\/\s+/),alias,...title.split(/\s+[–—-]\s+/).slice(0,1)].filter(Boolean))];
         const director=(line+'\n'+(lines[i+1]??'')).match(/(?:regia|regista|director|diretto da)\s*:?\s*([^\n;|]+?)(?=\s+[—–]\s|\s*\*\*|$|\n)/i)?.[1]?.trim().replace(/[.]+$/,'')??'';
-        add({type:'movie',title:variants[0],variants,year,director});
+        const tvHint=/\b(?:serie(?:\s+tv|\s+televisiva)?|miniserie|stagione|season|episodio|episode)\b/i.test(`${line} ${lines[i+1]??''}`);
+        add({type:tvHint?'tv':'movie',title:variants[0],variants,year,director:tvHint?'':director});
       }
       const person=line.replace(/[*_]/g,'').match(/^(?:regista|attore|attrice|director|actor)\s*:\s*([^;|\n]{2,100})$/i);
       if(person&&!title)add({type:'person',title:person[1].replace(/[.]+$/,'').trim(),variants:[person[1].trim()],year:null,director:''});

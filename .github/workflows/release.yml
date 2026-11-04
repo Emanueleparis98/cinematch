@@ -75,6 +75,9 @@ jobs:
       - name: Test launcher in-chat
         run: pnpm test:launcher
 
+      - name: Test TMDB e serie TV
+        run: pnpm test:tv
+
       - name: Test immagini TMDB
         run: pnpm test:images
 

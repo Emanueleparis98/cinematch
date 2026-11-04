@@ -15,7 +15,7 @@ function tab(name){const isAddons=name==='addons';$('addons-pane').hidden=!isAdd
 $('show-addons').onclick=()=>tab('addons');$('setup-addons').onclick=()=>{tab('addons');$('addon-url').focus();};$('show-player').onclick=()=>tab('player');
 async function readAddons(){
   const data=await chrome.storage.local.get(null);addons=Object.entries(data).filter(([key])=>key.startsWith(prefix)).flatMap(([key,value])=>{
-    try{const addon=parseManifest({id:value.id,name:value.name,version:value.version,description:value.description,resources:value.resources.map(r=>({name:'stream',types:r.types,idPrefixes:r.prefixes})),types:['movie']},value.url);return [{...addon,key,enabled:value.enabled!==false}];}catch{return [];}
+    try{const addon=parseManifest({id:value.id,name:value.name,version:value.version,description:value.description,resources:value.resources.map(r=>({name:'stream',types:r.types,idPrefixes:r.prefixes})),types:['movie','series']},value.url);return [{...addon,key,enabled:value.enabled!==false}];}catch{return [];}
   }).sort((a,b)=>a.name.localeCompare(b.name,'it'));renderAddons();
 }
 function renderAddons(){

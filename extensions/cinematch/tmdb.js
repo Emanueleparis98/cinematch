@@ -7,7 +7,7 @@ export function credential(value){
   return key;
 }
 export function validateReference(value){
-  if(!value||!['movie','person'].includes(value.type)||typeof value.title!=='string'||!value.title.trim()||value.title.length>150)throw new Error('Titolo o nome non valido.');
+  if(!value||!['movie','tv','person'].includes(value.type)||typeof value.title!=='string'||!value.title.trim()||value.title.length>150)throw new Error('Titolo o nome non valido.');
   if(value.year!=null&&(!Number.isInteger(value.year)||value.year<1800||value.year>2100))throw new Error('Anno non valido.');
   const variants=(Array.isArray(value.variants)?value.variants:[value.title]).filter(v=>typeof v==='string'&&v.trim()&&v.length<=150).slice(0,3);
   return {type:value.type,title:value.title.trim(),variants:[...new Set([value.title.trim(),...variants])].slice(0,3),year:value.year??null,director:typeof value.director==='string'?value.director.slice(0,100):''};
@@ -16,14 +16,19 @@ function person(p){return {id:p.id,name:p.name??'',role:p.character??p.job??p.kn
 export function summarizeMovie(data){
   return {type:'movie',id:data.id,imdbId:/^tt\d{5,12}$/.test(data.imdb_id??'')?data.imdb_id:null,title:data.title??data.original_title??'',originalTitle:data.original_title??'',year:data.release_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),runtime:Number.isFinite(data.runtime)&&data.runtime>0?data.runtime:null,genres:(data.genres??[]).map(g=>g.name).filter(name=>typeof name==='string').slice(0,5),overview:typeof data.overview==='string'?data.overview.slice(0,1600):'',rating:Number.isFinite(data.vote_average)&&data.vote_average>0?Math.round(data.vote_average*10)/10:null,votes:Number.isFinite(data.vote_count)?data.vote_count:null,directors:(data.credits?.crew??[]).filter(p=>p.job==='Director').map(person),cast:(data.credits?.cast??[]).map(person),aliases:(data.alternative_titles?.titles??[]).map(t=>t.title).filter(t=>typeof t==='string')};
 }
+export function summarizeTv(data){
+  const creators=(data.created_by??[]).map(person).map(p=>({...p,role:'Creatore'}));
+  const runtime=Array.isArray(data.episode_run_time)?data.episode_run_time.find(value=>Number.isFinite(value)&&value>0):null;
+  return {type:'tv',id:data.id,imdbId:/^tt\d{5,12}$/.test(data.external_ids?.imdb_id??'')?data.external_ids.imdb_id:null,title:data.name??data.original_name??'',originalTitle:data.original_name??'',year:data.first_air_date?.slice(0,4)??'',poster:safeImagePath(data.poster_path),runtime:Number.isFinite(runtime)?runtime:null,genres:(data.genres??[]).map(g=>g.name).filter(name=>typeof name==='string').slice(0,5),overview:typeof data.overview==='string'?data.overview.slice(0,1600):'',rating:Number.isFinite(data.vote_average)&&data.vote_average>0?Math.round(data.vote_average*10)/10:null,votes:Number.isFinite(data.vote_count)?data.vote_count:null,directors:creators,cast:(data.credits?.cast??[]).map(person),aliases:[...(data.alternative_titles?.results??[]),...(data.alternative_titles?.titles??[])].map(t=>t.title).filter(t=>typeof t==='string'),seasons:(data.seasons??[]).filter(s=>Number.isSafeInteger(s.season_number)&&s.season_number>=0).map(s=>({season:s.season_number,name:typeof s.name==='string'?s.name:'',episodes:Number.isSafeInteger(s.episode_count)?s.episode_count:0,year:typeof s.air_date==='string'?s.air_date.slice(0,4):'',poster:safeImagePath(s.poster_path)})).sort((a,b)=>a.season-b.season),numberOfSeasons:Number.isSafeInteger(data.number_of_seasons)?data.number_of_seasons:null,numberOfEpisodes:Number.isSafeInteger(data.number_of_episodes)?data.number_of_episodes:null,status:typeof data.status==='string'?data.status:''};
+}
 export function chooseMatch(results,ref){
   if(ref.type==='person'){
     const exact=results.filter(p=>ref.variants.some(name=>normalize(name)===normalize(p.name)));
     return exact.length===1?exact[0]:null;
   }
-  if(ref.type!=='movie'||!ref.year)return null;
-  const names=ref.variants.map(normalize);
-  const exact=results.filter(m=>Number(m.release_date?.slice(0,4))===ref.year&&[m.title,m.original_title].some(t=>t&&names.includes(normalize(t))));
+  if(!['movie','tv'].includes(ref.type)||!ref.year)return null;
+  const names=ref.variants.map(normalize),date=ref.type==='movie'?'release_date':'first_air_date';
+  const exact=results.filter(m=>Number(m[date]?.slice(0,4))===ref.year&&[m.title,m.original_title,m.name,m.original_name].some(t=>t&&names.includes(normalize(t))));
   return exact.length===1?exact[0]:null;
 }
 export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
@@ -45,15 +50,22 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
     pending.set(cacheKey,operation);try{return await operation;}finally{pending.delete(cacheKey);}
   }
   async function details(type,id){
-    if(!['movie','person'].includes(type)||!Number.isSafeInteger(id)||id<1)throw new Error('Scheda non valida.');
-    const data=await request(`/${type}/${id}`,{language:'it-IT',...(type==='movie'?{append_to_response:'credits,alternative_titles'}:{})});
+    if(!['movie','tv','person'].includes(type)||!Number.isSafeInteger(id)||id<1)throw new Error('Scheda non valida.');
+    const append=type==='movie'?'credits,alternative_titles':type==='tv'?'credits,alternative_titles,external_ids':'';
+    const data=await request(`/${type}/${id}`,{language:'it-IT',...(append?{append_to_response:append}:{})});
     if(type==='movie')return summarizeMovie(data);
+    if(type==='tv')return summarizeTv(data);
     return {type:'person',...person(data),biography:(data.biography??'').slice(0,600),birthday:data.birthday??'',place:data.place_of_birth??''};
+  }
+  async function season(id,seasonNumber){
+    if(!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(seasonNumber)||seasonNumber<0||seasonNumber>100)throw new Error('Stagione non valida.');
+    const data=await request(`/tv/${id}/season/${seasonNumber}`,{language:'it-IT'});
+    return {season:seasonNumber,episodes:(data.episodes??[]).filter(e=>Number.isSafeInteger(e.episode_number)&&e.episode_number>0).slice(0,500).map(e=>({episode:e.episode_number,title:typeof e.name==='string'?e.name:'',overview:typeof e.overview==='string'?e.overview.slice(0,1200):'',year:typeof e.air_date==='string'?e.air_date.slice(0,4):'',runtime:Number.isFinite(e.runtime)&&e.runtime>0?e.runtime:null,still:safeImagePath(e.still_path)}))};
   }
   async function search(value){
     const ref=validateReference(value);let results=[];
     for(const query of ref.variants){
-      const data=await request(`/search/${ref.type}`,{query,language:'it-IT',include_adult:false,...(ref.type==='movie'&&ref.year?{year:ref.year}:{})});
+      const data=await request(`/search/${ref.type}`,{query,language:'it-IT',include_adult:false,...(ref.year&&ref.type==='movie'?{year:ref.year}:{}),...(ref.year&&ref.type==='tv'?{first_air_date_year:ref.year}:{})});
       for(const result of data.results??[])if(Number.isSafeInteger(result.id)&&!results.some(r=>r.id===result.id))results.push(result);
       if(chooseMatch(results,ref)||(ref.type==='person'&&results.length))break;
     }
@@ -69,7 +81,7 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
         if(verified.length===1)return {matched:verified[0],candidates:[]};
       }
     }
-    return {matched:null,candidates:results.map(r=>ref.type==='movie'?{id:r.id,type:'movie',title:r.title??r.original_title??'',originalTitle:r.original_title??'',year:r.release_date?.slice(0,4)??'',poster:safeImagePath(r.poster_path)}:{id:r.id,type:'person',title:r.name??'',year:r.known_for_department??'',poster:safeImagePath(r.profile_path)}),hasMore:results.length>=20};
+    return {matched:null,candidates:results.map(r=>ref.type==='movie'?{id:r.id,type:'movie',title:r.title??r.original_title??'',originalTitle:r.original_title??'',year:r.release_date?.slice(0,4)??'',poster:safeImagePath(r.poster_path)}:ref.type==='tv'?{id:r.id,type:'tv',title:r.name??r.original_name??'',originalTitle:r.original_name??'',year:r.first_air_date?.slice(0,4)??'',poster:safeImagePath(r.poster_path)}:{id:r.id,type:'person',title:r.name??'',year:r.known_for_department??'',poster:safeImagePath(r.profile_path)}),hasMore:results.length>=20};
   }
   async function image(path,size){
     if(!safeImagePath(path)||!['w92','w185','w342'].includes(size))throw new Error('Immagine non valida.');
@@ -82,5 +94,5 @@ export function createTmdbClient({getCredential,fetcher=fetch,timeout=12000}){
       return `data:${mime};base64,${btoa(raw)}`;
     });
   }
-  return {search,details,image,clear:()=>cache.clear(),verify:()=>request('/configuration')};
+  return {search,details,season,image,clear:()=>cache.clear(),verify:()=>request('/configuration')};
 }

@@ -8,16 +8,21 @@ test('manifest links normalize stremio and keep personal path and query paramete
   for(const url of ['https://example.org/configure','https://example.org/app/configure','https://example.org/streams.json','javascript:alert(1)','file:///tmp/a','https://user:pass@example.org/manifest.json'])assert.throws(()=>manifestUrl(url));
   assert.equal(permissionOrigin('https://example.org/private/path?token=x'),'https://example.org/*');
 });
-test('manifest supports simple and advanced stream declarations, rejects catalogs and setup-required',()=>{
+test('manifest supports simple and advanced stream declarations for movies and series',()=>{
   assert.equal(parseManifest(manifest,'https://example.org/manifest.json').resources[0].prefixes[0],'tt');
   assert.equal(parseManifest({...manifest,resources:[{name:'stream',types:['movie'],idPrefixes:['tmdb:']}]},'https://example.org/manifest.json').resources[0].prefixes[0],'tmdb:');
-  for(const data of [null,{}, {...manifest,resources:['catalog']},{...manifest,types:['series']},{...manifest,behaviorHints:{configurationRequired:true}}])assert.throws(()=>parseManifest(data,'https://example.org/manifest.json'));
+  assert.deepEqual(parseManifest({...manifest,types:['series']},'https://example.org/manifest.json').resources[0].types,['series']);
+  assert.deepEqual(parseManifest({...manifest,types:['movie','series']},'https://example.org/manifest.json').resources[0].types,['movie','series']);
+  for(const data of [null,{}, {...manifest,resources:['catalog']},{...manifest,types:['channel']},{...manifest,behaviorHints:{configurationRequired:true}}])assert.throws(()=>parseManifest(data,'https://example.org/manifest.json'));
 });
-test('movie requests use verified IMDb or explicitly supported TMDB IDs and preserve configuration',()=>{
-  const addon=parseManifest(manifest,'https://example.org/private/manifest.json?lang=ita');
+test('movie and series requests preserve personal configuration and use season/episode IDs',()=>{
+  const addon=parseManifest({...manifest,types:['movie','series']},'https://example.org/private/manifest.json?lang=ita');
   assert.equal(resourceUrl(addon,{id:5,imdbId:'tt1234567'}),'https://example.org/private/stream/movie/tt1234567.json?lang=ita');
   assert.equal(resourceUrl(addon,{id:5,imdbId:null}),null);
+  assert.equal(resourceUrl(addon,{type:'tv',id:1399,imdbId:'tt0944947'},{season:2,episode:5}),'https://example.org/private/stream/series/tt0944947%3A2%3A5.json?lang=ita');
+  assert.equal(resourceUrl(addon,{type:'tv',id:1399,imdbId:'tt0944947'},{season:2}),null);
   addon.resources[0].prefixes=['tmdb:'];assert.equal(resourceUrl(addon,{id:5,imdbId:'tt1234567'}),'https://example.org/private/stream/movie/tmdb%3A5.json?lang=ita');
+  assert.equal(resourceUrl(addon,{type:'tv',id:1399,imdbId:'tt0944947'},{season:2,episode:5}),'https://example.org/private/stream/series/tmdb%3A1399%3A2%3A5.json?lang=ita');
 });
 test('stream schema distinguishes browser video, HLS, torrent, proxy, DASH and external pages',()=>{
   const streams=parseStreams({streams:[{name:'MP4',url:'https://media.example/a.mp4'},{url:'https://media.example/a.m3u8?key=x'},{infoHash:'abc',fileIdx:1},{url:'https://media.example/a',behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{url:'https://media.example/a.mpd'},{externalUrl:'https://example.org/watch'},{ytId:'abc'}]});

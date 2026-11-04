@@ -47,7 +47,7 @@
   `);
 
   let host, shadow, dialog, frame, loading, fallback, closeButton, titleEl, posterEl, fallbackMessageEl;
-  let readyTimer, currentId = 0, lastFocus = null, previousOverflow = null, closing = false, activeTheme = null;
+  let readyTimer, currentId = 0, currentKind = "movie", currentSeason = null, currentEpisode = null, lastFocus = null, previousOverflow = null, closing = false, activeTheme = null;
   let themeObserver = null, themeMedia = null, themeTimer = null;
 
   function ensureShell() {
@@ -67,7 +67,7 @@
             <p class="cm-kicker">CineMatch · Sorgenti</p>
             <h2 id="cm-cinema-title">Preparo il film…</h2>
             <div class="cm-shimmer" aria-hidden="true"></div>
-            <p class="cm-loading-note">Cerco le sorgenti e preparo il player. La chat resta qui dietro.</p>
+            <p class="cm-loading-note">Cerco le sorgenti e preparo il player. La pagina resta qui dietro.</p>
           </div>
         </div>
         <iframe class="cm-frame" title="Player CineMatch" allow="fullscreen; autoplay; encrypted-media; picture-in-picture" hidden></iframe>
@@ -101,9 +101,9 @@
     });
     dialog.addEventListener("close", cleanup);
     fallback.querySelector("[data-open-tab]").addEventListener("click", () => {
-      const id = currentId;
+      const id = currentId, kind = currentKind, season = currentSeason, episode = currentEpisode;
       close();
-      if (id > 0) chrome.runtime.sendMessage({ type: "watch-open", id }).catch(() => {});
+      if (id > 0) chrome.runtime.sendMessage({ type: "watch-open", id, kind, season, episode }).catch(() => {});
     });
   }
 
@@ -113,6 +113,9 @@
     readyTimer = null;
     closing = false;
     currentId = 0;
+    currentKind = "movie";
+    currentSeason = null;
+    currentEpisode = null;
     if (frame) frame.src = "about:blank";
     if (previousOverflow !== null) {
       document.documentElement.style.overflow = previousOverflow;
@@ -204,9 +207,15 @@
   function open(options = {}) {
     const id = Number(options.id);
     if (!Number.isSafeInteger(id) || id < 1) return false;
+    const kind = options.kind === "tv" ? "tv" : "movie";
+    const season = kind === "tv" && Number.isSafeInteger(options.season) && options.season >= 0 ? options.season : null;
+    const episode = kind === "tv" && Number.isSafeInteger(options.episode) && options.episode > 0 ? options.episode : null;
     ensureShell();
     const wasOpen = dialog.open;
     currentId = id;
+    currentKind = kind;
+    currentSeason = season;
+    currentEpisode = episode;
     lastFocus = options.posterEl instanceof HTMLElement ? options.posterEl : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     if (!wasOpen) {
       activeTheme = chatTheme();
@@ -225,7 +234,7 @@
     fallback.hidden = true;
     frame.hidden = true;
     frame.src = "about:blank";
-    titleEl.textContent = options.title ? `Preparo ${options.title}…` : "Preparo il film…";
+    titleEl.textContent = options.title ? `Preparo ${options.title}…` : kind === "tv" ? "Preparo la serie…" : "Preparo il film…";
     if (options.poster) {
       posterEl.src = options.poster;
       posterEl.alt = options.title ? `Locandina di ${options.title}` : "";
@@ -238,7 +247,10 @@
     dialog.focus({ preventScroll: true });
     requestAnimationFrame(() => {
       if (!dialog.open || currentId !== id) return;
-      frame.src = chrome.runtime.getURL(`cinema.html?movie=${id}`);
+      const params = new URLSearchParams(kind === "tv" ? { kind: "tv", id: String(id) } : { movie: String(id) });
+      if (kind === "tv" && season !== null) params.set("season", String(season));
+      if (kind === "tv" && episode !== null) params.set("episode", String(episode));
+      frame.src = chrome.runtime.getURL(`cinema.html?${params}`);
       frame.hidden = false;
       clearTimeout(readyTimer);
       readyTimer = setTimeout(() => {

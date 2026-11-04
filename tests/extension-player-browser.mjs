@@ -84,6 +84,16 @@ try{
   const chat=await context.newPage();chat.on('pageerror',e=>errors.push(e.message));await chat.goto('https://chat.deepseek.com/test');await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).waitFor({timeout:20000});
   const focusedChatLabel=()=>chat.evaluate(()=>{let el=document.activeElement;while(el?.shadowRoot?.activeElement)el=el.shadowRoot.activeElement;return el?.getAttribute('aria-label')??null;});
   let player;
+  await check('the explicit Flussi button opens the same in-chat source picker',async()=>{
+    const button=chat.getByRole('button',{name:'Cerca i flussi per Ladri di biciclette',exact:true});
+    await button.waitFor({timeout:20000});await button.click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+    assert.equal(await focusedChatLabel(),'Cerca i flussi per Ladri di biciclette');
+  });
   await check('trusted click on DeepSeek movie poster opens the in-chat overlay with the extension player for the correct TMDB/IMDb film',async()=>{
     await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
     const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});

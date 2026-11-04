@@ -33,6 +33,11 @@ body.player-mode .cn-topbar{display:none}
 .cm-rating{display:flex;align-items:center;gap:5px;margin:10px 0 0;font-size:12px;font-weight:750}
 .cm-rating .star{color:var(--warn)}
 .cm-rating small{font-weight:500;color:var(--muted)}
+.cm-episodes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin-top:11px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--surface) 72%,transparent)}
+.cm-episodes label{display:flex;flex-direction:column;gap:4px;font-size:9px;font-weight:750;color:var(--muted)}
+.cm-episodes select{min-width:130px;max-width:220px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--deep);color:var(--text);font-size:11px}
+.cm-episodes select:disabled{opacity:.55}
+.cm-episode-status{flex-basis:100%;min-height:13px;font-size:9.5px;line-height:1.4;color:var(--muted)}
 .cm-director{margin:7px 0 0;color:var(--muted);font-size:11.5px;line-height:1.5}
 .cm-director strong{color:var(--text);font-weight:700}
 .cm-overview{margin:9px 0 0;color:var(--muted);font-size:11.5px;line-height:1.65;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
