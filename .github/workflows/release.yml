@@ -78,9 +78,6 @@ jobs:
       - name: Test TMDB e serie TV
         run: pnpm test:tv
 
-      - name: Test modalità CB01
-        run: pnpm test:cb01
-
       - name: Test immagini TMDB
         run: pnpm test:images
 
@@ -89,6 +86,9 @@ jobs:
 
       - name: Test codec
         run: pnpm test:codecs
+
+      - name: Test modalità CB01
+        run: pnpm test:cb01
 
       - name: Test aggiornamenti
         run: pnpm test:updater
