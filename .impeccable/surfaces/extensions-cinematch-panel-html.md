@@ -2,7 +2,7 @@
 version: 1
 slug: "extensions-cinematch-panel-html"
 primary_target: "extensions/cinematch/panel.html"
-related_targets: ["extensions/cinematch/enrich.js","extensions/cinematch/options.html"]
+related_targets: ["extensions/cinematch/enrich.js","extensions/cinematch/settings-popup.html"]
 ---
 
 # CineMatch browser — 2.1 dark refinement

@@ -48,7 +48,7 @@ async function theme(page,mode='dark'){
 async function noControls(page){return hosts(page).evaluateAll(nodes=>nodes.every(n=>{const shadow=n.shadowRoot;return !shadow.querySelector('input,select,form,details,h3')&&[...shadow.querySelectorAll('button')].every(button=>button.classList.contains('streams-button'));}));}
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');const id=new URL(worker.url()).host;
-  const options=await context.newPage();options.on('pageerror',e=>errors.push(e.message));await options.goto(`chrome-extension://${id}/options.html`);
+  const options=await context.newPage();options.on('pageerror',e=>errors.push(e.message));await options.goto(`chrome-extension://${id}/settings-popup.html?page=1`);await options.waitForTimeout(500);
   const first=await context.newPage();first.on('pageerror',e=>errors.push(e.message));await first.goto('https://chatgpt.com/test');await theme(first);
   await check('missing credential leaves the AI answer entirely untouched',async()=>{await first.waitForTimeout(800);assert.equal(requests,0);assert.equal(await hosts(first).count(),0);assert.equal(await first.locator('[data-cinematch-ui="response"]').count(),0);});
   await check('saving once illustrates open chats automatically and does not expose the key',async()=>{

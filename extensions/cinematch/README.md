@@ -1,4 +1,4 @@
-# CineMatch - estensione browser 3.13.0
+# CineMatch - estensione browser 3.14.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
@@ -7,17 +7,17 @@ e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.13.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.14.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
    Estensioni: l’icona apre il **popup compatto delle impostazioni**, da cui
    colleghi TMDB e attivi le funzioni, compreso il pulsante Correnti in DeepSeek.
 
-Da una versione **3.6.0 o successiva** aggiorna da **Opzioni → Aggiornamenti**
-nella stessa cartella, senza cambiare ID né perdere TMDB e addon. Per una
-versione precedente alla 3.6.0 sostituisci invece i file della cartella già
-caricata e premi **Ricarica**.
+Da una versione **3.6.0 o successiva** aggiorna dal pannello CineMatch → icona
+**Aggiornamenti**: scarica e verifica la nuova versione nella stessa cartella,
+senza cambiare ID né perdere TMDB e addon. Per una versione precedente alla
+3.6.0 sostituisci invece i file della cartella già caricata e premi **Ricarica**.
 
 Nel repository la cartella già pronta è `dist/CineMatch-Chrome` dopo la build.
 Il sorgente `extensions/cinematch` non include i dati assemblati. Mantieni la
@@ -63,7 +63,7 @@ Locandine e foto di registi/interpreti vengono aggiunte automaticamente subito
 dopo la riga del titolo, prima della descrizione. Questo vale anche per titoli
 in grassetto e descrizioni nello stesso paragrafo, separati da un ritorno a capo.
 Le immagini seguono tipografia e colori della pagina della chat. Il pannello e
-le opzioni usano il tema scuro dell’estensione; il player in overlay segue il
+le impostazioni usano il tema scuro dell’estensione; il player in overlay segue il
 tema della pagina ospite (chat o TMDB).
 Non vengono inseriti pannelli, titoli duplicati, impostazioni, moduli, selettori,
 riquadri di errore o richieste di correzione. Ogni locandina mostra un discreto
@@ -77,7 +77,7 @@ alcuna immagine.
 
 ## Pulsante Flussi su TMDB
 
-Dalla 3.8.0, da **Opzioni → Pulsante flussi su TMDB**, puoi mostrare il pulsante
+Dalla 3.8.0, dal popup → **Funzioni → Pulsante Flussi su TMDB**, puoi mostrare il pulsante
 sui poster di themoviedb.org. L’accesso al sito è un permesso opzionale:
 CineMatch legge solo titolo, ID e immagine del poster per aprire il player; non
 legge account, cookie o conversazioni. Disattivando l’opzione i pulsanti vengono
@@ -86,7 +86,7 @@ principale, aprono lo stesso selettore sorgenti dell’estensione.
 
 ## Correnti in DeepSeek
 
-Dalla 3.13.0 non esiste più il pannello laterale e il vecchio pulsante
+Dalla 3.14.0 non esiste più il pannello laterale e il vecchio pulsante
 flottante. L’icona dell’estensione apre un **popup compatto delle impostazioni**,
 non le correnti. Attiva **Correnti in DeepSeek** per far comparire il pulsante
 **Correnti** nel composer di `chat.deepseek.com`, accanto a **Pensiero Profondo**
@@ -102,7 +102,7 @@ immagini TMDB, **Flussi** e player.
 
 ## Modalità CB01
 
-Dalla 3.9.0, da **Opzioni → Modalità CB01**, puoi aprire `cb01one.org` con la
+Dalla 3.9.0, dal popup → **Funzioni → Modalità CB01**, puoi aprire `cb01one.org` con la
 pubblicità bloccata e un pulsante **Guarda con CineMatch** sui poster di film e
 serie TV. Un click sulla locandina apre l’overlay CineMatch, risolve la sorgente
 Mixdrop disponibile e la riproduce senza cambiare pagina. Nella scheda film il
@@ -212,8 +212,9 @@ I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
 `scripting` inserisce il prompt nei quattro editor, `clipboardWrite` copia il
 testo, `storage` conserva le bozze nella sessione. L’icona dell’estensione apre
-il popup compatto delle impostazioni; le correnti si aprono solo dal pulsante nel
-composer DeepSeek, con la stessa interfaccia di `compact.html`.
+il popup compatto delle impostazioni, unica superficie di configurazione; le
+correnti si aprono solo dal pulsante nel composer DeepSeek, con la stessa
+interfaccia di `compact.html`.
 `webRequest` osserva temporaneamente soltanto i reindirizzamenti e gli errori
 della richiesta video corrente, sui siti già autorizzati. Se un flusso passa
 a un altro server, **Consenti [server]** richiede il relativo permesso opzionale
@@ -245,8 +246,8 @@ ogni formato di risposta è riconoscibile; in questi casi il testo resta leggibi
 Edge non eseguito direttamente. L'inserimento diretto del prompt accetta fino a
 200.000 caratteri; restano i limiti propri della chat.
 
-Dalla 3.6.0 usa **Opzioni → Aggiornamenti** per scaricare, verificare con SHA-256
-e applicare la nuova versione nella stessa cartella. Per una versione precedente
+Dalla 3.6.0 usa il pannello CineMatch → icona **Aggiornamenti** per scaricare,
+verificare con SHA-256 e applicare la nuova versione nella stessa cartella. Per una versione precedente
 alla 3.6.0 sostituisci i file della cartella già caricata e premi **Ricarica** in
 chrome://extensions. La credenziale e gli addon già salvati vengono mantenuti.
 Per rimuovere usa **Rimuovi** nella pagina delle estensioni; la credenziale può

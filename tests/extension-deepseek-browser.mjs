@@ -35,7 +35,7 @@ const compactFrame=async(page)=>{const popover=page.locator('.cm-currents-popove
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker'),id=new URL(worker.url()).host;
   const manager=await context.newPage();manager.on('pageerror',error=>errors.push(error.message));
-  await manager.goto(`chrome-extension://${id}/options.html`);await manager.waitForTimeout(400);
+  await manager.goto(`chrome-extension://${id}/settings-popup.html`);await manager.waitForTimeout(500);await manager.locator('#tab-functions').click();
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
   await page.goto('https://chat.deepseek.com/test',{waitUntil:'load'});await page.waitForTimeout(500);
 
@@ -52,11 +52,11 @@ try{
   await check('the compact currents button is off by default and no floating launcher exists',async()=>{
     assert.equal(await page.locator('.cm-deepseek-currents').count(),0);
     assert.equal(await page.locator('.cm-fab').count(),0);
-    assert.equal(await manager.locator('#deepseek-currents-toggle').isChecked(),false);
+    assert.equal(await manager.locator('#deepseek-toggle').isChecked(),false);
   });
 
   await check('enabling the setting inserts one native-looking button after DeepThink and Search',async()=>{
-    await manager.locator('#deepseek-currents-toggle').check();
+    await manager.locator('#deepseek-toggle').check();
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
     const info=await page.evaluate(()=>{
       const button=document.querySelector('.cm-deepseek-currents');
@@ -71,7 +71,7 @@ try{
     await page.reload();await page.waitForTimeout(300);
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
     assert.equal(await page.locator('.cm-deepseek-currents').count(),1);
-    assert.equal(await manager.locator('#deepseek-currents-toggle').isChecked(),true);
+    assert.equal(await manager.locator('#deepseek-toggle').isChecked(),true);
   });
 
   await check('the compact popover lists 74 currents and inserts a generated prompt',async()=>{
@@ -132,7 +132,7 @@ try{
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===0,{},{timeout:10000});
     await popup.locator('#deepseek-toggle').check();
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
-    assert.equal(await popup.locator('#open-options').isVisible(),true);
+    assert.equal(await popup.locator('#open-updates').isVisible(),true);
     await popup.close();
   });
 
@@ -145,7 +145,7 @@ try{
   await check('turning the setting off removes the button and closes the popover',async()=>{
     await page.locator('.cm-deepseek-currents').click();
     await page.locator('.cm-currents-popover').waitFor({state:'visible'});
-    await manager.bringToFront();await manager.locator('#deepseek-currents-toggle').uncheck();
+    await manager.bringToFront();await manager.locator('#deepseek-toggle').uncheck();
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===0,{},{timeout:10000});
     await page.waitForTimeout(300);
     assert.equal(await page.locator('.cm-currents-popover').count(),1);
@@ -160,7 +160,7 @@ try{
   });
 
   await check('the compact popover fits a narrow DeepSeek layout',async()=>{
-    await manager.locator('#deepseek-currents-toggle').check();
+    await manager.locator('#deepseek-toggle').check();
     await page.setViewportSize({width:360,height:800});await page.bringToFront();await page.waitForTimeout(400);
     await page.locator('.cm-deepseek-currents').click();
     const popover=page.locator('.cm-currents-popover');await popover.waitFor({state:'visible'});

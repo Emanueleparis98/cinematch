@@ -189,7 +189,7 @@ async function cb01Article(articleUrl,season=null,episode=null){
   return {token,media,stream,episode:target};
 }
 const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
-const settingsPage=sender=>extensionPage(sender,'options.html')||extensionPage(sender,'settings-popup.html');
+const settingsPage=sender=>extensionPage(sender,'settings-popup.html');
 const playerPage=sender=>extensionPage(sender,'watch.html')||extensionPage(sender,'cinema.html');
 const TMDB_SITE_ORIGIN='https://www.themoviedb.org/*';
 const tmdbPageSender=sender=>Boolean(sender.tab&&sender.frameId===0&&/^https:\/\/www\.themoviedb\.org\//.test(sender.url??''));
@@ -354,7 +354,6 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   (async()=>{
     await storageReady;
     if(message.type==="tmdb-status")return tmdbStatus();
-    if(message.type==="tmdb-options"){await chrome.runtime.openOptionsPage();return {ok:true};}
     if(message.type==="tmdb-save"&&settings){
       const value=credential(message.credential);
       // Validate before replacing a working credential. Never return it to a tab.

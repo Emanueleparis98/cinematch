@@ -29,10 +29,11 @@ try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
   const id=new URL(worker.url()).host;
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
-  await page.goto(`chrome-extension://${id}/options.html#updates`,{waitUntil:'load'});
-  await page.locator('#updates').waitFor({timeout:10000});
+  await page.goto(`chrome-extension://${id}/panel.html`,{waitUntil:'load'});
+  await page.locator('#updates').click();
+  await page.locator('#updates-dialog').waitFor({state:'visible',timeout:10000});
   await page.waitForFunction(version=>document.querySelector('#update-status')?.textContent.includes(version),latest,{timeout:15000});
-  await check('the options page shows the installed version and the update channel',async()=>{
+  await check('the panel shows the installed version and the update channel',async()=>{
     assert.equal(await page.locator('#update-current').innerText(),current);
     assert.match(await page.locator('#update-status').innerText(),new RegExp(latest.replaceAll('.','\\.')));
   });

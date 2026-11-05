@@ -273,7 +273,7 @@ Place a poster beside a strip of director and cast portraits immediately below t
 
 Buttons transition background, border and text over (160ms ease). Choice menus arrive over (120ms ease-out). Media arrive over (180ms cubic-bezier(.22,1,.36,1)) with a small (3px) vertical movement and opacity change. All effects respect reduced-motion preferences.
 
-Runtime photographs come from TMDB and retain their source link and asset attribution; they are not generated identity artwork. Bundled icon provenance and font licensing remain with the shipped assets. Source evidence: panel.css, controls.css, controls.js, options.css and enrich.js under extensions/cinematch/; surface direction: docs/design/cinematch-browser.md.
+Runtime photographs come from TMDB and retain their source link and asset attribution; they are not generated identity artwork. Bundled icon provenance and font licensing remain with the shipped assets. Source evidence: panel.css, controls.css, controls.js, settings-popup.css, updates.css and enrich.js under extensions/cinematch/; surface direction: docs/design/cinematch-browser.md.
 
 ## Do's and Don'ts
 

@@ -296,4 +296,9 @@ async function init() {
 $("update-check").addEventListener("click", () => check({interactive: true}));
 $("update-folder").addEventListener("click", chooseFolder);
 $("update-apply").addEventListener("click", applyUpdate);
-init().catch(() => setStatus("Aggiornamenti non disponibili in questa pagina. Riprova dopo aver riaperto le opzioni.", "error"));
+const updatesDialog = $("updates-dialog");
+$("update-close")?.addEventListener("click", () => updatesDialog?.close());
+updatesDialog?.addEventListener("click", event => { if (event.target === updatesDialog) updatesDialog.close(); });
+updatesDialog?.addEventListener("close", () => { if (location.hash === "#updates") history.replaceState(null, "", location.pathname + location.search); });
+if (location.hash === "#updates") updatesDialog?.showModal();
+init().catch(() => setStatus("Aggiornamenti non disponibili in questa pagina. Riprova dopo aver riaperto il pannello.", "error"));

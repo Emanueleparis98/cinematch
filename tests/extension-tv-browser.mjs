@@ -60,7 +60,7 @@ try{
     await chrome.storage.local.set({'streamAddon:tvtest':{id:'tv.test',name:'TV Test',version:'1.0.0',description:'',url,resources:[{types:['movie','series'],prefixes:['tt']}],enabled:true}});
   },{url:`${base}/manifest.json`});
   const tmdb=await context.newPage();tmdb.on('pageerror',error=>errors.push(error.message));await tmdb.goto('https://www.themoviedb.org/movie/now-playing?language=it-IT');
-  const options=await context.newPage();options.on('pageerror',error=>errors.push(error.message));await options.goto(`chrome-extension://${id}/options.html`);await options.waitForTimeout(600);
+  const options=await context.newPage();options.on('pageerror',error=>errors.push(error.message));await options.goto(`chrome-extension://${id}/settings-popup.html?page=1`);await options.waitForTimeout(600);await options.locator('#tab-functions').click();
   await check('TMDB site access is optional in production and the TMDB button is off by default',async()=>{
     assert.equal(await options.locator('#tmdb-site-toggle').isChecked(),false);
     assert.equal(await options.locator('#tmdb-site-toggle').isEnabled(),true);

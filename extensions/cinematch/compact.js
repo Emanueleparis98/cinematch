@@ -185,8 +185,6 @@ function load() {
   $("cancel-conflict").addEventListener("click", () => {$("conflict").hidden = true; status();});
   $("back").addEventListener("click", back);
   $("close").addEventListener("click", closePanel);
-  $("settings").hidden = embedded;
-  $("settings").addEventListener("click", () => { chrome.runtime.openOptionsPage().catch(() => {}); if (!embedded) window.close(); });
   $("prompt-preview").addEventListener("input", event => {state.prompt = event.target.value;});
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !event.defaultPrevented) closePanel();

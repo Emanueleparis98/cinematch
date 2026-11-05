@@ -10,6 +10,12 @@ const DEEPSEEK_KEY = "deepseekCurrentsButton";
 let siteConfigured = false;
 let busy = false;
 
+const pageMode = new URL(location.href).searchParams.has("page");
+if (pageMode) {
+  document.documentElement.removeAttribute("data-action");
+  document.body.classList.add("ss-page");
+}
+
 const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 document.documentElement.dataset.theme = systemTheme();
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
@@ -77,8 +83,8 @@ async function refresh() {
 $("tab-connection").addEventListener("click", () => showTab("connection"));
 $("tab-functions").addEventListener("click", () => showTab("functions"));
 $("close").addEventListener("click", () => window.close());
-$("open-options").addEventListener("click", () => {
-  chrome.runtime.openOptionsPage().catch(() => {});
+$("open-updates").addEventListener("click", () => {
+  chrome.tabs.create({url:chrome.runtime.getURL("panel.html#updates")}).catch(() => {});
   window.close();
 });
 $("reveal").addEventListener("click", () => {

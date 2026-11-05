@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.13.0
+# CineMatch — estensione browser 3.14.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.13.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.14.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
@@ -17,11 +17,11 @@ TMDB e attivi le funzioni, comprese le **Correnti in DeepSeek**. In Edge:
 `edge://extensions`.
 
 **Per aggiornare senza perdere TMDB e addon**, da una versione 3.6.0 o successiva
-usa **Opzioni → Aggiornamenti**. Se arrivi da una versione precedente alla 3.6.0,
-sostituisci i file nella cartella che stai già usando (la vedi in
+usa il pannello CineMatch → icona **Aggiornamenti**. Se arrivi da una versione
+precedente alla 3.6.0, sostituisci i file nella cartella che stai già usando (la vedi in
 `chrome://extensions` → dettagli → “caricata da”) e premi **Reload**; dalla 3.6.0
 in poi il self-updater mantiene ID, credenziali e addon. Il pulsante su TMDB
-richiede un permesso **opzionale** che attivi tu da Opzioni.
+richiede un permesso **opzionale** che attivi tu dal popup delle impostazioni.
 
 [Istruzioni complete, permessi e privacy](extensions/cinematch/README.md).
 Chrome 116+; Edge con Chromium recente. Pacchetto manuale, non pubblicato sullo store.
@@ -50,7 +50,7 @@ numerazioni e sottotitoli tradotti vengono gestiti automaticamente.
 
 Dalla 3.8.0 puoi mostrare lo stesso pulsante sui poster di **themoviedb.org**:
 film e serie TV, compresi i poster delle card e la locandina principale. Si
-attiva da **Opzioni → Pulsante flussi su TMDB** e richiede un permesso opzionale
+attiva dal popup → **Funzioni → Pulsante Flussi su TMDB** e richiede un permesso opzionale
 solo per quel sito. Non serve per le immagini nelle chat.
 
 Per le serie TV il player chiede stagione ed episodio, interroga gli addon con
@@ -60,7 +60,7 @@ tipo film: se una serie non compare, ricollega il manifest dell’addon.
 
 ### Modalità CB01
 
-Dalla 3.9.0 puoi attivare **Opzioni → Modalità CB01** per aprire
+Dalla 3.9.0 puoi attivare **Modalità CB01** dal popup → **Funzioni** per aprire
 `cb01one.org` senza pubblicità e con un pulsante **Guarda con CineMatch** su
 film e serie TV. Il click sulla locandina apre il player CineMatch, risolve la
 sorgente Mixdrop disponibile e la riproduce nello stesso overlay, senza cambiare
@@ -87,24 +87,25 @@ progressivo di film o richieste. I limiti della chat rimangono quelli del serviz
 
 ## Aggiornamenti
 
-Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiornamenti**:
-scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
-scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
-quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. La **3.13.0** include già
-l’updater: per una nuova installazione usa lo ZIP 3.13.0, mentre chi arriva da una
+Dalla **3.6.0** le versioni successive si installano dal pannello CineMatch →
+icona **Aggiornamenti**: scegli una volta la cartella da cui hai caricato
+l’estensione, poi CineMatch scarica l’ultima release, verifica lo **SHA-256**,
+estrae il pacchetto e aggiorna quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
+restano perché l’ID e la cartella non cambiano. La **3.14.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.14.0, mentre chi arriva da una
 versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
-L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
-il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
+L’icona dell’estensione mostra un badge quando è disponibile una nuova versione;
+il controllo periodico richiede una sola autorizzazione a GitHub. La finestra
 **Aggiornamenti** spiega anche cosa fare se viene scelta la cartella sbagliata.
 
 ## Correnti e prompt in DeepSeek
 
-Dalla 3.13.0 l’icona dell’estensione apre un **popup compatto delle impostazioni**,
+Dalla 3.14.0 l’icona dell’estensione apre un **popup compatto delle impostazioni**,
 senza cambiare pagina e senza correnti: connessione TMDB, **Flussi** su TMDB,
-**CB01** e **Correnti in DeepSeek**, più il collegamento alle impostazioni
-complete. Il popup segue il tema chiaro/scuro del sistema.
+**CB01** e **Correnti in DeepSeek**, più il pulsante **Aggiornamenti**. Il popup
+segue il tema chiaro/scuro del sistema. La vecchia pagina delle impostazioni
+complete non esiste più.
 
 Le correnti restano nel composer di `chat.deepseek.com`. Attiva **Correnti in
 DeepSeek** dal popup: il pulsante **Correnti** compare accanto a **Pensiero
@@ -158,8 +159,9 @@ fallback nella scheda dedicata.
 [Correnti DeepSeek persistenti, 3.10.1](docs/estensione-3.10.1-deepseek-fix.md).
 [Correnti compatte in DeepSeek, 3.11.0](docs/estensione-3.11.0-deepseek-compact.md).
 [Testo libero generico, 3.11.1](docs/estensione-3.11.1-deepseek-free.md).
-[Popup correnti dall’icona, 3.12.0 (superato dalla 3.13.0)](docs/estensione-3.12.0-action-popup.md).
-[Popup impostazioni dall’icona, 3.13.0](docs/estensione-3.13.0-settings-popup.md).
+[Popup correnti dall’icona, 3.12.0 (superato dalla 3.14.0)](docs/estensione-3.12.0-action-popup.md).
+[Popup impostazioni dall’icona, 3.13.0 (superato dalla 3.14.0)](docs/estensione-3.13.0-settings-popup.md).
+[Solo popup compatto, 3.14.0](docs/estensione-3.14.0-solo-popup.md).
 
 ## Sviluppo dell'estensione
 

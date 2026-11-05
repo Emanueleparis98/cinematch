@@ -1,0 +1,20 @@
+.updates-dialog{width:min(560px,calc(100vw - 28px));max-height:calc(100dvh - 40px);padding:0;border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--text);box-shadow:0 24px 90px rgba(0,0,0,.6)}
+.updates-dialog::backdrop{background:rgba(4,8,16,.72);backdrop-filter:blur(3px)}
+.updates-sheet{padding:22px 22px 24px;overflow:auto;max-height:calc(100dvh - 42px)}
+.updates-sheet>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
+.updates-sheet h2{margin:0}
+.updates-sheet>p{color:var(--muted);font-size:13px;line-height:1.65;margin:10px 0}
+#update-close{font-size:21px;line-height:1;padding:0;width:34px;height:34px;flex:none}
+.update-card{border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px;background:var(--raised)}
+.update-status-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+#update-status{margin:0;font-size:13px;line-height:1.55;color:var(--muted)}
+#update-status.error{color:var(--danger)}
+#update-status.success{color:var(--good)}
+#update-release{font-size:12px;flex:none}
+#update-progress{display:block;width:100%;height:8px;margin:12px 0 2px;accent-color:var(--accent)}
+#update-progress[hidden]{display:none}
+.update-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.update-actions button{font-size:12px}
+.update-card .small{margin:10px 0 0;color:var(--muted)}
+.update-card code{font-size:.92em}
+@media(max-width:420px){.updates-sheet{padding:18px 16px 20px}.update-actions{flex-direction:column}.update-actions button{width:100%}.update-status-row{display:block}#update-release{display:inline-block;margin-top:6px}}

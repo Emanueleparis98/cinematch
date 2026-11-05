@@ -1,3 +1,5 @@
+html:has(body.ss-page){background:var(--deep)}
+body.ss-page{width:100%;max-width:420px;margin:0 auto;border-inline:1px solid var(--line)}
 .ss-view{padding:9px 11px 8px;overflow:auto;gap:0}
 .ss-view .notice{margin:0 0 8px;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--deep);color:var(--muted);font-size:10.5px;line-height:1.4}
 .ss-form{display:flex;flex-direction:column;gap:7px}

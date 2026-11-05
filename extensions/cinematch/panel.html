@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark">
-  <title>CineMatch · Correnti del cinema</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css">
-  <script type="module" src="panel.js"></script>
+  <title>CineMatch · Correnti del cinema</title><link rel="stylesheet" href="panel.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="updates.css">
+  <script type="module" src="panel.js"></script><script type="module" src="updater.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -96,5 +96,17 @@
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </footer>
   <div id="boot-error" class="empty" hidden><h1>CineMatch non si è caricato</h1><p>Chiudi e riapri il pannello. Se il problema continua, ricarica l’estensione dalla pagina delle estensioni del browser.</p></div>
+  <dialog id="updates-dialog" class="updates-dialog" aria-labelledby="updates-title">
+    <div class="updates-sheet">
+      <header><h2 id="updates-title">Aggiornamenti</h2><button id="update-close" class="icon-button" type="button" aria-label="Chiudi gli aggiornamenti">×</button></header>
+      <p>Versione installata <strong id="update-current">…</strong>. CineMatch può scaricare l’ultima release, verificare il pacchetto e aggiornare la stessa cartella senza perdere TMDB, addon e impostazioni.</p>
+      <div class="update-card">
+        <div class="update-status-row"><p id="update-status" role="status" aria-live="polite">Controllo configurazione…</p><a id="update-release" href="#" target="_blank" rel="noopener noreferrer" hidden>Note della release</a></div>
+        <progress id="update-progress" max="100" value="0" hidden></progress>
+        <div class="update-actions"><button id="update-folder" type="button">Scegli cartella</button><button id="update-check" type="button">Controlla aggiornamenti</button><button id="update-apply" type="button" class="primary" hidden>Aggiorna ora</button></div>
+        <p class="small">La prima volta seleziona la cartella da cui hai caricato l’estensione, quella che contiene <code>manifest.json</code>. Dopo l’aggiornamento l’estensione si ricarica da sola; TMDB e addon restano perché l’ID non cambia.</p>
+      </div>
+    </div>
+  </dialog>
 </body>
 </html>

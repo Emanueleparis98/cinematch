@@ -79,7 +79,7 @@ const closeDialog=async(page,dialog)=>{await dialog.getByRole('button',{name:'Ch
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker'),id=new URL(worker.url()).host;
   const options=await context.newPage();options.on('pageerror',error=>errors.push(error.message));
-  await options.goto(`chrome-extension://${id}/options.html`);await options.waitForTimeout(500);
+  await options.goto(`chrome-extension://${id}/settings-popup.html?page=1`);await options.waitForTimeout(500);await options.locator('#tab-functions').click();
 
   await check('CB01 mode is optional, disabled by default and uses a scoped ruleset',async()=>{
     assert.equal(await options.locator('#cb01-toggle').isChecked(),false);

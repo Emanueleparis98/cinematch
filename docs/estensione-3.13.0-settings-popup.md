@@ -1,5 +1,10 @@
 # CineMatch 3.13.0 — Popup impostazioni dall’icona
 
+> **Superata dalla 3.14.0.** La pagina delle impostazioni complete è stata
+> rimossa e gli aggiornamenti sono passati nel pannello CineMatch. Vedi
+> [Solo popup compatto 3.14.0](estensione-3.14.0-solo-popup.md). Questa pagina
+> resta come documentazione della 3.13.0.
+
 La 3.13.0 cambia il click sull’icona: non apre più le correnti, ma un **popup
 compatto con le sole impostazioni**. Le correnti e la richiesta libera restano
 nel composer di DeepSeek, dietro il pulsante **Correnti**.

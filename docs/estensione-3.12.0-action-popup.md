@@ -1,8 +1,8 @@
 # CineMatch 3.12.0 — Popup dall’icona
 
-> **Superata dalla 3.13.0.** Il popup dell’icona ora contiene solo le
-> impostazioni; le correnti restano nel composer DeepSeek. Vedi
-> [Popup impostazioni 3.13.0](estensione-3.13.0-settings-popup.md). Questa pagina
+> **Superata dalla 3.13.0 e poi dalla 3.14.0.** Il popup dell’icona ora contiene
+> solo le impostazioni; le correnti restano nel composer DeepSeek. Vedi
+> [Solo popup compatto 3.14.0](estensione-3.14.0-solo-popup.md). Questa pagina
 > resta come documentazione della 3.12.0.
 
 La 3.12.0 porta lo stesso popover compatto di DeepSeek anche sull’icona

@@ -21,6 +21,7 @@ try{
     const manifest=await worker.evaluate(()=>chrome.runtime.getManifest());
     assert.equal(manifest.side_panel,undefined);
     assert.equal(manifest.permissions.includes('sidePanel'),false);
+    assert.equal(manifest.options_ui,undefined);
     assert.match(await worker.evaluate(async()=>await chrome.action.getPopup({})),/settings-popup\.html$/);
     assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),false);
   });
