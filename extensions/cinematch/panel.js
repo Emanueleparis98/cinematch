@@ -261,7 +261,8 @@ async function boot() {
   $("expand").addEventListener("click",async()=>{await saveNow();await chrome.tabs.create({url:chrome.runtime.getURL("panel.html?view=full"),windowId});});
   $("updates").addEventListener("click",()=>$("updates-dialog").showModal());
   $("tmdb-settings").addEventListener("click",()=>{
-    const fallback=()=>chrome.tabs.create({url:chrome.runtime.getURL("settings-popup.html?page=1")});
+    const fallback=()=>chrome.windows.create({url:chrome.runtime.getURL("settings-popup.html?page=1"),type:"popup",width:420,height:620,focused:true})
+      .catch(()=>chrome.tabs.create({url:chrome.runtime.getURL("settings-popup.html?page=1")}));
     if(typeof chrome.action?.openPopup!=="function")return fallback();
     chrome.action.openPopup().catch(fallback);
   });

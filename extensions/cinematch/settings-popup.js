@@ -10,7 +10,8 @@ const DEEPSEEK_KEY = "deepseekCurrentsButton";
 let siteConfigured = false;
 let busy = false;
 
-const pageMode = new URL(location.href).searchParams.has("page");
+const pageName = new URL(location.href).searchParams.get("page");
+const pageMode = pageName !== null;
 if (pageMode) {
   document.documentElement.removeAttribute("data-action");
   document.body.classList.add("ss-page");
@@ -27,11 +28,14 @@ function status(id, message, error = false) {
   $(id).className = `cc-status${error ? " error" : ""}`;
 }
 function showTab(name) {
-  const connection = name === "connection";
-  $("tab-connection").setAttribute("aria-selected", String(connection));
-  $("tab-functions").setAttribute("aria-selected", String(!connection));
-  $("connection-view").hidden = !connection;
-  $("functions-view").hidden = connection;
+  const selected = ["connection","functions","updates"].includes(name) ? name : "connection";
+  $("tab-connection").setAttribute("aria-selected", String(selected === "connection"));
+  $("tab-functions").setAttribute("aria-selected", String(selected === "functions"));
+  $("tab-updates").setAttribute("aria-selected", String(selected === "updates"));
+  $("connection-view").hidden = selected !== "connection";
+  $("functions-view").hidden = selected !== "functions";
+  $("updates-view").hidden = selected !== "updates";
+  if (selected === "updates") document.dispatchEvent(new Event("cinematch:updates-open"));
 }
 
 async function refreshSite() {
@@ -82,11 +86,9 @@ async function refresh() {
 
 $("tab-connection").addEventListener("click", () => showTab("connection"));
 $("tab-functions").addEventListener("click", () => showTab("functions"));
+$("tab-updates").addEventListener("click", () => showTab("updates"));
 $("close").addEventListener("click", () => window.close());
-$("open-updates").addEventListener("click", () => {
-  chrome.tabs.create({url:chrome.runtime.getURL("panel.html#updates")}).catch(() => {});
-  window.close();
-});
+if (pageName === "updates") showTab("updates");
 $("reveal").addEventListener("click", () => {
   const show = $("credential").type === "password";
   $("credential").type = show ? "text" : "password";

@@ -19,9 +19,21 @@ const MAX_BYTES = 50 * 1024 * 1024;
 const currentVersion = chrome.runtime.getManifest().version;
 
 const $ = id => document.getElementById(id);
+const pageMode = new URL(location.href).searchParams.has("page");
+const compactUpdater = !pageMode && !$("updates-dialog");
 let latest = null;
 let busy = false;
 let dirHandle = null;
+
+function openUpdaterWindow() {
+  if (typeof chrome.windows?.create !== "function") {
+    setStatus("Aggiornamenti non disponibili in questa finestra. Apri il pannello CineMatch.", "error");
+    return;
+  }
+  chrome.windows.create({url:chrome.runtime.getURL("settings-popup.html?page=updates"),type:"popup",width:420,height:620,focused:true})
+    .then(()=>window.close())
+    .catch(error=>setStatus(error.message ?? "Non riesco ad aprire gli aggiornamenti.", "error"));
+}
 
 function setStatus(text, type = "") {
   const node = $("update-status");
@@ -117,6 +129,7 @@ async function validateFolder(handle) {
   return manifest;
 }
 async function chooseFolder() {
+  if (compactUpdater) { openUpdaterWindow(); return; }
   if (typeof window.showDirectoryPicker !== "function") {
     setStatus("Questo browser non supporta la scelta della cartella. Aggiorna Chrome o usa la build manuale.", "error");
     return;
@@ -144,6 +157,7 @@ async function check({interactive = false} = {}) {
     setStatus("Premi Controlla aggiornamenti per verificare la presenza di nuove versioni.");
     return;
   }
+  if (interactive && compactUpdater && !await hasOrigins()) { openUpdaterWindow(); return; }
   if (interactive && !await requestOrigins()) {
     setStatus("Accesso a GitHub non concesso. Riprova e consenti il collegamento.", "error");
     return;
@@ -179,6 +193,7 @@ async function directoryPermission(handle) {
   let permission = "prompt";
   try { permission = await handle.queryPermission({mode: "readwrite"}); } catch {}
   if (permission === "granted") return true;
+  if (compactUpdater) { openUpdaterWindow(); return false; }
   if (!handle.requestPermission) return false;
   try { permission = await handle.requestPermission({mode: "readwrite"}); } catch { return false; }
   return permission === "granted";
@@ -231,6 +246,7 @@ function validateArchive(files, info) {
 }
 async function applyUpdate() {
   if (busy) return;
+  if (compactUpdater && (!dirHandle || !await hasOrigins())) { openUpdaterWindow(); return; }
   if (!latest) { await check({interactive: true}); if (!latest) return; }
   if (!dirHandle) {
     setStatus("Scegli prima la cartella dell’estensione con Scegli cartella.", "error");
@@ -290,9 +306,14 @@ async function init() {
       return;
     }
   }
-  if (await hasOrigins()) check().catch(() => {});
-  else setStatus("Premi Controlla aggiornamenti per verificare la presenza di nuove versioni.");
+  if (await hasOrigins()) {
+    if (compactUpdater) setStatus("Premi Controlla per verificare la presenza di nuove versioni.");
+    else check().catch(() => {});
+  } else setStatus("Premi Controlla aggiornamenti per verificare la presenza di nuove versioni.");
 }
+document.addEventListener("cinematch:updates-open", () => {
+  if (compactUpdater && !busy && !latest) check().catch(() => {});
+});
 $("update-check").addEventListener("click", () => check({interactive: true}));
 $("update-folder").addEventListener("click", chooseFolder);
 $("update-apply").addEventListener("click", applyUpdate);

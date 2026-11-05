@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="compact.css">
   <link rel="stylesheet" href="settings-popup.css">
   <script type="module" src="settings-popup.js"></script>
+  <script type="module" src="updater.js"></script>
 </head>
 <body>
   <header class="cc-head">
@@ -18,6 +19,7 @@
   <div class="cc-tabs" role="tablist" aria-label="Impostazioni">
     <button id="tab-connection" role="tab" aria-controls="connection-view" aria-selected="true" type="button">Connessione</button>
     <button id="tab-functions" role="tab" aria-controls="functions-view" aria-selected="false" type="button">Funzioni</button>
+    <button id="tab-updates" role="tab" aria-controls="updates-view" aria-selected="false" type="button">Aggiorna</button>
   </div>
 
   <main id="connection-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-connection">
@@ -45,12 +47,21 @@
       <label><input id="cb01-toggle" type="checkbox"> Modalità CB01</label>
       <p id="cb01-status" class="cc-status" role="status" aria-live="polite">Controllo…</p>
     </div>
-    <p class="ss-muted">Le impostazioni complete, gli aggiornamenti e la gestione degli addon restano nella pagina estesa.</p>
+    <p class="ss-muted">Le correnti restano nel composer DeepSeek. Addon e player restano nel pannello CineMatch.</p>
+  </main>
+
+  <main id="updates-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-updates" hidden>
+    <p class="ss-update-intro">Versione installata <strong id="update-current">…</strong>. Gli aggiornamenti arrivano direttamente dal repository GitHub, senza scaricare lo ZIP a mano.</p>
+    <div class="ss-update-card">
+      <div class="ss-update-status"><p id="update-status" role="status" aria-live="polite">Controllo configurazione…</p><a id="update-release" href="#" target="_blank" rel="noopener noreferrer" hidden>Note</a></div>
+      <progress id="update-progress" max="100" value="0" hidden></progress>
+      <div class="ss-update-actions"><button id="update-folder" type="button">Scegli cartella</button><button id="update-check" type="button">Controlla</button><button id="update-apply" type="button" class="cc-primary" hidden>Aggiorna ora</button></div>
+      <p class="ss-update-note">La prima volta autorizza la cartella: si apre una piccola finestra con lo stesso layout, non una scheda. Poi CineMatch verifica SHA-256 e aggiorna i file; non chiudere la finestra durante il download.</p>
+    </div>
   </main>
 
   <footer class="ss-footer">
     <span>Versione <strong id="current-version">…</strong></span>
-    <button id="open-updates" type="button">Aggiornamenti</button>
   </footer>
 </body>
 </html>

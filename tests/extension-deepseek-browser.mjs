@@ -132,8 +132,33 @@ try{
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===0,{},{timeout:10000});
     await popup.locator('#deepseek-toggle').check();
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
-    assert.equal(await popup.locator('#open-updates').isVisible(),true);
+    await popup.locator('#tab-updates').click();
+    assert.equal(await popup.locator('#updates-view').isVisible(),true);
+    assert.equal(await popup.locator('#tab-updates').getAttribute('aria-selected'),'true');
+    assert.equal(await popup.locator('#update-current').innerText(),await worker.evaluate(()=>chrome.runtime.getManifest().version));
+    assert.equal(await popup.locator('#update-folder').isVisible(),true);
+    assert.equal(await popup.locator('#update-check').isVisible(),true);
+    await popup.locator('#tab-connection').click();
+    await popup.locator('#tab-updates').click();
+    assert.equal(await popup.locator('#updates-view').isVisible(),true);
     await popup.close();
+  });
+
+  await check('updates stay in the popup and only folder setup opens a compact window',async()=>{
+    const settings=await context.newPage();
+    await settings.goto(`chrome-extension://${id}/settings-popup.html`);await settings.waitForTimeout(500);
+    const pagesBefore=context.pages().length;
+    await settings.locator('#tab-updates').click();await settings.waitForTimeout(300);
+    assert.equal(await settings.locator('#updates-view').isVisible(),true);
+    assert.equal(context.pages().length,pagesBefore);
+    const nextPage=context.waitForEvent('page');
+    await settings.locator('#update-folder').click();
+    const updater=await nextPage;await updater.waitForLoadState();
+    assert.match(updater.url(),/settings-popup\.html\?page=updates$/);
+    assert.equal(await updater.locator('#updates-view').isVisible(),true);
+    const windowTypes=await worker.evaluate(async()=>(await chrome.windows.getAll({populate:false})).map(window=>window.type));
+    assert.ok(windowTypes.includes('popup'));
+    await updater.close();
   });
 
   await check('a DeepSeek rerender restores exactly one button',async()=>{

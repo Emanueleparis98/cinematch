@@ -1,4 +1,4 @@
-# CineMatch - estensione browser 3.14.0
+# CineMatch - estensione browser 3.15.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
@@ -7,15 +7,15 @@ e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.14.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.15.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
    Estensioni: l’icona apre il **popup compatto delle impostazioni**, da cui
    colleghi TMDB e attivi le funzioni, compreso il pulsante Correnti in DeepSeek.
 
-Da una versione **3.6.0 o successiva** aggiorna dal pannello CineMatch → icona
-**Aggiornamenti**: scarica e verifica la nuova versione nella stessa cartella,
+Da una versione **3.6.0 o successiva** aggiorna dal popup → scheda **Aggiorna**:
+scarica e verifica la nuova versione nella stessa cartella,
 senza cambiare ID né perdere TMDB e addon. Per una versione precedente alla
 3.6.0 sostituisci invece i file della cartella già caricata e premi **Ricarica**.
 
@@ -246,8 +246,8 @@ ogni formato di risposta è riconoscibile; in questi casi il testo resta leggibi
 Edge non eseguito direttamente. L'inserimento diretto del prompt accetta fino a
 200.000 caratteri; restano i limiti propri della chat.
 
-Dalla 3.6.0 usa il pannello CineMatch → icona **Aggiornamenti** per scaricare,
-verificare con SHA-256 e applicare la nuova versione nella stessa cartella. Per una versione precedente
+Dalla 3.6.0 usa il popup → scheda **Aggiorna** per scaricare, verificare con
+SHA-256 e applicare la nuova versione nella stessa cartella. Per una versione precedente
 alla 3.6.0 sostituisci i file della cartella già caricata e premi **Ricarica** in
 chrome://extensions. La credenziale e gli addon già salvati vengono mantenuti.
 Per rimuovere usa **Rimuovi** nella pagina delle estensioni; la credenziale può

@@ -1,5 +1,10 @@
 # CineMatch 3.14.0 — Solo popup compatto
 
+> **Superata dalla 3.15.0.** Gli aggiornamenti ora sono una scheda del popup e
+> non aprono più il pannello. Vedi
+> [Aggiornamenti nel popup 3.15.0](estensione-3.15.0-aggiornamenti-popup.md).
+> Questa pagina resta come documentazione della 3.14.0.
+
 La 3.14.0 elimina la pagina delle impostazioni complete. Tutto ciò che serve per
 configurare CineMatch sta nel **popup compatto dell’icona**; aggiornamenti e
 addon restano nel pannello CineMatch, che esisteva già.
