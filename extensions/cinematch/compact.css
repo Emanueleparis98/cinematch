@@ -10,8 +10,11 @@ button{cursor:pointer}
 .cc-head{display:flex;align-items:center;justify-content:space-between;height:38px;padding:0 8px 0 12px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
 .cc-brand{display:flex;align-items:center;gap:7px;font-weight:750;letter-spacing:-.01em}
 .cc-brand svg{width:17px;height:17px;fill:none;stroke:var(--accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.cc-close{width:28px;height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:19px;line-height:1}
+.cc-head-actions{display:flex;align-items:center;gap:2px}
+.cc-close{width:28px;height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:19px;line-height:1;display:grid;place-items:center}
+.cc-close svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 .cc-close:hover{background:var(--hover);color:var(--text)}
+html[data-action="true"] body{width:400px;height:560px;min-width:400px;min-height:560px}
 .cc-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:7px 10px 0;flex:none}
 .cc-tabs button{height:29px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--muted);font-weight:650}
 .cc-tabs button[aria-selected="true"]{background:var(--deep);border-color:var(--line);color:var(--text)}

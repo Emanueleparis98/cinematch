@@ -45,7 +45,8 @@ try{
     assert.equal(manifest.permissions.includes('sidePanel'),false);
     assert.ok(manifest.content_scripts.some(script=>script.js.includes('launcher.js')&&script.matches.length===1&&script.matches[0]==='https://chat.deepseek.com/*'));
     assert.ok(!manifest.content_scripts.find(script=>script.js.includes('references.js')).js.includes('launcher.js'));
-    assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),true);
+    assert.match(await worker.evaluate(async()=>await chrome.action.getPopup({})),/compact\.html$/);
+    assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),false);
   });
 
   await check('the compact currents button is off by default and no floating launcher exists',async()=>{
@@ -107,6 +108,22 @@ try{
     assert.equal(await frame.locator('#free-question').isVisible(),true);
     await frame.locator('#close').click();
     await page.locator('.cm-currents-popover').waitFor({state:'hidden',timeout:5000});
+  });
+
+  await check('the extension icon popup uses the same compact UI and inserts into DeepSeek',async()=>{
+    await page.locator('#chat-input').fill('');
+    const popup=await context.newPage();popup.on('pageerror',error=>errors.push(error.message));
+    await popup.goto(`chrome-extension://${id}/compact.html`);await popup.waitForTimeout(700);
+    assert.equal(await popup.locator('#settings').isVisible(),true);
+    assert.equal(await popup.locator('.cc-row').count(),74);
+    await popup.evaluate(()=>{window.close=()=>{};});
+    await popup.locator('.cc-row').first().click();await popup.locator('#generate').click();
+    await popup.locator('#prompt-preview').waitFor({state:'visible'});
+    const prompt=await popup.locator('#prompt-preview').inputValue();
+    await popup.locator('#insert').click();await popup.waitForTimeout(700);
+    await page.waitForFunction(()=>document.querySelector('#chat-input').value.length>200,{},{timeout:10000});
+    assert.ok((await page.locator('#chat-input').inputValue()).includes(prompt.trim().slice(0,60)));
+    await popup.close();
   });
 
   await check('a DeepSeek rerender restores exactly one button',async()=>{

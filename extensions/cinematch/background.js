@@ -209,11 +209,18 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     return true;
   }
   if(message?.type==='deepseek-insert-prompt'){
-    if(!extensionPage(sender,'compact.html'))return false;
-    const tab=sender.tab;
-    if(!tab?.id||providerForUrl(tab.url)?.id!=='deepseek'||typeof message.prompt!=='string')return false;
+    if(!extensionPage(sender,'compact.html')||typeof message.prompt!=='string')return false;
     const mode=['empty','append','replace'].includes(message.mode)?message.mode:'empty';
     (async()=>{
+      let tab=sender.tab;
+      if(!tab||providerForUrl(tab.url)?.id!=='deepseek'){
+        const tabs=await chrome.tabs.query({url:'https://chat.deepseek.com/*'});
+        tab=tabs.find(item=>item.active)??tabs.at(-1);
+      }
+      if(!tab?.id||providerForUrl(tab.url)?.id!=='deepseek'){
+        respond({ok:false,code:'no-deepseek',error:'Apri chat.deepseek.com per inserire il prompt.'});return;
+      }
+      if(!sender.tab)await chrome.tabs.update(tab.id,{active:true}).catch(()=>{});
       const results=await chrome.scripting.executeScript({target:{tabId:tab.id},func:insertIntoComposer,args:[{provider:'deepseek',prompt:message.prompt,mode}]});
       respond(results[0]?.result??{ok:false,code:'no-editor'});
     })().catch(error=>respond({ok:false,error:error.message}));
@@ -364,7 +371,6 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   return true;
 });
 
-chrome.action.onClicked.addListener(()=>{chrome.runtime.openOptionsPage().catch(()=>{});});
 (async()=>{const state=await tmdbSiteState();if(state.enabled)await registerTmdbSite();else await unregisterTmdbSite();})().catch(()=>{});
 (async()=>{const state=await cb01State();if(state.enabled)await syncCb01();else{await setCb01Rules(false);await unregisterCb01();}})().catch(()=>{});
 chrome.permissions.onRemoved.addListener(permissions=>{

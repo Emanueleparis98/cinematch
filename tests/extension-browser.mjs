@@ -21,7 +21,8 @@ try{
     const manifest=await worker.evaluate(()=>chrome.runtime.getManifest());
     assert.equal(manifest.side_panel,undefined);
     assert.equal(manifest.permissions.includes('sidePanel'),false);
-    assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),true);
+    assert.match(await worker.evaluate(async()=>await chrome.action.getPopup({})),/compact\.html$/);
+    assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),false);
   });
   const panel=await context.newPage();panel.on('pageerror',e=>errors.push(e.message));panel.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
   await panel.goto(`chrome-extension://${id}/panel.html`);await panel.locator('#question').waitFor();

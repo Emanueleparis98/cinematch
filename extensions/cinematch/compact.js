@@ -1,6 +1,13 @@
 import {KINDS,MAX_MOVEMENTS,MODES,defaultRequest,generatePrompt,matches,normalize,period} from "./core.js";
 
 const $ = id => document.getElementById(id);
+const embedded = window.parent !== window;
+if (!embedded) {
+  document.documentElement.dataset.action = "true";
+  const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  document.documentElement.dataset.theme = systemTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { document.documentElement.dataset.theme = systemTheme(); });
+}
 const state = {
   mode:"currents", selected:[], catalog:[], query:"", view:"form",
   goal:"recommendations", depth:"concise", question:"",
@@ -12,6 +19,7 @@ const status = (message="", error=false) => {
 };
 const hint = message => { $("hint").textContent = message; };
 const post = (type, extra={}) => { try { parent.postMessage({type,...extra}, "*"); } catch {} };
+const closePanel = () => { if (embedded) post("cinematch:compact-close"); else window.close(); };
 
 function selectedMovements() {
   return state.selected.map(id => state.catalog.find(item => item.id === id)).filter(Boolean);
@@ -149,7 +157,7 @@ async function insert(mode="empty") {
     const result = await chrome.runtime.sendMessage({type:"deepseek-insert-prompt", prompt:state.prompt, mode});
     if (result?.ok) {
       status("Prompt inserito.");
-      post("cinematch:compact-close");
+      closePanel();
       return;
     }
     if (result?.code === "draft-not-empty") {
@@ -176,10 +184,12 @@ function load() {
   $("replace").addEventListener("click", () => insert("replace"));
   $("cancel-conflict").addEventListener("click", () => {$("conflict").hidden = true; status();});
   $("back").addEventListener("click", back);
-  $("close").addEventListener("click", () => post("cinematch:compact-close"));
+  $("close").addEventListener("click", closePanel);
+  $("settings").hidden = embedded;
+  $("settings").addEventListener("click", () => { chrome.runtime.openOptionsPage().catch(() => {}); if (!embedded) window.close(); });
   $("prompt-preview").addEventListener("input", event => {state.prompt = event.target.value;});
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !event.defaultPrevented) post("cinematch:compact-close");
+    if (event.key === "Escape" && !event.defaultPrevented) closePanel();
   });
   window.addEventListener("message", event => {
     if (event.source !== parent) return;
@@ -196,6 +206,9 @@ function load() {
       updateTabs();
       post("cinematch:compact-ready");
       $("search").focus();
+      if (!embedded) chrome.tabs.query({url:"https://chat.deepseek.com/*"}).then(tabs => {
+        if (!tabs.length) hint("Apri DeepSeek per inserire il prompt; puoi comunque copiarlo.");
+      }).catch(() => {});
     })
     .catch(() => {
       $("empty").hidden = false;
