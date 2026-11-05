@@ -63,6 +63,17 @@ async function notifyChats(){
   if((await tmdbSiteState()).enabled)for(const tab of tabs.filter(tab=>/^https:\/\/www\.themoviedb\.org\//.test(tab.url??'')))messages.push(chrome.tabs.sendMessage(tab.id,{type:'tmdb-preferences-changed',...status}));
   await Promise.allSettled(messages);
 }
+const DEEPSEEK_URL='https://chat.deepseek.com/*';
+const deepseekPageSender=sender=>Boolean(sender.tab&&sender.frameId===0&&/^https:\/\/chat\.deepseek\.com\//.test(sender.url??''));
+async function deepseekCurrentsEnabled(){
+  await storageReady;
+  return (await chrome.storage.local.get('deepseekCurrentsButton')).deepseekCurrentsButton===true;
+}
+async function notifyDeepseekCurrents(enabled){
+  if(enabled===undefined)enabled=await deepseekCurrentsEnabled();
+  const tabs=await chrome.tabs.query({url:DEEPSEEK_URL});
+  await Promise.allSettled(tabs.map(tab=>chrome.tabs.sendMessage(tab.id,{type:'cinematch:deepseek-currents',enabled})));
+}
 /* ---------- CB01 ---------- */
 const CB01_RULESET='cb01_ads';
 const CB01_SCRIPT_IDS=['cinematch-cb01-main','cinematch-cb01-site'];
@@ -181,6 +192,24 @@ const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.sp
 const playerPage=sender=>extensionPage(sender,'watch.html')||extensionPage(sender,'cinema.html');
 const TMDB_SITE_ORIGIN='https://www.themoviedb.org/*';
 const tmdbPageSender=sender=>Boolean(sender.tab&&sender.frameId===0&&/^https:\/\/www\.themoviedb\.org\//.test(sender.url??''));
+chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+  if(sender.id!==chrome.runtime.id)return false;
+  if(message?.type==='deepseek-currents-status'){
+    if(!deepseekPageSender(sender))return false;
+    (async()=>respond({ok:true,enabled:await deepseekCurrentsEnabled()})).catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  if(message?.type==='deepseek-currents-sync'){
+    if(!extensionPage(sender,'options.html'))return false;
+    (async()=>{
+      const enabled=await deepseekCurrentsEnabled();
+      await notifyDeepseekCurrents(enabled);
+      respond({ok:true,enabled});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
+  return false;
+});
 const mediaKind=value=>value===undefined||value==='movie'?'movie':value==='tv'?'tv':null;
 const episodeNumber=value=>Number.isSafeInteger(value)&&value>=0?value:null;
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
@@ -324,7 +353,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   return true;
 });
 
-chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true}).catch(()=>{});
+chrome.action.onClicked.addListener(()=>{chrome.runtime.openOptionsPage().catch(()=>{});});
 (async()=>{const state=await tmdbSiteState();if(state.enabled)await registerTmdbSite();else await unregisterTmdbSite();})().catch(()=>{});
 (async()=>{const state=await cb01State();if(state.enabled)await syncCb01();else{await setCb01Rules(false);await unregisterCb01();}})().catch(()=>{});
 chrome.permissions.onRemoved.addListener(permissions=>{

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "CineMatch — Correnti del cinema",
-  "version": "3.9.0",
-  "description": "74 correnti, prompt in-chat, immagini TMDB, flussi su TMDB e player per film e serie TV, con modalità CB01 senza pubblicità.",
+  "version": "3.10.0",
+  "description": "74 correnti, prompt in-chat, immagini TMDB, flussi e player; pulsante Correnti in DeepSeek e modalità CB01 senza pubblicità.",
   "minimum_chrome_version": "116",
-  "permissions": ["sidePanel", "storage", "scripting", "clipboardWrite", "webRequest", "alarms", "declarativeNetRequest"],
+  "permissions": ["storage", "scripting", "clipboardWrite", "webRequest", "alarms", "declarativeNetRequest"],
   "declarative_net_request": {
     "rule_resources": [{"id": "cb01_ads", "enabled": false, "path": "rules/cb01-ads.json"}]
   },
@@ -18,15 +18,18 @@
   ],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {"service_worker": "background.js", "type": "module"},
-  "side_panel": {"default_path": "panel.html"},
   "options_ui": {"page": "options.html", "open_in_tab": true},
-  "content_scripts": [{"matches": ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://claude.ai/*", "https://gemini.google.com/*"], "js": ["references.js", "overlay.js", "launcher.js", "enrich.js"], "run_at": "document_idle"}],
+  "content_scripts": [
+    {"matches": ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://claude.ai/*", "https://gemini.google.com/*"], "js": ["references.js", "overlay.js", "enrich.js"], "run_at": "document_idle"},
+    {"matches": ["https://chat.deepseek.com/*"], "js": ["launcher.js"], "css": ["deepseek-currents.css"], "run_at": "document_idle"}
+  ],
   "web_accessible_resources": [
-    {"resources": ["watch.html", "cinema.html", "panel.html"], "matches": ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://claude.ai/*", "https://gemini.google.com/*"]},
+    {"resources": ["watch.html", "cinema.html"], "matches": ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://claude.ai/*", "https://gemini.google.com/*"]},
+    {"resources": ["panel.html"], "matches": ["https://chat.deepseek.com/*"]},
     {"resources": ["cinema.html"], "matches": ["https://www.themoviedb.org/*"]},
     {"resources": ["cinema.html"], "matches": ["https://cb01one.org/*", "https://www.cb01one.org/*"]}
   ],
-  "action": {"default_title": "Apri CineMatch", "default_icon": "assets/cinematch.png"},
+  "action": {"default_title": "Impostazioni CineMatch", "default_icon": "assets/cinematch.png"},
   "icons": {"16": "assets/cinematch.png", "32": "assets/cinematch.png", "48": "assets/cinematch.png", "128": "assets/cinematch.png"},
   "content_security_policy": {"extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; object-src 'none'; connect-src 'self' https: http:; media-src 'self' https: http: blob:; img-src 'self' data: https:; style-src 'self'; font-src 'self'; base-uri 'none'"}
 }

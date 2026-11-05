@@ -17,9 +17,11 @@ await context.route('https://example.org/**',route=>route.fulfill({contentType:'
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
   const id=new URL(worker.url()).host;
-  await check('browser side panel is configured to open on the extension action',async()=>{
-    assert.equal((await worker.evaluate(()=>chrome.sidePanel.getPanelBehavior())).openPanelOnActionClick,true);
-    assert.equal((await worker.evaluate(()=>chrome.sidePanel.getOptions({}))).path,'panel.html');
+  await check('the extension action opens settings and no side panel is declared',async()=>{
+    const manifest=await worker.evaluate(()=>chrome.runtime.getManifest());
+    assert.equal(manifest.side_panel,undefined);
+    assert.equal(manifest.permissions.includes('sidePanel'),false);
+    assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),true);
   });
   const panel=await context.newPage();panel.on('pageerror',e=>errors.push(e.message));panel.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
   await panel.goto(`chrome-extension://${id}/panel.html`);await panel.locator('#question').waitFor();

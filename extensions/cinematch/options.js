@@ -6,6 +6,7 @@ const CB01_ORIGINS=[
   'https://*.mxdrop.click/*','https://*.m1xdrop.net/*','https://*.mixdrop.co/*','https://*.mixdrop.ag/*',
   'https://*.mxdrop.to/*','https://*.mixdrop.to/*','https://*.mxcontent.net/*'
 ];
+const DEEPSEEK_CURRENTS_KEY='deepseekCurrentsButton';
 let siteConfigured=false;
 async function refreshSite(){
   const result=await send({type:'tmdb-site-status'});
@@ -34,7 +35,15 @@ async function refreshCb01(){
       ?'Il permesso per CB01 o per i suoi player non è più attivo. Riattiva l’opzione per concederlo di nuovo.'
       :'Disattivo. CB01 si apre senza bloccare la pubblicità e senza il pulsante CineMatch.';
 }
-async function refresh(){const result=await send({type:'tmdb-status'});$('connection').textContent=result?.configured?'TMDB è configurato. Le immagini sono automatiche.':'Collega TMDB per attivare le immagini.';$('remove').disabled=!result?.configured;await refreshSite().catch(error=>{$('tmdb-site-status').textContent=error.message;});await refreshCb01().catch(error=>{$('cb01-status').textContent=error.message;});}
+async function refreshDeepSeekCurrents(){
+  const data=await chrome.storage.local.get(DEEPSEEK_CURRENTS_KEY);
+  const enabled=data[DEEPSEEK_CURRENTS_KEY]===true;
+  $('deepseek-currents-toggle').checked=enabled;
+  $('deepseek-currents-status').textContent=enabled
+    ?'Attivo. Il pulsante Correnti compare nel composer di DeepSeek accanto agli altri due pulsanti.'
+    :'Disattivo. DeepSeek non mostra il pulsante Correnti.';
+}
+async function refresh(){const result=await send({type:'tmdb-status'});$('connection').textContent=result?.configured?'TMDB è configurato. Le immagini sono automatiche.':'Collega TMDB per attivare le immagini.';$('remove').disabled=!result?.configured;await refreshSite().catch(error=>{$('tmdb-site-status').textContent=error.message;});await refreshCb01().catch(error=>{$('cb01-status').textContent=error.message;});await refreshDeepSeekCurrents().catch(error=>{$('deepseek-currents-status').textContent=error.message;});}
 $('tmdb-site-toggle').addEventListener('change',async()=>{
   const toggle=$('tmdb-site-toggle'),status=$('tmdb-site-status');
   if(!siteConfigured){toggle.checked=false;status.textContent='Collega prima TMDB dalle impostazioni qui sopra.';return;}
@@ -83,6 +92,24 @@ $('cb01-toggle').addEventListener('change',async()=>{
   }catch(error){
     await refreshCb01().catch(()=>{});
     status.textContent=error.message;
+  }finally{
+    toggle.disabled=false;
+  }
+});
+$('deepseek-currents-toggle').addEventListener('change',async()=>{
+  const toggle=$('deepseek-currents-toggle'),status=$('deepseek-currents-status');
+  toggle.disabled=true;
+  try{
+    await chrome.storage.local.set({[DEEPSEEK_CURRENTS_KEY]:toggle.checked});
+    const result=await send({type:'deepseek-currents-sync'});
+    if(!result?.ok)throw new Error(result?.error??'Aggiornamento delle schede DeepSeek non riuscito.');
+    await refreshDeepSeekCurrents();
+    status.textContent=toggle.checked
+      ?'Attivo. Apri o ricarica DeepSeek: il pulsante Correnti compare accanto a Pensiero Profondo e Ricerca.'
+      :'Disattivo. DeepSeek non mostra il pulsante Correnti.';
+  }catch(error){
+    status.textContent=error.message;
+    await refreshDeepSeekCurrents().catch(()=>{});
   }finally{
     toggle.disabled=false;
   }

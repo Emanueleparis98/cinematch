@@ -1,17 +1,18 @@
-# CineMatch - estensione browser 3.9.0
+# CineMatch - estensione browser 3.10.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
-Claude e Gemini, pulsante **Flussi** su TMDB e modalità **CB01** senza
-pubblicità per film e serie TV.
+Claude e Gemini, pulsante **Flussi** su TMDB, pulsante **Correnti** in DeepSeek
+e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.9.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.10.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
-   Estensioni, poi premi l'icona per aprire il pannello.
+   Estensioni: l’icona apre le **Impostazioni**, da cui puoi attivare il pulsante
+   Correnti in DeepSeek.
 
 Da una versione **3.6.0 o successiva** aggiorna da **Opzioni → Aggiornamenti**
 nella stessa cartella, senza cambiare ID né perdere TMDB e addon. Per una
@@ -20,8 +21,9 @@ caricata e premi **Ricarica**.
 
 Nel repository la cartella già pronta è `dist/CineMatch-Chrome` dopo la build.
 Il sorgente `extensions/cinematch` non include i dati assemblati. Mantieni la
-cartella caricata nella stessa posizione. Chrome 116+; in Edge con sidePanel usa
-`edge://extensions`. Firefox e Safari non sono supportati da questo pacchetto.
+cartella caricata nella stessa posizione. Chrome 116+; in Edge con Chromium
+recente usa `edge://extensions`. Firefox e Safari non sono supportati da questo
+pacchetto.
 Distribuzione manuale, non pubblicata sullo store.
 Guida Chrome: https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world.
 
@@ -81,6 +83,19 @@ CineMatch legge solo titolo, ID e immagine del poster per aprire il player; non
 legge account, cookie o conversazioni. Disattivando l’opzione i pulsanti vengono
 rimossi e il permesso revocato. I poster di film e serie TV, compresa la locandina
 principale, aprono lo stesso selettore sorgenti dell’estensione.
+
+## Correnti in DeepSeek
+
+Dalla 3.10.0 non esiste più il pannello laterale e il vecchio pulsante
+flottante. L’icona dell’estensione apre le **Impostazioni**. Attiva
+**Correnti in DeepSeek** per far comparire un pulsante **Correnti** nel composer
+di `chat.deepseek.com`, accanto a **Pensiero Profondo** e **Ricerca**.
+
+Il pulsante usa lo stile nativo di DeepSeek e apre il pannello CineMatch completo
+in overlay: ricerca, filtri, fino a quattro correnti, dettaglio, composer e
+inserimento nella chat. Non è un pannello laterale e non si apre da solo. Le
+altre chat non mostrano il pulsante Correnti e non hanno più il pulsante
+flottante; conservano immagini TMDB, **Flussi** e player.
 
 ## Modalità CB01
 
@@ -192,8 +207,9 @@ Le risposte AI vengono analizzate localmente; TMDB riceve titoli, anni o nomi,
 richieste di schede e immagini, non il testo completo della conversazione.
 I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
-`sidePanel` apre il pannello, `scripting` inserisce il prompt nei quattro editor,
-`clipboardWrite` copia il testo, `storage` conserva le bozze nella sessione.
+`scripting` inserisce il prompt nei quattro editor, `clipboardWrite` copia il
+testo, `storage` conserva le bozze nella sessione. L’icona dell’estensione apre
+le Impostazioni; il pannello Correnti è un overlay caricato solo su DeepSeek.
 `webRequest` osserva temporaneamente soltanto i reindirizzamenti e gli errori
 della richiesta video corrente, sui siti già autorizzati. Se un flusso passa
 a un altro server, **Consenti [server]** richiede il relativo permesso opzionale

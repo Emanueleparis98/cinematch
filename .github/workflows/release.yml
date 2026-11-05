@@ -72,8 +72,8 @@ jobs:
       - name: Test browser
         run: pnpm test:browser
 
-      - name: Test launcher in-chat
-        run: pnpm test:launcher
+      - name: Test Correnti DeepSeek
+        run: pnpm test:deepseek
 
       - name: Test TMDB e serie TV
         run: pnpm test:tv

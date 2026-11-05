@@ -23,11 +23,13 @@ jobs:
       - run: pnpm test:throughput
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
-      - run: pnpm test:launcher
-      - run: pnpm test:updater
+      - run: pnpm test:deepseek
+      - run: pnpm test:tv
       - run: pnpm test:images
       - run: pnpm test:player
       - run: pnpm test:codecs
+      - run: pnpm test:cb01
+      - run: pnpm test:updater
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: CineMatch-Chrome
