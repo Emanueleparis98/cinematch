@@ -266,6 +266,26 @@ try{
     await frame.locator('#pickerView').waitFor({state:'visible',timeout:5000});
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
   });
+  await check('returning to the picker cancels a source still waiting for its first byte',async()=>{
+    const delayed=`${base}/pattern.mp4`;
+    const handler=async route=>{await new Promise(resolve=>setTimeout(resolve,1500));await route.continue().catch(()=>{});};
+    await context.route(delayed,handler);
+    try{
+      await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+      const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible'});
+      const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+      let frame=null;for(let i=0;i<30&&!frame;i++){frame=await (await iframe.elementHandle()).contentFrame();if(!frame)await chat.waitForTimeout(100);}
+      assert.ok(frame);
+      await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();
+      await frame.locator('#playerView').waitFor({state:'visible'});
+      await frame.locator('#backToPicker').click();
+      await frame.waitForTimeout(1900);
+      assert.equal(await frame.locator('#pickerView').isVisible(),true);
+      assert.equal(await frame.locator('#video').evaluate(video=>video.paused&&!video.getAttribute('src')),true);
+      assert.equal(await frame.locator('#playerMessage').isVisible(),false);
+      await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden'});
+    }finally{await context.unroute(delayed,handler);}
+  });
   await check('the in-chat overlay plays an integrated MKV HEVC/AC3 stream inside the same dialog',async()=>{
     await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
     const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});

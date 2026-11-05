@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CineMatch — Correnti del cinema",
-  "version": "3.19.1",
+  "version": "3.19.2",
   "description": "74 correnti, prompt in-chat, immagini TMDB, flussi e player; pulsante Correnti in DeepSeek e modalità CB01 senza pubblicità.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "scripting", "clipboardWrite", "webRequest", "alarms", "declarativeNetRequest"],

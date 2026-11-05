@@ -1,10 +1,8 @@
-# CineMatch — estensione browser 3.19.1 (ripristino 3.18.0)
+# CineMatch — estensione browser 3.19.2
 
-La **3.19.1 ripristina le funzioni della 3.18.0** e rimuove integralmente la
-modalità Live TV / Sport introdotta nella 3.19.0, ritirata. Il numero superiore
-permette di ricevere il ripristino dal popup Aggiorna anche dopo aver installato
-la 3.19.0. Una migrazione elimina registrazioni, filtri e dati residui di quella
-funzione senza alterare TMDB, CB01 o addon.
+La **3.19.2** migliora gli aggiornamenti dalla cartella ricordata, la verifica
+dei pacchetti e la gestione dei cambi di sorgente nel player. Le funzioni sono
+quelle della 3.18.0, senza la modalità Live TV / Sport ritirata.
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -15,7 +13,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.19.1.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.19.2.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
@@ -98,8 +96,14 @@ Dalla **3.6.0** le versioni successive si installano dal popup → scheda
 l’estensione, poi CineMatch scarica l’ultima release, verifica lo **SHA-256**,
 estrae il pacchetto e aggiorna quella cartella. L’estensione si ricarica da
 sola: TMDB, addon e impostazioni restano perché l’ID e la cartella non cambiano.
-La **3.19.1** include già l’updater: per una nuova installazione usa lo ZIP
-3.19.1, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
+La cartella resta ricordata anche se un riavvio non viene subito confermato.
+Se il browser richiede di nuovo l’accesso, **Conferma accesso e aggiorna** usa
+la cartella già salvata senza riaprire la scelta della cartella. Il pulsante
+**Aggiorna ora** apre una finestra persistente e continua automaticamente quando
+l’accesso è già autorizzato. Prima di modificare i file, CineMatch verifica che
+la cartella scelta sia quella effettivamente caricata dal browser.
+La **3.19.2** include già l’updater: per una nuova installazione usa lo ZIP
+3.19.2, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
 un aggiornamento manuale.
 
 L’icona dell’estensione mostra un badge quando è disponibile una nuova versione;
@@ -173,6 +177,7 @@ fallback nella scheda dedicata.
 [Layout sorgenti compatto, 3.16.0](docs/estensione-3.16.0-layout-sorgenti.md).
 [Consenso server video, 3.17.0](docs/estensione-3.17.0-permessi-player.md).
 [Filtri sorgenti, 3.18.0](docs/estensione-3.18.0-filtri-sorgenti.md).
+[Aggiornamenti e affidabilità, 3.19.2](docs/estensione-3.19.2-affidabilita.md).
 
 ## Sviluppo dell'estensione
 

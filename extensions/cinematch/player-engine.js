@@ -5,7 +5,7 @@ import {probePlayback,declaredCodecs,compatibility,containerExtension,likelyInte
 import {createCodecPlayer} from "./codec-player.js";
 import {playbackPermissions,permissionLabel} from "./media-access.js";
 
-export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{},onState=()=>{},onTracks=()=>{},onFrame=()=>{},onError=()=>{}}){
+export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{},onState=()=>{},onTracks=()=>{},onFrame=()=>{},onError=()=>{},probeMedia=probePlayback,codecFactory=createCodecPlayer}){
   let hls=null,integrated=null,mode="native",generation=0,lastStream=null,probe=null,abort=null,engineCleanup=Promise.resolve(),volumeValue=1;
   const codecCache=new Map();
   const checkCodecs=codecs=>compatibility(codecs,mime=>{if(!codecCache.has(mime))codecCache.set(mime,video.canPlayType(mime));return codecCache.get(mime);});
@@ -47,7 +47,8 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
       hls.on(Hls.Events.ERROR,async(_,data)=>{
         if(current!==generation||mode!=="native"||!data.fatal)return;
         const failed=data.context?.url??data.response?.url??data.url;
-        if(failed){try{if(!await chrome.permissions.contains({origins:[permissionOrigin(failed)]})){onError(Object.assign(new Error(`Il flusso usa un altro server (${new URL(failed).hostname}). Autorizzalo per continuare.`),{mediaOrigin:permissionOrigin(failed)}));return;}}catch{}}
+        if(failed){try{if(!await chrome.permissions.contains({origins:[permissionOrigin(failed)]})){if(current===generation&&mode==="native")onError(Object.assign(new Error(`Il flusso usa un altro server (${new URL(failed).hostname}). Autorizzalo per continuare.`),{mediaOrigin:permissionOrigin(failed)}));return;}}catch{}}
+        if(current!==generation||mode!=="native")return;
         hls?.stopLoad();
         startIntegrated(stream,{kind:"hls"},current).catch(error=>{if(current===generation)onError(error);});
       });
@@ -65,29 +66,36 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
     onState("loading");onStatus("Avvio dei decoder integrati…");
     try{video.pause();video.removeAttribute("src");video.load();}catch{}
     video.hidden=true;codecContainer.hidden=false;codecContainer.replaceChildren();
+    // An obsolete async decoder must never clear the new decoder's DOM.
+    const surface=codecContainer.ownerDocument.createElement('div');
+    surface.style.cssText='position:absolute;inset:0;width:100%;height:100%';
+    codecContainer.append(surface);
     const ext=containerExtension(stream,probeResult)||(probeResult.kind==="video"?"mp4":"mkv");
-    const candidate=await createCodecPlayer({
-      container:codecContainer,url:stream.url,
+    const candidate=await codecFactory({
+      container:surface,url:stream.url,
       kind:probeResult.kind==="dash"||stream.kind==="dash"?"dash":probeResult.kind==="hls"||stream.kind==="hls"?"hls":"video",
       ext,
       onState:state=>{if(current===generation&&mode==="integrated")onState(state);},
-      onTime:(position,duration)=>onTime(position,duration),
+      onTime:(position,duration)=>{if(current===generation)onTime(position,duration);},
       onTracks:tracks=>{if(current===generation)onTracks(tracks);},
       onFrame:type=>{if(current===generation)onFrame(type);},
-      onAudioUnavailable:()=>onStatus("Audio non supportato: prova un’altra traccia o sorgente."),
+      onAudioUnavailable:()=>{if(current===generation)onStatus("Audio non supportato: prova un’altra traccia o sorgente.");},
       onError:error=>{if(current===generation)onError(error);}
     });
-    if(current!==generation){await candidate.destroy();return;}
+    if(current!==generation){await candidate.destroy();surface.remove();return;}
     integrated=candidate;
     candidate.volume(volumeValue);
     await candidate.start();
-    if(current!==generation){await candidate.destroy();integrated=null;return;}
+    if(current!==generation){await candidate.destroy();surface.remove();if(integrated===candidate)integrated=null;return;}
     onState("playing");onStatus("In riproduzione · decoder integrati");
   }
 
   async function load(stream){
     if(!stream?.url)throw new Error("Sorgente non valida.");
     const current=++generation;
+    const previousMode=mode;mode="idle";
+    if(previousMode==="integrated")integrated?.pause().catch(()=>{});
+    else try{video.pause();}catch{}
     lastStream=stream;
     abort?.abort();abort=new AbortController();
     const origins=playbackPermissions(stream);
@@ -102,7 +110,7 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
     await queueReset();
     if(current!==generation)return;
     onState("loading");onStatus("Verifica della sorgente e del formato…");
-    const probed=await probePlayback(stream.url,{signal:abort.signal,timeout:20000});
+    const probed=await probeMedia(stream.url,{signal:abort.signal,timeout:20000});
     if(current!==generation)return;
     probe=probed;
     if(probed.kind==="page")throw new Error("La sorgente restituisce una pagina o un messaggio del servizio, non un video. Aggiorna le sorgenti o scegli un altro flusso.");
@@ -121,14 +129,15 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
   video.addEventListener("ended",()=>{
     if(mode!=="native"||!lastStream)return;
     const empty=video.currentTime<.05&&(!Number.isFinite(video.duration)||video.duration<.05);
-    if(empty){onState("loading");onStatus("Il formato richiede i decoder integrati. Avvio…");startIntegrated(lastStream,probe??{},generation).catch(error=>onError(error));}
+    if(empty){const current=generation;onState("loading");onStatus("Il formato richiede i decoder integrati. Avvio…");startIntegrated(lastStream,probe??{},current).catch(error=>{if(current===generation)onError(error);});}
     else onState("ended");
   });
   video.addEventListener("error",()=>{
     if(mode!=="native"||!lastStream)return;
     const code=video.error?.code;
+    const current=generation;
     onState("loading");onStatus("Il browser non riesce a decodificare questa sorgente. Provo i decoder integrati…");
-    startIntegrated(lastStream,probe??{},generation).catch(()=>onError(new Error(nativePlaybackError(code))));
+    startIntegrated(lastStream,probe??{},current).catch(()=>{if(current===generation)onError(new Error(nativePlaybackError(code)));});
   });
 
   return {
