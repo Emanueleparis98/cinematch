@@ -177,13 +177,6 @@ function load() {
   $("cancel-conflict").addEventListener("click", () => {$("conflict").hidden = true; status();});
   $("back").addEventListener("click", back);
   $("close").addEventListener("click", () => post("cinematch:compact-close"));
-  for (const button of document.querySelectorAll(".cc-examples button")) {
-    button.addEventListener("click", () => {
-      $("free-question").value = button.textContent;
-      $("free-question").focus();
-      status();
-    });
-  }
   $("prompt-preview").addEventListener("input", event => {state.prompt = event.target.value;});
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !event.defaultPrevented) post("cinematch:compact-close");

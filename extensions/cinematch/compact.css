@@ -48,9 +48,6 @@ button{cursor:pointer}
 .cc-options select:focus,.cc-options textarea:focus,.cc-field textarea:focus{border-color:var(--accent)}
 .cc-field{flex:none}
 .cc-field textarea{min-height:82px;resize:none;font-size:12px;line-height:1.45}
-.cc-examples{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;flex:none}
-.cc-examples button{max-width:100%;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--deep);color:var(--muted);font-size:9.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cc-examples button:hover{border-color:var(--accent);color:var(--text)}
 .cc-preview{padding-top:8px}
 .cc-preview-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;flex:none}
 .cc-preview-head span{font-weight:700}

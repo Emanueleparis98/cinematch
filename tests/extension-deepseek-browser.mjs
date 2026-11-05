@@ -97,6 +97,8 @@ try{
     await page.bringToFront();await page.locator('.cm-deepseek-currents').click();
     const frame=await compactFrame(page);assert.ok(frame);
     await frame.locator('#tab-free').click();
+    assert.equal(await frame.locator('.cc-examples').count(),0);
+    assert.match(await frame.locator('#free-question').getAttribute('placeholder'),/Scrivi la tua richiesta/);
     await frame.locator('#free-question').fill('Un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia.');
     await frame.locator('#generate').click();
     await frame.locator('#prompt-preview').waitFor({state:'visible'});

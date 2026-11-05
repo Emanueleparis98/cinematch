@@ -1,4 +1,4 @@
-# CineMatch - estensione browser 3.11.0
+# CineMatch - estensione browser 3.11.1
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
@@ -7,7 +7,7 @@ e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.11.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.11.1.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
