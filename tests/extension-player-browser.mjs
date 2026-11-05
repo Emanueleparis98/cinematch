@@ -278,7 +278,10 @@ try{
       assert.ok(frame);
       await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();
       await frame.locator('#playerView').waitFor({state:'visible'});
+      await chat.waitForFunction(()=>document.querySelector('#cinematch-cinema-host')?.shadowRoot?.querySelector('dialog')?.dataset.view==='player');
+      await dialog.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
       await frame.locator('#backToPicker').click();
+      await frame.locator('#pickerView').waitFor({state:'visible'});
       await frame.waitForTimeout(1900);
       assert.equal(await frame.locator('#pickerView').isVisible(),true);
       assert.equal(await frame.locator('#video').evaluate(video=>video.paused&&!video.getAttribute('src')),true);
