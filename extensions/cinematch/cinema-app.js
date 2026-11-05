@@ -113,7 +113,7 @@ function showPlayer(stream){
   delete $("codecScreen").dataset.audio;delete $("codecScreen").dataset.video;
   $("stage").classList.remove("hide-chrome");
   hidePlayerMessage();setPlayerLoading(true);$("bigPlay").hidden=true;
-  renderDrawer();renderSources();
+  renderDrawer();renderSources();notifyView();
   $("stage").focus?.({preventScroll:true});
 }
 function showPicker(){
@@ -125,7 +125,7 @@ function showPicker(){
   $("playerView").hidden=true;$("addonsView").hidden=true;$("pickerView").hidden=false;
   $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
   $("backToPicker").textContent=state.direct?(state.kind==="tv"?"← Episodi":"← Sorgente"):state.kind==="tv"?"← Serie":"← Film";
-  closeDrawer();renderSources();
+  closeDrawer();renderSources();notifyView();
   (state.kind==="tv"?$("seasonSelect"):$("playBest")).focus({preventScroll:true});
   updateResume();
 }
@@ -138,7 +138,7 @@ function showAddons(){
   $("pickerView").hidden=true;$("playerView").hidden=true;$("addonsView").hidden=false;
   $("manageAddons").textContent=state.kind==="tv"?"Serie":"Film";$("topbarTitle").textContent="Addon e player";
   $("addonsBack").textContent=state.kind==="tv"?"← Serie":"← Film";
-  renderAddons();
+  renderAddons();notifyView();
   $("addonsBack").focus({preventScroll:true});
 }
 function setAddonStatus(message,type=""){
@@ -605,6 +605,7 @@ async function startDirect(result){
     await startStream(stream);
   }
 }
+function notifyView(){if(embedded)parent.postMessage({type:"cinematch:view",view:state.view},"*");}
 function closeOverlay(){if(embedded)parent.postMessage({type:"cinematch:close"},"*");else window.close();}
 let toastTimer;
 function toast(message){const toast=$("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2400);}

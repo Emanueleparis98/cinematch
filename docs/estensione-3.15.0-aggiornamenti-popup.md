@@ -1,5 +1,9 @@
 # CineMatch 3.15.0 — Aggiornamenti nel popup
 
+> **Superata dalla 3.16.0.** Gli aggiornamenti restano nel popup; la 3.16.0
+> compatta il layout della scelta sorgenti. Vedi
+> [Layout sorgenti compatto 3.16.0](estensione-3.16.0-layout-sorgenti.md).
+
 La 3.15.0 porta gli aggiornamenti dentro il **popup compatto delle impostazioni**.
 Click su **Aggiornamenti** non apre più una nuova scheda: seleziona la scheda
 **Aggiorna** nello stesso layout.

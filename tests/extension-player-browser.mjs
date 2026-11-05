@@ -107,9 +107,12 @@ try{
     assert.equal(await frame.locator('#movieTitle').innerText(),'Ladri di biciclette');
     assert.ok(calls.some(c=>c.path==='/stream/movie/tt0040522.json'));
     assert.equal(await dialog.locator('.cm-loading').isVisible(),false);
+    const pickerWidth=await dialog.evaluate(node=>node.getBoundingClientRect().width);
+    assert.ok(pickerWidth<=980,`picker dialog should stay contained, got ${pickerWidth}px`);
     await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-picker-v330.png'});
     await frame.locator('#playBest').click();
     await frame.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:15000});
+    assert.ok(await dialog.evaluate(node=>node.getBoundingClientRect().width)>pickerWidth);
     await chat.screenshot({path:'test-results/overlay-player-v330.png'});
     await frame.locator('#fullscreen').click();
     await frame.waitForFunction(()=>document.fullscreenElement?.id==='stage',{},{timeout:5000});

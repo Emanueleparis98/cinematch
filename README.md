@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.15.0
+# CineMatch — estensione browser 3.16.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.15.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.16.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
@@ -92,8 +92,8 @@ Dalla **3.6.0** le versioni successive si installano dal popup → scheda
 l’estensione, poi CineMatch scarica l’ultima release, verifica lo **SHA-256**,
 estrae il pacchetto e aggiorna quella cartella. L’estensione si ricarica da
 sola: TMDB, addon e impostazioni restano perché l’ID e la cartella non cambiano.
-La **3.15.0** include già l’updater: per una nuova installazione usa lo ZIP
-3.15.0, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
+La **3.16.0** include già l’updater: per una nuova installazione usa lo ZIP
+3.16.0, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
 un aggiornamento manuale.
 
 L’icona dell’estensione mostra un badge quando è disponibile una nuova versione;
@@ -102,7 +102,7 @@ il controllo periodico richiede una sola autorizzazione a GitHub. La scheda
 
 ## Correnti e prompt in DeepSeek
 
-Dalla 3.15.0 l’icona dell’estensione apre un **popup compatto delle impostazioni**,
+Dalla 3.13.0 l’icona dell’estensione apre un **popup compatto delle impostazioni**,
 senza cambiare pagina e senza correnti: connessione TMDB, **Flussi** su TMDB,
 **CB01** e **Correnti in DeepSeek**, più la scheda **Aggiorna**. Il popup
 segue il tema chiaro/scuro del sistema. La vecchia pagina delle impostazioni
@@ -160,10 +160,11 @@ fallback nella scheda dedicata.
 [Correnti DeepSeek persistenti, 3.10.1](docs/estensione-3.10.1-deepseek-fix.md).
 [Correnti compatte in DeepSeek, 3.11.0](docs/estensione-3.11.0-deepseek-compact.md).
 [Testo libero generico, 3.11.1](docs/estensione-3.11.1-deepseek-free.md).
-[Popup correnti dall’icona, 3.12.0 (superato dalla 3.15.0)](docs/estensione-3.12.0-action-popup.md).
-[Popup impostazioni dall’icona, 3.13.0 (superato dalla 3.15.0)](docs/estensione-3.13.0-settings-popup.md).
-[Solo popup compatto, 3.14.0 (superato dalla 3.15.0)](docs/estensione-3.14.0-solo-popup.md).
-[Aggiornamenti nel popup, 3.15.0](docs/estensione-3.15.0-aggiornamenti-popup.md).
+[Popup correnti dall’icona, 3.12.0 (superato dalla 3.16.0)](docs/estensione-3.12.0-action-popup.md).
+[Popup impostazioni dall’icona, 3.13.0 (superato dalla 3.16.0)](docs/estensione-3.13.0-settings-popup.md).
+[Solo popup compatto, 3.14.0 (superato dalla 3.16.0)](docs/estensione-3.14.0-solo-popup.md).
+[Aggiornamenti nel popup, 3.15.0 (superato dalla 3.16.0)](docs/estensione-3.15.0-aggiornamenti-popup.md).
+[Layout sorgenti compatto, 3.16.0](docs/estensione-3.16.0-layout-sorgenti.md).
 
 ## Sviluppo dell'estensione
 

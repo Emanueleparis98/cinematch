@@ -14,6 +14,8 @@
     .cm-dialog{position:fixed;inset:0;margin:auto;width:min(1180px,96vw);height:min(820px,92dvh);max-width:none;max-height:none;padding:0;border:1px solid rgba(255,255,255,.12);border-radius:24px;background:#0c111b;color:#eef3ff;box-shadow:0 40px 120px rgba(0,0,0,.66);overflow:hidden;font-family:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;opacity:0;transform:translateY(8px) scale(.985)}
     .cm-dialog[open]{animation:cm-in .34s cubic-bezier(.22,1,.36,1) forwards}
     .cm-dialog.closing{animation:cm-out .18s ease forwards}
+    .cm-dialog[data-view="picker"]{width:min(940px,96vw);height:min(720px,92dvh)}
+    .cm-dialog[data-view="addons"]{width:min(900px,96vw);height:min(760px,92dvh)}
     .cm-dialog::backdrop{background:rgba(3,6,11,.62);backdrop-filter:blur(18px) saturate(.8);animation:cm-fade .3s ease both}
     .cm-dialog.closing::backdrop{animation:cm-fade-out .18s ease forwards}
     .cm-frame{position:absolute;inset:0;display:block;width:100%;height:100%;border:0;background:#0c111b}
@@ -264,6 +266,7 @@
     }
     closing = false;
     dialog.classList.remove("closing");
+    dialog.dataset.view = "picker";
     loading.hidden = false;
     fallback.hidden = true;
     frame.hidden = true;
@@ -329,6 +332,7 @@
     }
     closing = false;
     dialog.classList.remove("closing");
+    dialog.dataset.view = "picker";
     loading.hidden = false;
     fallback.hidden = true;
     retryButton.hidden = true;
@@ -391,6 +395,8 @@
       fallback.hidden = true;
       sendTheme();
       if (currentDirect && directResult) sendDirect();
+    } else if (data.type === "cinematch:view" && ["picker","player","addons"].includes(data.view)) {
+      dialog.dataset.view = data.view;
     } else if (data.type === "cinematch:close") {
       close();
     } else if (data.type === "cinematch:error") {
