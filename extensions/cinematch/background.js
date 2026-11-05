@@ -4,6 +4,7 @@ import {credential,createTmdbClient} from "./tmdb.js";
 import {defaultEpisode,publicMedia} from "./cb01-resolver.js";
 import {Cb01Error,inspectArticle,resolveEpisode,resolveMovie} from "./cb01-service.js";
 import {cleanupWithdrawnRelease} from "./upgrade-cleanup.js";
+import {validUpdate,readUpdateBody,versionIsNewer} from "./update-core.js";
 
 const storageReady=Promise.all([
   chrome.storage.local.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"}),
@@ -409,19 +410,13 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 /* Lightweight update badge. The full download/install flow lives in options. */
 const updateChannel="https://github.com/Emanueleparis98/cinematch/releases/latest/download/latest.json";
 const updateOrigins=["https://github.com/*","https://objects.githubusercontent.com/*","https://release-assets.githubusercontent.com/*"];
-function newerVersion(candidate,current){
-  const a=String(candidate).split(".").map(Number),b=String(current).split(".").map(Number);
-  if(a.length!==3||a.some(n=>!Number.isSafeInteger(n)))return false;
-  for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]>b[i];
-  return false;
-}
 async function checkUpdateBadge(){
   try{
     if(!await chrome.permissions.contains({origins:updateOrigins}))return;
-    const response=await fetch(updateChannel,{cache:"no-store",credentials:"omit",redirect:"follow"});
+    const response=await fetch(updateChannel,{cache:"no-store",credentials:"omit",redirect:"follow",signal:AbortSignal.timeout(15000)});
     if(!response.ok)return;
-    const data=await response.json();
-    if(!newerVersion(data?.version,chrome.runtime.getManifest().version)){await chrome.action.setBadgeText({text:""});return;}
+    const data=validUpdate(JSON.parse(new TextDecoder().decode(await readUpdateBody(response,{maxBytes:64*1024}))));
+    if(!versionIsNewer(data.version,chrome.runtime.getManifest().version)){await chrome.action.setBadgeText({text:""});await chrome.action.setTitle({title:chrome.runtime.getManifest().action.default_title});return;}
     await chrome.action.setBadgeText({text:"1"});
     await chrome.action.setBadgeBackgroundColor({color:"#315fd1"});
     await chrome.action.setTitle({title:`CineMatch · aggiornamento ${data.version} disponibile`});

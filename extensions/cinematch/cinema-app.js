@@ -12,6 +12,7 @@ const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(va
 
 const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",quality:"all",sourceType:"all",language:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null};
 const embedded=window.parent!==window;
+let playRequest=0;
 const mediaPhrase=()=>state.kind==="tv"?"questa serie":"questo film";
 const episodeLabel=()=>state.kind==="tv"&&state.season!==null&&state.episode!==null?`S${state.season} E${state.episode}`:"";
 
@@ -134,7 +135,7 @@ function showPlayer(stream){
 }
 function showPicker(){
   saveResume();
-  player.pause().catch(()=>{});
+  playRequest++;player.destroy().catch(()=>{});
   state.view="picker";
   state.selected=null;
   document.body.classList.remove("player-mode","addons-mode");
@@ -148,7 +149,7 @@ function showPicker(){
 function showAddons(){
   if(state.direct)return;
   saveResume();
-  player.pause().catch(()=>{});
+  playRequest++;player.destroy().catch(()=>{});
   state.view="addons";
   document.body.classList.remove("player-mode");document.body.classList.add("addons-mode");
   $("pickerView").hidden=true;$("playerView").hidden=true;$("addonsView").hidden=false;
@@ -455,13 +456,15 @@ async function loadStreams(){
 }
 async function startStream(stream,{resumeAt=0}={}){
   if(!stream?.playable)return;
+  const request=++playRequest;
   const previous=state.view==="player"&&player.duration>5?Math.max(0,Math.min(1,player.currentTime/player.duration)):null;
   showPlayer(stream);
   try{
     await player.load(stream);
+    if(request!==playRequest)return;
     if(resumeAt>5)await player.seek(resumeAt);
     else if(previous!==null){const duration=player.duration;if(duration>5)await player.seek(previous*duration);}
-  }catch(error){showPlayerError(error);}
+  }catch(error){if(request===playRequest)showPlayerError(error);}
 }
 
 /* ---------- Media, episodes and poster ---------- */

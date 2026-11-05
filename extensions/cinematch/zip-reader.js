@@ -23,7 +23,7 @@ function crc32(bytes) {
 }
 
 function safePath(path) {
-  if (!path || path.length > 300 || path.includes("\\") || path.includes("\0")) return false;
+  if (!path || path.length > 300 || /[\\\x00-\x1f<>:"|?*]/.test(path)) return false;
   if (path.startsWith("/")) return false;
   const parts = path.split("/");
   return parts.every(part => part && part !== "." && part !== "..");
@@ -33,10 +33,14 @@ function decodeName(bytes, start, length) {
   return new TextDecoder().decode(bytes.subarray(start, start + length));
 }
 
-async function inflateRaw(bytes) {
+async function inflateRaw(bytes,limit) {
   if (typeof DecompressionStream !== "function") throw new Error("Questo browser non supporta l’estrazione ZIP.");
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader=stream.getReader(),chunks=[];let size=0;
+  try{
+    for(;;){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>limit)throw new Error("Il pacchetto supera la dimensione massima consentita.");chunks.push(value);}
+  }finally{await reader.cancel().catch(()=>{});}
+  const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
 
 export async function extractZip(input, options = {}) {
@@ -46,20 +50,26 @@ export async function extractZip(input, options = {}) {
   let eocd = -1;
   const min = Math.max(0, bytes.length - 22 - 0xffff);
   for (let i = bytes.length - 22; i >= min; i -= 1) {
-    if (view.getUint32(i, true) === EOCD) { eocd = i; break; }
+    if (view.getUint32(i, true) === EOCD && i+22+view.getUint16(i+20,true)===bytes.length) { eocd = i; break; }
   }
   if (eocd < 0) throw new Error("Indice ZIP non trovato.");
   const count = view.getUint16(eocd + 10, true);
   const centralOffset = view.getUint32(eocd + 16, true);
+  const centralSize=view.getUint32(eocd+12,true);
+  if(view.getUint16(eocd+4,true)!==0||view.getUint16(eocd+6,true)!==0||view.getUint16(eocd+8,true)!==count)throw new Error("Archivi ZIP multi-volume non supportati.");
   if (count === 0xffff || centralOffset === 0xffffffff) throw new Error("Archivi ZIP64 non supportati.");
   if (count > (options.maxFiles ?? MAX_FILES)) throw new Error("Il pacchetto contiene troppi file.");
+  if(centralOffset+centralSize!==eocd)throw new Error("Indice ZIP non valido.");
 
   const files = [];
   let offset = centralOffset;
   let total = 0;
+  const names=new Set(),maxBytes=options.maxBytes??MAX_UNCOMPRESSED;
   for (let index = 0; index < count; index += 1) {
     if (offset + 46 > bytes.length || view.getUint32(offset, true) !== CENTRAL) throw new Error("Indice ZIP non valido.");
     const method = view.getUint16(offset + 10, true);
+    const flags=view.getUint16(offset+8,true);
+    if(flags&1)throw new Error("Archivi ZIP cifrati non supportati.");
     const crc = view.getUint32(offset + 16, true);
     const compressedSize = view.getUint32(offset + 20, true);
     const uncompressedSize = view.getUint32(offset + 24, true);
@@ -69,21 +79,28 @@ export async function extractZip(input, options = {}) {
     const localOffset = view.getUint32(offset + 42, true);
     const name = decodeName(bytes, offset + 46, nameLength);
     offset += 46 + nameLength + extraLength + commentLength;
+    if(offset>eocd)throw new Error("Indice ZIP troncato.");
     if (name.endsWith("/")) continue;
     if (!safePath(name)) throw new Error(`Percorso ZIP non sicuro: ${name}`);
+    if(names.has(name.toLowerCase()))throw new Error("Il pacchetto contiene percorsi duplicati.");
+    names.add(name.toLowerCase());
+    if(uncompressedSize>maxBytes-total)throw new Error("Il pacchetto supera la dimensione massima consentita.");
     if (method !== 0 && method !== 8) throw new Error(`Compressione ZIP non supportata per ${name}.`);
     if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== LOCAL) throw new Error(`Header ZIP non valido per ${name}.`);
     const localNameLength = view.getUint16(localOffset + 26, true);
     const localExtraLength = view.getUint16(localOffset + 28, true);
     const dataStart = localOffset + 30 + localNameLength + localExtraLength;
-    if (dataStart + compressedSize > bytes.length) throw new Error(`Dati ZIP troncati per ${name}.`);
+    if(view.getUint16(localOffset+8,true)!==method||view.getUint16(localOffset+6,true)!==flags||decodeName(bytes,localOffset+30,localNameLength)!==name)throw new Error("Header ZIP non coerente con l’indice.");
+    if(!(flags&8)&&(view.getUint32(localOffset+14,true)!==crc||view.getUint32(localOffset+18,true)!==compressedSize||view.getUint32(localOffset+22,true)!==uncompressedSize))throw new Error("Dimensioni ZIP non coerenti con l’indice.");
+    if (dataStart + compressedSize > centralOffset) throw new Error(`Dati ZIP troncati per ${name}.`);
     const compressed = bytes.subarray(dataStart, dataStart + compressedSize);
-    const data = method === 8 ? await inflateRaw(compressed) : compressed.slice();
+    const data = method === 8 ? await inflateRaw(compressed,uncompressedSize) : compressed.slice();
     if (data.length !== uncompressedSize) throw new Error(`Dimensione non valida per ${name}.`);
     if (crc32(data) !== crc) throw new Error(`CRC non valido per ${name}.`);
     total += data.length;
     if (total > (options.maxBytes ?? MAX_UNCOMPRESSED)) throw new Error("Il pacchetto supera la dimensione massima consentita.");
     files.push({ path: name, data });
   }
+  if(offset!==eocd)throw new Error("Indice ZIP non coerente.");
   return files;
 }
