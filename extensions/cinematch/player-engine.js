@@ -136,6 +136,12 @@ export function createPlayer({video,codecContainer,onStatus=()=>{},onTime=()=>{}
     async play(){if(mode==="integrated")return integrated?.play();return video.play();},
     async pause(){if(mode==="integrated"){await integrated?.pause();return;}video.pause();},
     async seek(seconds){if(mode==="integrated")return integrated?.seek(seconds);if(Number.isFinite(video.duration))video.currentTime=Math.max(0,Math.min(video.duration,seconds));},
+    async goLive(){
+      if(mode!=="native"||!video.seekable.length)throw new Error("Punto live non disponibile.");
+      const end=hls?.liveSyncPosition??video.seekable.end(video.seekable.length-1);
+      if(Number.isFinite(end))video.currentTime=Math.max(video.seekable.start(video.seekable.length-1),end-2);
+      await video.play();
+    },
     setVolume(value){volumeValue=Math.max(0,Math.min(1,Number(value)||0));if(mode==="integrated")integrated?.volume(volumeValue);else video.volume=volumeValue;},
     async setAudio(id){if(mode==="integrated")await integrated?.audio(id);},
     async setSubtitle(id){
