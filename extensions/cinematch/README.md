@@ -1,4 +1,4 @@
-# CineMatch - estensione browser 3.12.0
+# CineMatch - estensione browser 3.13.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
@@ -7,13 +7,12 @@ e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.12.0.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.13.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
-   Estensioni: l’icona apre il **popup compatto** delle correnti; l’ingranaggio
-   nel popup apre le **Impostazioni**, da cui puoi attivare il pulsante Correnti
-   in DeepSeek.
+   Estensioni: l’icona apre il **popup compatto delle impostazioni**, da cui
+   colleghi TMDB e attivi le funzioni, compreso il pulsante Correnti in DeepSeek.
 
 Da una versione **3.6.0 o successiva** aggiorna da **Opzioni → Aggiornamenti**
 nella stessa cartella, senza cambiare ID né perdere TMDB e addon. Per una
@@ -87,11 +86,11 @@ principale, aprono lo stesso selettore sorgenti dell’estensione.
 
 ## Correnti in DeepSeek
 
-Dalla 3.12.0 non esiste più il pannello laterale e il vecchio pulsante
-flottante. L’icona dell’estensione apre un **popup compatto** con le correnti e
-la richiesta libera. L’ingranaggio nel popup apre le **Impostazioni**. Attiva
-**Correnti in DeepSeek** per far comparire lo stesso pulsante **Correnti** nel
-composer di `chat.deepseek.com`, accanto a **Pensiero Profondo** e **Ricerca**.
+Dalla 3.13.0 non esiste più il pannello laterale e il vecchio pulsante
+flottante. L’icona dell’estensione apre un **popup compatto delle impostazioni**,
+non le correnti. Attiva **Correnti in DeepSeek** per far comparire il pulsante
+**Correnti** nel composer di `chat.deepseek.com`, accanto a **Pensiero Profondo**
+e **Ricerca**.
 
 Il pulsante usa lo stile nativo di DeepSeek e apre un piccolo popover ancorato al
 composer: ricerca, elenco compatto delle **74 correnti**, fino a quattro
@@ -213,8 +212,8 @@ I messaggi dell'utente restano esclusi dai selettori delle risposte.
 
 `scripting` inserisce il prompt nei quattro editor, `clipboardWrite` copia il
 testo, `storage` conserva le bozze nella sessione. L’icona dell’estensione apre
-il popup compatto; l’ingranaggio apre le Impostazioni. Il popup Correnti usa la
-stessa pagina sia dall’icona sia dall’overlay su DeepSeek.
+il popup compatto delle impostazioni; le correnti si aprono solo dal pulsante nel
+composer DeepSeek, con la stessa interfaccia di `compact.html`.
 `webRequest` osserva temporaneamente soltanto i reindirizzamenti e gli errori
 della richiesta video corrente, sui siti già autorizzati. Se un flusso passa
 a un altro server, **Consenti [server]** richiede il relativo permesso opzionale

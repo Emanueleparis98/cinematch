@@ -189,6 +189,7 @@ async function cb01Article(articleUrl,season=null,episode=null){
   return {token,media,stream,episode:target};
 }
 const extensionPage=(sender,path)=>sender.id===chrome.runtime.id&&sender.url?.split(/[?#]/)[0]===chrome.runtime.getURL(path);
+const settingsPage=sender=>extensionPage(sender,'options.html')||extensionPage(sender,'settings-popup.html');
 const playerPage=sender=>extensionPage(sender,'watch.html')||extensionPage(sender,'cinema.html');
 const TMDB_SITE_ORIGIN='https://www.themoviedb.org/*';
 const tmdbPageSender=sender=>Boolean(sender.tab&&sender.frameId===0&&/^https:\/\/www\.themoviedb\.org\//.test(sender.url??''));
@@ -200,7 +201,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     return true;
   }
   if(message?.type==='deepseek-currents-sync'){
-    if(!extensionPage(sender,'options.html'))return false;
+    if(!settingsPage(sender))return false;
     (async()=>{
       const enabled=await deepseekCurrentsEnabled();
       await notifyDeepseekCurrents(enabled);
@@ -256,7 +257,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 });
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id||!message?.type?.startsWith('cb01-'))return false;
-  const settings=extensionPage(sender,'options.html');
+  const settings=settingsPage(sender);
   if(message.type==='cb01-status'){
     if(!settings)return false;
     (async()=>{
@@ -321,17 +322,17 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id)return false;
   if(message?.type==='tmdb-site-status'){
-    if(!extensionPage(sender,'options.html'))return false;
+    if(!settingsPage(sender))return false;
     (async()=>{const state=await tmdbSiteState(),status=await tmdbStatus();respond({ok:true,...state,...status});})().catch(error=>respond({ok:false,error:error.message}));
     return true;
   }
   if(message?.type==='tmdb-site-sync'){
-    if(!extensionPage(sender,'options.html'))return false;
+    if(!settingsPage(sender))return false;
     (async()=>{await syncTmdbSite({inject:true});const state=await tmdbSiteState(),status=await tmdbStatus();respond({ok:true,...state,...status});})().catch(error=>respond({ok:false,error:error.message}));
     return true;
   }
   if(message?.type==='tmdb-site-disable'){
-    if(!extensionPage(sender,'options.html'))return false;
+    if(!settingsPage(sender))return false;
     (async()=>{
       await chrome.storage.local.set({tmdbSiteButton:false});
       disableTmdbSite().catch(()=>{});
@@ -346,7 +347,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   }
   if(message?.type?.startsWith("tmdb-site-"))return false;
   if(!message?.type?.startsWith("tmdb-"))return false;
-  const settings=extensionPage(sender,"options.html");
+  const settings=settingsPage(sender);
   const trusted=settings||extensionPage(sender,"panel.html")||extensionPage(sender,"cinema.html");
   const chat=sender.tab&&sender.frameId===0&&providerForUrl(sender.url);
   if(!trusted&&!chat)return false;

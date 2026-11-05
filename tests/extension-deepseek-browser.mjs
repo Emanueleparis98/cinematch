@@ -45,7 +45,7 @@ try{
     assert.equal(manifest.permissions.includes('sidePanel'),false);
     assert.ok(manifest.content_scripts.some(script=>script.js.includes('launcher.js')&&script.matches.length===1&&script.matches[0]==='https://chat.deepseek.com/*'));
     assert.ok(!manifest.content_scripts.find(script=>script.js.includes('references.js')).js.includes('launcher.js'));
-    assert.match(await worker.evaluate(async()=>await chrome.action.getPopup({})),/compact\.html$/);
+    assert.match(await worker.evaluate(async()=>await chrome.action.getPopup({})),/settings-popup\.html$/);
     assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),false);
   });
 
@@ -110,19 +110,29 @@ try{
     await page.locator('.cm-currents-popover').waitFor({state:'hidden',timeout:5000});
   });
 
-  await check('the extension icon popup uses the same compact UI and inserts into DeepSeek',async()=>{
-    await page.locator('#chat-input').fill('');
+  await check('the extension icon popup shows only settings and can toggle DeepSeek',async()=>{
     const popup=await context.newPage();popup.on('pageerror',error=>errors.push(error.message));
-    await popup.goto(`chrome-extension://${id}/compact.html`);await popup.waitForTimeout(700);
-    assert.equal(await popup.locator('#settings').isVisible(),true);
-    assert.equal(await popup.locator('.cc-row').count(),74);
-    await popup.evaluate(()=>{window.close=()=>{};});
-    await popup.locator('.cc-row').first().click();await popup.locator('#generate').click();
-    await popup.locator('#prompt-preview').waitFor({state:'visible'});
-    const prompt=await popup.locator('#prompt-preview').inputValue();
-    await popup.locator('#insert').click();await popup.waitForTimeout(700);
-    await page.waitForFunction(()=>document.querySelector('#chat-input').value.length>200,{},{timeout:10000});
-    assert.ok((await page.locator('#chat-input').inputValue()).includes(prompt.trim().slice(0,60)));
+    await popup.goto(`chrome-extension://${id}/settings-popup.html`);await popup.waitForTimeout(600);
+    assert.equal(await popup.locator('#credential').isVisible(),true);
+    assert.equal(await popup.locator('#tab-connection').getAttribute('aria-selected'),'true');
+    assert.equal(await popup.locator('#tab-functions').getAttribute('aria-selected'),'false');
+    assert.equal(await popup.locator('.cc-row').count(),0);
+    assert.equal(await popup.locator('.cc-chip').count(),0);
+    assert.equal(await popup.locator('#current-version').innerText(),await worker.evaluate(()=>chrome.runtime.getManifest().version));
+    assert.match(await popup.locator('#connection').innerText(),/TMDB/);
+    assert.match(await popup.locator('#tmdb-site-status').innerText(),/TMDB|Disattivo|Attivo|Permesso/);
+    assert.match(await popup.locator('#cb01-status').innerText(),/Disattivo|Attivo|Permesso/);
+    assert.match(await popup.locator('#deepseek-status').innerText(),/Pulsante Correnti/);
+    await popup.locator('#tab-functions').click();
+    assert.equal(await popup.locator('#functions-view').isVisible(),true);
+    assert.equal(await popup.locator('#tmdb-site-toggle').isVisible(),true);
+    assert.equal(await popup.locator('#cb01-toggle').isVisible(),true);
+    assert.equal(await popup.locator('#deepseek-toggle').isChecked(),true);
+    await popup.locator('#deepseek-toggle').uncheck();
+    await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===0,{},{timeout:10000});
+    await popup.locator('#deepseek-toggle').check();
+    await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
+    assert.equal(await popup.locator('#open-options').isVisible(),true);
     await popup.close();
   });
 

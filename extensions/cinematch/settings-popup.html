@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="it" data-theme="dark" data-action="true">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>CineMatch · Impostazioni</title>
+  <link rel="stylesheet" href="compact.css">
+  <link rel="stylesheet" href="settings-popup.css">
+  <script type="module" src="settings-popup.js"></script>
+</head>
+<body>
+  <header class="cc-head">
+    <div class="cc-brand"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="4" width="17" height="17" rx="4"/><path d="M9 24h12a4 4 0 0 0 4-4V9M9 10h6M9 15h4"/></svg><span>Impostazioni</span></div>
+    <button id="close" class="cc-close" type="button" aria-label="Chiudi">×</button>
+  </header>
+
+  <div class="cc-tabs" role="tablist" aria-label="Impostazioni">
+    <button id="tab-connection" role="tab" aria-controls="connection-view" aria-selected="true" type="button">Connessione</button>
+    <button id="tab-functions" role="tab" aria-controls="functions-view" aria-selected="false" type="button">Funzioni</button>
+  </div>
+
+  <main id="connection-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-connection">
+    <p id="connection" class="notice" role="status">Controllo configurazione…</p>
+    <form id="credential-form" class="ss-form">
+      <label for="credential">Chiave API v3 o API Read Access Token TMDB</label>
+      <div class="ss-row"><input id="credential" type="password" autocomplete="off" spellcheck="false" required><button id="reveal" type="button" aria-pressed="false">Mostra</button></div>
+      <label class="ss-check"><input id="remember" type="checkbox" checked> Ricorda su questo dispositivo</label>
+      <div class="ss-actions"><button id="save" class="cc-primary" type="submit">Verifica e salva</button><button id="remove" type="button">Rimuovi</button></div>
+      <p id="settings-status" class="cc-status" role="status" aria-live="polite"></p>
+    </form>
+    <p class="ss-muted">La credenziale resta nel browser. Le immagini TMDB e i metadati del player la usano localmente; non viene inviata alle chat.</p>
+  </main>
+
+  <main id="functions-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-functions" hidden>
+    <div class="ss-feature">
+      <label><input id="deepseek-toggle" type="checkbox"> Correnti in DeepSeek</label>
+      <p id="deepseek-status" class="cc-status" role="status" aria-live="polite">Controllo…</p>
+    </div>
+    <div class="ss-feature">
+      <label><input id="tmdb-site-toggle" type="checkbox"> Pulsante Flussi su TMDB</label>
+      <p id="tmdb-site-status" class="cc-status" role="status" aria-live="polite">Controllo…</p>
+    </div>
+    <div class="ss-feature">
+      <label><input id="cb01-toggle" type="checkbox"> Modalità CB01</label>
+      <p id="cb01-status" class="cc-status" role="status" aria-live="polite">Controllo…</p>
+    </div>
+    <p class="ss-muted">Le impostazioni complete, gli aggiornamenti e la gestione degli addon restano nella pagina estesa.</p>
+  </main>
+
+  <footer class="ss-footer">
+    <span>Versione <strong id="current-version">…</strong></span>
+    <button id="open-options" type="button">Impostazioni complete</button>
+  </footer>
+</body>
+</html>

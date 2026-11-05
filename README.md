@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.12.0
+# CineMatch — estensione browser 3.13.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,12 +9,12 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.12.0.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.13.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
-Estensioni: l’icona apre il **popup compatto Correnti**; l’ingranaggio nel popup
-apre le **Impostazioni**. Per il pulsante Correnti anche nel composer di DeepSeek
-attiva l’opzione dedicata. In Edge: `edge://extensions`.
+Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
+TMDB e attivi le funzioni, comprese le **Correnti in DeepSeek**. In Edge:
+`edge://extensions`.
 
 **Per aggiornare senza perdere TMDB e addon**, da una versione 3.6.0 o successiva
 usa **Opzioni → Aggiornamenti**. Se arrivi da una versione precedente alla 3.6.0,
@@ -91,8 +91,8 @@ Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiorname
 scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
 scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
 quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. La **3.12.0** include già
-l’updater: per una nuova installazione usa lo ZIP 3.12.0, mentre chi arriva da una
+restano perché l’ID e la cartella non cambiano. La **3.13.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.13.0, mentre chi arriva da una
 versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
 L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
@@ -101,13 +101,14 @@ il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
 
 ## Correnti e prompt in DeepSeek
 
-Dalla 3.12.0 l’icona dell’estensione apre direttamente un **popup compatto** con
-le correnti e la richiesta libera, senza cambiare pagina. L’ingranaggio nel popup
-apre le **Impostazioni**, dove si attiva **Correnti in DeepSeek**. Quando
-l’opzione è attiva, lo stesso pulsante **Correnti** compare anche nel composer di
-`chat.deepseek.com`, accanto a **Pensiero Profondo** e **Ricerca**.
+Dalla 3.13.0 l’icona dell’estensione apre un **popup compatto delle impostazioni**,
+senza cambiare pagina e senza correnti: connessione TMDB, **Flussi** su TMDB,
+**CB01** e **Correnti in DeepSeek**, più il collegamento alle impostazioni
+complete. Il popup segue il tema chiaro/scuro del sistema.
 
-In entrambi i casi si apre lo stesso popup compatto: ricerca, elenco delle
+Le correnti restano nel composer di `chat.deepseek.com`. Attiva **Correnti in
+DeepSeek** dal popup: il pulsante **Correnti** compare accanto a **Pensiero
+Profondo** e **Ricerca**. Premendolo si apre il popup con ricerca, elenco delle
 **74 correnti**, selezione fino a quattro voci e modalità **Richiesta libera**.
 Le opzioni avanzate stanno in un pannello richiudibile; il prompt generato si può
 copiare o inserire direttamente nella chat, senza inviare il messaggio. `Esc`, il
@@ -157,7 +158,8 @@ fallback nella scheda dedicata.
 [Correnti DeepSeek persistenti, 3.10.1](docs/estensione-3.10.1-deepseek-fix.md).
 [Correnti compatte in DeepSeek, 3.11.0](docs/estensione-3.11.0-deepseek-compact.md).
 [Testo libero generico, 3.11.1](docs/estensione-3.11.1-deepseek-free.md).
-[Popup dall’icona, 3.12.0](docs/estensione-3.12.0-action-popup.md).
+[Popup correnti dall’icona, 3.12.0 (superato dalla 3.13.0)](docs/estensione-3.12.0-action-popup.md).
+[Popup impostazioni dall’icona, 3.13.0](docs/estensione-3.13.0-settings-popup.md).
 
 ## Sviluppo dell'estensione
 
