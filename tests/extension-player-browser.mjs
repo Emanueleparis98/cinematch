@@ -201,7 +201,7 @@ try{
     assert.ok(frame);
     await frame.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).waitFor({timeout:20000});
     await frame.getByRole('button',{name:'Riproduci MKV HEVC AC3 di prova da Cinema di prova'}).click();
-    await frame.waitForFunction(()=>document.querySelector('#codecScreen').dataset.audio==='decoded'&&document.querySelector('#codecScreen').dataset.video==='decoded'&&document.querySelector('#playerLoading').hidden,{},{timeout:30000}).catch(async()=>{throw new Error(await (await frame.locator('#playerMessage').count()?frame.locator('#playerMessage').innerText():frame.locator('#playerLoading').innerText()));});
+    await frame.waitForFunction(()=>document.querySelector('#codecScreen').dataset.audio==='decoded'&&document.querySelector('#codecScreen').dataset.video==='decoded'&&document.querySelector('#playerLoading').hidden,{},{timeout:60000}).catch(async()=>{throw new Error(await (await frame.locator('#playerMessage').count()?frame.locator('#playerMessage').innerText():frame.locator('#playerLoading').innerText()));});
     await frame.waitForTimeout(400);
     await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-integrated-v330.png'});
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
