@@ -3,13 +3,13 @@ import {insertIntoComposer} from "./composer.js";
 import {credential,createTmdbClient} from "./tmdb.js";
 import {defaultEpisode,publicMedia} from "./cb01-resolver.js";
 import {Cb01Error,inspectArticle,resolveEpisode,resolveMovie} from "./cb01-service.js";
-import {installLiveService} from "./live-service.js";
+import {cleanupWithdrawnRelease} from "./upgrade-cleanup.js";
 
 const storageReady=Promise.all([
   chrome.storage.local.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"}),
   chrome.storage.session.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"})
 ]);
-installLiveService();
+storageReady.then(()=>cleanupWithdrawnRelease()).catch(()=>{});
 async function getCredential(){
   await storageReady;
   const session=await chrome.storage.session.get("tmdbCredential");
