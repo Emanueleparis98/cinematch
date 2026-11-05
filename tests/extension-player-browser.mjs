@@ -40,7 +40,7 @@ const server=createServer((req,res)=>{
   if(path==='/forbidden'){res.statusCode=403;return res.end('private token must never be shown');}
   if(path==='/stream/movie/tt0040522.json'){
     if(failStreams){res.statusCode=503;return res.end('unavailable');}
-    res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({streams:[{name:'MP4 di prova',title:'Video sintetico · H264 AAC · 320 × 180',url:`${base}/pattern.mp4`},{name:'HLS di prova',url:`${base}/pattern.m3u8`},{name:'HLS senza estensione',url:`${base}/play?id=test`},{name:'Comet redirect di prova',description:'HEVC AC3.mkv · etichetta prima della conversione',url:`${base}/comet-like`},{name:'MKV HEVC AC3 di prova',description:'HEVC · AC3 · 5.1',url:`${base}/pattern-hevc-ac3.mkv`},{name:'Torrent di prova',infoHash:'a'.repeat(40)},{name:'Header di prova',url:`${base}/headers.mp4`,behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{name:'<img onerror=alert(1)>',externalUrl:'javascript:alert(1)'}]}));
+    res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({streams:[{name:'MP4 di prova',title:'Video sintetico · H264 AAC · 320 × 180',url:`${base}/pattern.mp4`},{name:'HLS di prova',url:`${base}/pattern.m3u8`},{name:'HLS senza estensione',url:`${base}/play?id=test`},{name:'Comet redirect di prova',description:'HEVC AC3.mkv · etichetta prima della conversione',url:`${base}/comet-like`},{name:'Redirect CDN di prova',description:'Redirect verso un altro server',url:`${base}/cdn-redirect`},{name:'MKV HEVC AC3 di prova',description:'HEVC · AC3 · 5.1',url:`${base}/pattern-hevc-ac3.mkv`},{name:'Torrent di prova',infoHash:'a'.repeat(40)},{name:'Header di prova',url:`${base}/headers.mp4`,behaviorHints:{proxyHeaders:{request:{Referer:'https://example.org'}}}},{name:'<img onerror=alert(1)>',externalUrl:'javascript:alert(1)'}]}));
   }
   const file=files.get(path==='/play'?'pattern.m3u8':path==='/oversized-range.mkv'?'pattern-hevc-ac3.mkv':basename(path));if(file){res.setHeader('Content-Type',path.endsWith('.m3u8')||path==='/play'?'application/vnd.apple.mpegurl':path.endsWith('.ts')?'video/mp2t':'video/mp4');res.setHeader('Accept-Ranges','bytes');const range=req.headers.range?.match(/bytes=(\d+)-(\d*)/);if(range){const start=Number(range[1]),end=path==='/oversized-range.mkv'?file.length-1:range[2]?Math.min(Number(range[2]),file.length-1):file.length-1;if(path==='/oversized-range.mkv'&&end>Number(range[2]))oversizedResponses++;res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);res.setHeader('Content-Length',end-start+1);return res.end(file.subarray(start,end+1));}res.setHeader('Content-Length',file.length);return res.end(file);}
   res.statusCode=404;res.end('Not found');
@@ -136,6 +136,38 @@ try{
     await frame.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:20000}).catch(async()=>{throw new Error(await frame.locator('#playerMessage').innerText());});
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
   });
+  await check('the in-chat Consenti button requests the missing media permission',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    const source=frame.getByRole('button',{name:'Riproduci Redirect CDN di prova da Cinema di prova'});
+    await source.waitFor({timeout:20000});
+    await frame.evaluate(()=>{
+      window.__originalPermissionRequest=chrome.permissions.request.bind(chrome.permissions);
+      window.__mediaPermissionRequests=[];
+      chrome.permissions.request=options=>{
+        if(options.origins?.some(origin=>origin.startsWith('http://127.0.0.2/'))){window.__mediaPermissionRequests.push(options);return Promise.resolve(false);}
+        return window.__originalPermissionRequest(options);
+      };
+    });
+    try{
+      await source.click();
+      const consent=frame.locator('#messageAction');
+      await consent.waitFor({state:'visible',timeout:15000});
+      assert.equal(await consent.innerText(),'Consenti 127.0.0.2');
+      await consent.click();
+      await frame.waitForFunction(()=>window.__mediaPermissionRequests.length>0,{},{timeout:5000});
+      const requests=await frame.evaluate(()=>window.__mediaPermissionRequests);
+      assert.deepEqual(requests.at(-1).origins,['http://127.0.0.2/*']);
+      await consent.waitFor({state:'visible',timeout:5000});
+      assert.equal(await consent.innerText(),'Consenti 127.0.0.2');
+    }finally{
+      await frame.evaluate(()=>{if(window.__originalPermissionRequest)chrome.permissions.request=window.__originalPermissionRequest;}).catch(()=>{});
+      await dialog.locator('button.cm-close').click().catch(()=>{});await dialog.waitFor({state:'hidden',timeout:5000}).catch(()=>{});
+    }
+  });
   await check('the picker follows a dark chat theme and keeps the player dark',async()=>{
     await chat.evaluate(()=>{document.body.style.background='#14161a';document.body.style.color='#ececec';});
     await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
@@ -229,7 +261,7 @@ try{
     assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');
   });
   await check('stream output is inert text, with torrent and header-only sources explicitly unavailable',async()=>{
-    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),5);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
+    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),6);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
   });
   await check('MP4 actually decodes and plays with controls, pause and seek',async()=>{
     await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:15000});

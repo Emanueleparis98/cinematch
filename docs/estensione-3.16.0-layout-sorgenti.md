@@ -1,5 +1,8 @@
 # CineMatch 3.16.0 — Layout sorgenti compatto
 
+> **Aggiornata dalla 3.17.0** per il consenso ai server video nel player.
+> Vedi [Consenso server video 3.17.0](estensione-3.17.0-permessi-player.md).
+
 La 3.16.0 sistema la schermata **Scegli una sorgente** con lo stesso criterio
 del popup impostazioni: meno spazio sprecato, tutto più contenuto e leggibile.
 

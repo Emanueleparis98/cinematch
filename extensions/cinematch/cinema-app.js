@@ -62,7 +62,19 @@ function showPlayerError(error){
   message.hidden=false;
   text.textContent=error?.message??"Non riesco a riprodurre questa sorgente.";
   if(error?.mediaOrigin){
-    action.hidden=false;action.textContent=`Consenti ${permissionLabel(error.mediaOrigin)}`;action.onclick=()=>{hidePlayerMessage();player.retry().catch(showPlayerError);};
+    const mediaOrigin=error.mediaOrigin;
+    action.hidden=false;action.textContent=`Consenti ${permissionLabel(mediaOrigin)}`;
+    action.onclick=async()=>{
+      hidePlayerMessage();
+      setPlayerLoading(true);
+      let granted=false;
+      try{granted=await chrome.permissions.request({origins:[mediaOrigin]});}catch{}
+      if(!granted){
+        showPlayerError(Object.assign(new Error(`Accesso a ${permissionLabel(mediaOrigin)} non concesso. Premi Consenti per autorizzare il server video.`),{mediaOrigin}));
+        return;
+      }
+      try{await player.retry();}catch(retryError){showPlayerError(retryError);}
+    };
   }else if(player.stream){
     action.hidden=false;action.textContent="Riprova";action.onclick=()=>{hidePlayerMessage();player.retry().catch(showPlayerError);};
   }else action.hidden=true;
