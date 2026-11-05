@@ -82,6 +82,13 @@ try{
     assert.deepEqual(info.style,info.nativeStyle);
   });
 
+  await check('the enabled button survives a DeepSeek reload without touching the setting',async()=>{
+    await page.reload();await page.waitForTimeout(300);
+    await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===1,{},{timeout:10000});
+    assert.equal(await page.locator('.cm-deepseek-currents').count(),1);
+    assert.equal(await manager.locator('#deepseek-currents-toggle').isChecked(),true);
+  });
+
   await check('the integrated button opens the real CineMatch panel in an overlay and returns focus',async()=>{
     await page.bringToFront();
     await page.locator('.cm-deepseek-currents').click();

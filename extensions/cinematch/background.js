@@ -196,7 +196,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   if(sender.id!==chrome.runtime.id)return false;
   if(message?.type==='deepseek-currents-status'){
     if(!deepseekPageSender(sender))return false;
-    (async()=>respond({ok:true,enabled:await deepseekCurrentsEnabled()})).catch(error=>respond({ok:false,error:error.message}));
+    (async()=>respond({ok:true,enabled:await deepseekCurrentsEnabled()}))().catch(error=>respond({ok:false,error:error.message}));
     return true;
   }
   if(message?.type==='deepseek-currents-sync'){
