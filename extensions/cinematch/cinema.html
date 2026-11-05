@@ -67,6 +67,12 @@
         </div>
       </div>
       <div class="cm-chips" id="addonChips" role="group" aria-label="Filtra per addon"></div>
+      <div class="cm-filters" id="sourceFilters" role="group" aria-label="Filtra per qualità, tipo e lingua">
+        <label class="cm-filter">Qualità<select id="qualityFilter"><option value="all">Tutte</option></select></label>
+        <label class="cm-filter">Tipo<select id="typeFilter"><option value="all">Tutti</option></select></label>
+        <label class="cm-filter">Lingua<select id="languageFilter"><option value="all">Tutte</option></select></label>
+        <button class="cm-filter-reset" id="resetFilters" type="button" disabled>Azzera</button>
+      </div>
       <div class="cm-source-list" id="sourceList"></div>
     </div>
   </section>

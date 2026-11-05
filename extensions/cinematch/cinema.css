@@ -64,6 +64,13 @@ html[data-theme="dark"] .cm-primary{color:#0b1020}
 .cm-chip:hover{border-color:var(--line);color:var(--text);background:var(--raised)}
 .cm-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 html[data-theme="dark"] .cm-chip[aria-pressed="true"]{color:#0b1020}
+.cm-filters{display:flex;align-items:flex-end;gap:6px;margin:0 0 10px;padding:7px 8px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--surface) 58%,transparent)}
+.cm-filter{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;color:var(--muted);font-size:8px;font-weight:750;letter-spacing:.02em}
+.cm-filter select{width:100%;min-width:0;margin:0;padding:5px 20px 5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--deep);color:var(--text);font-size:9.5px;font-weight:600;text-overflow:ellipsis}
+.cm-filter select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.cm-filter-reset{flex:none;height:26px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--accent);font-size:9px;font-weight:750}
+.cm-filter-reset:hover:not(:disabled){background:var(--raised);color:var(--text)}
+.cm-filter-reset:disabled{cursor:default;opacity:.35;color:var(--muted)}
 .cm-source-list{flex:1;min-height:0;overflow-y:auto;padding:1px 3px 6px 1px;scrollbar-width:thin}
 .cm-source-card{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:var(--surface);margin-bottom:6px;transition:transform .16s,border-color .16s,background .16s;animation:cm-card-in .3s cubic-bezier(.22,1,.36,1) both}
 .cm-source-card:hover{transform:translateY(-1px);border-color:var(--line);background:var(--raised)}
@@ -213,6 +220,9 @@ html[data-theme="dark"] .cm-source-name .rec{color:#0b1020}
   .cm-overview{display:none}
   .cm-primary,.cm-resume,.cm-ghost{font-size:10px;padding:7px 9px}
   .cm-sources-head h2{font-size:16px}
+  .cm-filters{flex-wrap:wrap}
+  .cm-filter{flex:1 1 calc(50% - 3px)}
+  .cm-filter-reset{flex:1 1 100%;height:27px}
   .cm-source-card{grid-template-columns:34px minmax(0,1fr);padding:10px 10px}
   .source-play{width:32px;height:32px}
   .cm-source-side{display:none}

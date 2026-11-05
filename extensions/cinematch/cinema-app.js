@@ -10,7 +10,7 @@ const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const formatTime=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
 const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(value)||value<1)return "";const h=Math.floor(value/60),m=value%60;return h?`${h}h ${m}m`:`${m}m`;};
 
-const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null};
+const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",quality:"all",sourceType:"all",language:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null};
 const embedded=window.parent!==window;
 const mediaPhrase=()=>state.kind==="tv"?"questa serie":"questo film";
 const episodeLabel=()=>state.kind==="tv"&&state.season!==null&&state.episode!==null?`S${state.season} E${state.episode}`:"";
@@ -107,6 +107,10 @@ $("backToPicker").onclick=showPicker;
 $("playBest").onclick=()=>{if(state.recommended)startStream(state.recommended);};
 $("resumePlay").onclick=()=>{const stream=state.recommended||state.groups.flatMap(group=>group.streams).find(item=>item.playable);if(stream)startStream(stream,{resumeAt:state.resume});};
 $("refreshSources").onclick=()=>loadStreams();
+$("qualityFilter").onchange=()=>{state.quality=$("qualityFilter").value;renderSources();};
+$("typeFilter").onchange=()=>{state.sourceType=$("typeFilter").value;renderSources();};
+$("languageFilter").onchange=()=>{state.language=$("languageFilter").value;renderSources();};
+$("resetFilters").onclick=()=>{state.filter="all";state.quality="all";state.sourceType="all";state.language="all";renderChips();renderSources();};
 $("manageAddons").onclick=()=>state.view==="addons"?showPicker():showAddons();
 $("addonsBack").onclick=showPicker;
 $("importJson").onclick=()=>$("jsonFile").click();
@@ -220,7 +224,16 @@ function present(stream){
   const hdr=/dolby.?vision|\bdv\b/i.test(text)?"Dolby Vision":/hdr10\+?/i.test(text)?"HDR10":/\bhdr\b/i.test(text)?"HDR":null;
   const codec=/hevc|[hx][. ]?265/i.test(text)?"HEVC":/\bav1\b/i.test(text)?"AV1":/avc|[hx][. ]?264/i.test(text)?"H.264":null;
   const audio=/atmos/i.test(text)?"Atmos":/truehd/i.test(text)?"TrueHD":/\bdts\b/i.test(text)?"DTS":/e[. -]?ac[. -]?3|ddp|dd\+/i.test(text)?"E-AC3":/ac[. -]?3/i.test(text)?"AC3":/aac/i.test(text)?"AAC":null;
-  const languages=[];if(/\bita\b|italian|italiano/i.test(text))languages.push("ITA");if(/\beng\b|english|inglese/i.test(text))languages.push("ENG");if(/sub[. -]?ita/i.test(text))languages.push("SUB-ITA");
+  const languages=[];
+  if(/\bita\b|italian|italiano/i.test(text))languages.push("ITA");
+  if(/\beng\b|english|inglese/i.test(text))languages.push("ENG");
+  if(/\bfra\b|french|francese/i.test(text))languages.push("FRA");
+  if(/\bspa\b|spanish|spagnolo/i.test(text))languages.push("SPA");
+  if(/\bger\b|\bdeu\b|german|tedesco/i.test(text))languages.push("GER");
+  if(/\bjpn\b|japanese|giapponese/i.test(text))languages.push("JPN");
+  if(/\bkor\b|korean|coreano/i.test(text))languages.push("KOR");
+  if(/sub[. -]?ita/i.test(text))languages.push("SUB-ITA");
+  if(/\bmulti\b|multilingua/i.test(text))languages.push("MULTI");
   const size=text.match(/(\d+(?:[.,]\d+)?)\s*(GB|MB)/i);
   const compatibilityResult=compatibility(declaredCodecs(stream),mime=>$("video").canPlayType(mime));
   const integrated=likelyIntegrated(stream);
@@ -238,8 +251,14 @@ function present(stream){
   if(compatibilityResult.unsupported.length)badges.push({text:"Decoder integrato",tone:"good"});
   else if(stream.playable)badges.push({text:integrated?"Decoder integrato":"Compatibilità nativa",tone:"good"});
   const quality=resolution??({hls:"HLS",dash:"DASH",video:"Video",external:"Esterno",torrent:"Torrent"}[stream.kind]??"Sorgente");
-  const presentation={quality,score,badges};
+  const presentation={quality,score,badges,resolution,languages};
   state.presented.set(stream,presentation);return presentation;
+}
+function streamType(stream){
+  if(stream.kind==="torrent")return "torrent";
+  if(stream.kind==="external")return "external";
+  if(stream.kind==="unsupported")return "other";
+  return "direct";
 }
 
 function renderChips(){
@@ -250,6 +269,58 @@ function renderChips(){
   container.hidden=false;
   const all=el("button","Tutti · "+state.groups.reduce((total,group)=>total+group.streams.length,0),"cm-chip");all.type="button";all.setAttribute("aria-pressed",String(state.filter==="all"));all.onclick=()=>{state.filter="all";renderChips();renderSources();};container.append(all);
   for(const group of state.groups){const chip=el("button",`${group.name} · ${group.streams.length}`,"cm-chip");chip.type="button";chip.setAttribute("aria-pressed",String(state.filter===group.key));chip.onclick=()=>{state.filter=group.key;renderChips();renderSources();};container.append(chip);}
+}
+const QUALITY_FILTERS=[["4K","4K"],["1080p","1080p"],["720p","720p"],["SD","SD"],["other","Altre"]];
+const TYPE_FILTERS=[["direct","Diretti"],["torrent","Torrent"],["external","Esterni"],["other","Altri"]];
+const LANGUAGE_ORDER=["ITA","ENG","FRA","SPA","GER","JPN","KOR","SUB-ITA","MULTI"];
+let filterSignature="";
+function fillFilter(select,options,value){
+  select.replaceChildren(...options.map(([optionValue,label])=>{const option=document.createElement("option");option.value=optionValue;option.textContent=label;return option;}));
+  select.value=options.some(([optionValue])=>optionValue===value)?value:"all";
+}
+function renderFilters(){
+  const bar=$("sourceFilters");
+  const groups=state.groups.filter(group=>state.filter==="all"||group.key===state.filter);
+  const streams=groups.flatMap(group=>group.streams);
+  const totalStreams=state.groups.flatMap(group=>group.streams).length;
+  bar.hidden=state.direct||totalStreams<2;
+  const qualities=new Map(),types=new Map(),languages=new Map();
+  for(const stream of streams){
+    const presentation=present(stream);
+    const quality=presentation.resolution??"other";
+    qualities.set(quality,(qualities.get(quality)??0)+1);
+    const type=streamType(stream);types.set(type,(types.get(type)??0)+1);
+    if(presentation.languages.length)for(const language of presentation.languages)languages.set(language,(languages.get(language)??0)+1);
+    else languages.set("other",(languages.get("other")??0)+1);
+  }
+  if(state.quality!=="all"&&!qualities.has(state.quality))state.quality="all";
+  if(state.sourceType!=="all"&&!types.has(state.sourceType))state.sourceType="all";
+  if(state.language!=="all"&&!languages.has(state.language))state.language="all";
+  const signature=JSON.stringify([state.filter,[...qualities],[...types],[...languages]]);
+  if(signature!==filterSignature){
+    filterSignature=signature;
+    fillFilter($("qualityFilter"),[["all",`Tutte · ${streams.length}`],...QUALITY_FILTERS.filter(([value])=>qualities.has(value)).map(([value,label])=>[value,`${label} · ${qualities.get(value)}`])],state.quality);
+    fillFilter($("typeFilter"),[["all",`Tutti · ${streams.length}`],...TYPE_FILTERS.filter(([value])=>types.has(value)).map(([value,label])=>[value,`${label} · ${types.get(value)}`])],state.sourceType);
+    const ordered=[...LANGUAGE_ORDER.filter(language=>languages.has(language)),...[...languages.keys()].filter(language=>language!=="other"&&!LANGUAGE_ORDER.includes(language)).sort()];
+    const languageOptions=[["all",`Tutte · ${streams.length}`],...ordered.map(language=>[language,`${language} · ${languages.get(language)}`])];
+    if(languages.has("other"))languageOptions.push(["other",`Non indicata · ${languages.get("other")}`]);
+    fillFilter($("languageFilter"),languageOptions,state.language);
+  }
+  $("qualityFilter").value=state.quality;
+  $("typeFilter").value=state.sourceType;
+  $("languageFilter").value=state.language;
+  $("resetFilters").disabled=!(state.filter!=="all"||state.quality!=="all"||state.sourceType!=="all"||state.language!=="all");
+}
+function matchesFilters(stream,group){
+  if(state.filter!=="all"&&group.key!==state.filter)return false;
+  const presentation=present(stream);
+  if(state.quality!=="all"&&(presentation.resolution??"other")!==state.quality)return false;
+  if(state.sourceType!=="all"&&streamType(stream)!==state.sourceType)return false;
+  if(state.language!=="all"){
+    if(state.language==="other"){if(presentation.languages.length)return false;}
+    else if(!presentation.languages.includes(state.language))return false;
+  }
+  return true;
 }
 function renderSkeletons(){
   const list=$("sourceList");list.replaceChildren();
@@ -319,25 +390,29 @@ function renderDirectSources(){
 }
 function renderSources(){
   $("sourcesStatus").classList.remove("error");
-  if(state.direct){renderDirectSources();return;}
+  if(state.direct){$("sourceFilters").hidden=true;$("addonChips").hidden=true;renderDirectSources();return;}
   const list=$("sourceList");
-  if(!state.addons.length){renderEmpty();$("playBest").disabled=true;return;}
-  if(!state.addons.some(addon=>addon.enabled)){renderNoActiveAddons();$("playBest").disabled=true;return;}
-  if(state.loading&&!state.groups.length){renderSkeletons();$("sourcesStatus").textContent="Interrogo gli addon collegati…";$("playBest").disabled=true;return;}
+  if(!state.addons.length){$("sourceFilters").hidden=true;renderEmpty();$("playBest").disabled=true;return;}
+  if(!state.addons.some(addon=>addon.enabled)){$("sourceFilters").hidden=true;renderNoActiveAddons();$("playBest").disabled=true;return;}
+  if(state.loading&&!state.groups.length){$("sourceFilters").hidden=true;renderSkeletons();$("sourcesStatus").textContent="Interrogo gli addon collegati…";$("playBest").disabled=true;return;}
+  renderFilters();
   list.replaceChildren();
-  if(!state.groups.length){renderSkeletons();return;}
+  if(!state.groups.length){$("sourceFilters").hidden=true;renderSkeletons();return;}
   const all=state.groups.flatMap(group=>group.streams.map(stream=>({stream,group})));
   all.sort((a,b)=>present(b.stream).score-present(a.stream).score);
   const best=all.find(item=>item.stream.playable);
   state.recommended=best?.stream??null;state.recommendedId=best?.stream.id??null;
   $("playBest").disabled=!state.recommended;
-  const visible=all.filter(({group})=>state.filter==="all"||group.key===state.filter);
+  const visible=all.filter(({stream,group})=>matchesFilters(stream,group));
   const errors=state.groups.filter(group=>group.error&&(state.filter==="all"||state.filter===group.key));
   if(!visible.length&&!errors.length){const empty=el("div",undefined,"cm-empty");empty.innerHTML='<h3>Nessun flusso per questo filtro</h3><p>Prova un altro addon o aggiorna le sorgenti.</p>';list.append(empty);$("sourcesStatus").textContent="Nessun flusso per questo filtro.";return;}
   for(const {stream} of visible)list.append(renderSourceCard(stream));
   for(const group of errors)list.append(renderErrorCard(group));
-  const playable=all.filter(item=>item.stream.playable).length,episode=state.kind==="tv"?` · ${episodeLabel()}`:"";
-  $("sourcesStatus").textContent=`${all.length} sorgenti · ${playable} riproducibili${episode} · aggiornate ora`;
+  const playable=visible.filter(item=>item.stream.playable).length,episode=state.kind==="tv"?` · ${episodeLabel()}`:"";
+  const active=state.filter!=="all"||state.quality!=="all"||state.sourceType!=="all"||state.language!=="all";
+  $("sourcesStatus").textContent=active
+    ? `${visible.length} di ${all.length} sorgenti · ${playable} riproducibili${episode} · filtri attivi`
+    : `${all.length} sorgenti · ${playable} riproducibili${episode} · aggiornate ora`;
 }
 function renderDrawer(){
   const list=$("drawerList");list.replaceChildren();

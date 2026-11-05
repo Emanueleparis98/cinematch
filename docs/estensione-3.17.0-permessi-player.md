@@ -1,5 +1,9 @@
 # CineMatch 3.17.0 — Consenso ai server video
 
+> **Aggiornata dalla 3.18.0** con i filtri per qualità, tipo e lingua nella
+> scelta delle sorgenti. Vedi
+> [Filtri sorgenti 3.18.0](estensione-3.18.0-filtri-sorgenti.md).
+
 La 3.17.0 corregge il pulsante **Consenti …** nel player dentro la chat.
 
 ## Il problema

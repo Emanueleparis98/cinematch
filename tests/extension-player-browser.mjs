@@ -168,6 +168,41 @@ try{
       await dialog.locator('button.cm-close').click().catch(()=>{});await dialog.waitFor({state:'hidden',timeout:5000}).catch(()=>{});
     }
   });
+  await check('the source picker filters by quality, type and language',async()=>{
+    await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
+    const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
+    const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+    let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
+    assert.ok(frame);
+    await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).waitFor({timeout:20000});
+    await frame.locator('#jsonFile').setInputFiles({name:'filtri.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({streams:[
+      {name:'Filtro 4K ITA',url:`${base}/pattern.mp4?filtro=4k`},
+      {name:'Filtro 1080p ENG',url:`${base}/pattern.mp4?filtro=1080p`},
+      {name:'Filtro Torrent 720p ITA',infoHash:'b'.repeat(40)}
+    ]}))});
+    await frame.locator('#sourceFilters').waitFor({state:'visible'});
+    await frame.locator('#qualityFilter').selectOption('1080p');
+    assert.equal(await frame.locator('.cm-source-card').count(),1);
+    assert.equal(await frame.locator('.cm-source-name').innerText(),'Filtro 1080p ENG');
+    assert.match(await frame.locator('#sourcesStatus').innerText(),/1 di \d+ sorgenti/);
+    assert.equal(await frame.locator('#resetFilters').isEnabled(),true);
+    await frame.locator('#resetFilters').click();
+    assert.equal(await frame.locator('#resetFilters').isDisabled(),true);
+    await frame.locator('#typeFilter').selectOption('torrent');
+    assert.ok(await frame.locator('.cm-source-card').count()>=2);
+    await frame.locator('#languageFilter').selectOption('ITA');
+    assert.equal(await frame.locator('.cm-source-card').count(),1);
+    assert.match(await frame.locator('.cm-source-name').innerText(),/Filtro Torrent 720p ITA/);
+    await frame.locator('#resetFilters').click();
+    await frame.locator('#languageFilter').selectOption('ITA');
+    assert.equal(await frame.locator('.cm-source-card').count(),2);
+    await frame.locator('#resetFilters').click();
+    await frame.locator('#qualityFilter').selectOption('720p');
+    assert.equal(await frame.locator('.cm-source-card').count(),1);
+    assert.match(await frame.locator('.cm-source-name').innerText(),/Filtro Torrent 720p ITA/);
+    await mkdir('test-results',{recursive:true});await chat.screenshot({path:'test-results/overlay-filters.png'});
+    await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
+  });
   await check('the picker follows a dark chat theme and keeps the player dark',async()=>{
     await chat.evaluate(()=>{document.body.style.background='#14161a';document.body.style.color='#ececec';});
     await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
