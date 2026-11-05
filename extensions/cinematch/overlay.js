@@ -51,6 +51,7 @@
   let host, shadow, dialog, frame, loading, fallback, closeButton, titleEl, posterEl, fallbackMessageEl, retryButton;
   let readyTimer, currentId = 0, currentKind = "movie", currentSeason = null, currentEpisode = null, lastFocus = null, previousOverflow = null, closing = false, activeTheme = null;
   let currentDirect = false, directRetry = null, directResult = null, directManualUrl = null, frameReady = false;
+  let currentLiveToken = null;
   let themeObserver = null, themeMedia = null, themeTimer = null;
 
   function ensureShell() {
@@ -106,6 +107,12 @@
     });
     dialog.addEventListener("close", cleanup);
     fallback.querySelector("[data-open-tab]").addEventListener("click", () => {
+      if (currentLiveToken) {
+        const token = currentLiveToken;
+        close();
+        chrome.runtime.sendMessage({type:"live-open",token}).catch(()=>{});
+        return;
+      }
       if (currentDirect) {
         const token = directResult?.token;
         close();
@@ -140,6 +147,7 @@
     currentSeason = null;
     currentEpisode = null;
     currentDirect = false;
+    currentLiveToken = null;
     directRetry = null;
     directResult = null;
     directManualUrl = null;
@@ -243,6 +251,7 @@
     ensureShell();
     const wasOpen = dialog.open;
     currentDirect = false;
+    currentLiveToken = null;
     directRetry = null;
     directResult = null;
     directManualUrl = null;
@@ -310,6 +319,7 @@
     ensureShell();
     const wasOpen = dialog.open;
     currentDirect = true;
+    currentLiveToken = options.liveToken ?? null;
     currentId = 0;
     currentKind = "movie";
     currentSeason = null;
@@ -351,7 +361,7 @@
     dialog.focus({ preventScroll: true });
     requestAnimationFrame(() => {
       if (!dialog.open || !currentDirect) return;
-      frame.src = chrome.runtime.getURL("cinema.html?direct=1");
+      frame.src = chrome.runtime.getURL(currentLiveToken ? `cinema.html?liveToken=${encodeURIComponent(currentLiveToken)}` : "cinema.html?direct=1");
       frame.hidden = false;
       clearTimeout(readyTimer);
       readyTimer = setTimeout(() => {
@@ -407,6 +417,7 @@
   globalThis.CineMatchCinema = {
     open,
     openDirect,
+    openLive: options => typeof options?.token === "string" && openDirect({...options,liveToken:options.token}),
     resolveDirect,
     failDirect,
     close,

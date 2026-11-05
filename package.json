@@ -3,6 +3,21 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
-  "scripts": {"test": "node --test tests/extension-core.test.mjs tests/extension-cb01.test.mjs tests/extension-tmdb.test.mjs tests/extension-streams.test.mjs tests/extension-playback.test.mjs tests/extension-range.test.mjs", "test:browser": "node tests/extension-browser.mjs", "test:deepseek": "node tests/extension-deepseek-browser.mjs", "test:tv": "node tests/extension-tv-browser.mjs", "test:cb01": "node tests/extension-cb01-browser.mjs", "test:updater": "node --test tests/extension-updater.test.mjs && node tests/extension-updater-browser.mjs", "test:images": "node tests/extension-tmdb-browser.mjs", "test:player": "node tests/extension-player-browser.mjs", "test:codecs": "node tests/extension-codec-browser.mjs", "test:throughput": "node tests/extension-throughput.mjs", "build": "python scripts/build-extension.py"},
-  "devDependencies": {"playwright": "1.62.1"}
+  "scripts": {
+    "test": "node --test tests/extension-core.test.mjs tests/extension-cb01.test.mjs tests/extension-tmdb.test.mjs tests/extension-streams.test.mjs tests/extension-playback.test.mjs tests/extension-range.test.mjs tests/extension-live.test.mjs",
+    "test:browser": "node tests/extension-browser.mjs && node tests/extension-live-browser.mjs",
+    "test:deepseek": "node tests/extension-deepseek-browser.mjs",
+    "test:tv": "node tests/extension-tv-browser.mjs",
+    "test:cb01": "node tests/extension-cb01-browser.mjs",
+    "test:updater": "node --test tests/extension-updater.test.mjs && node tests/extension-updater-browser.mjs",
+    "test:images": "node tests/extension-tmdb-browser.mjs",
+    "test:player": "node tests/extension-player-browser.mjs",
+    "test:codecs": "node tests/extension-codec-browser.mjs",
+    "test:throughput": "node tests/extension-throughput.mjs",
+    "build": "python scripts/build-extension.py",
+    "test:live": "node tests/extension-live-browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
 }

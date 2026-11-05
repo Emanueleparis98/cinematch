@@ -10,7 +10,7 @@ const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const formatTime=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
 const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(value)||value<1)return "";const h=Math.floor(value/60),m=value%60;return h?`${h}h ${m}m`:`${m}m`;};
 
-const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",quality:"all",sourceType:"all",language:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null};
+const state={movie:null,kind:"movie",season:null,episode:null,episodeTitle:"",seasons:[],episodes:[],seasonGeneration:0,addons:[],groups:[],filter:"all",quality:"all",sourceType:"all",language:"all",selected:null,recommended:null,recommendedId:null,resume:0,view:"picker",muted:false,lastVolume:1,scrubbing:false,loading:false,generation:0,poster:null,toastTimer:null,stack:null,direct:false,directToken:null,directKey:null,directStream:null,directInitial:null,live:false,liveToken:null,liveResult:null,liveTried:new Set(),liveTimer:null,liveGeneration:0};
 const embedded=window.parent!==window;
 const mediaPhrase=()=>state.kind==="tv"?"questa serie":"questo film";
 const episodeLabel=()=>state.kind==="tv"&&state.season!==null&&state.episode!==null?`S${state.season} E${state.episode}`:"";
@@ -23,7 +23,7 @@ const player=createPlayer({
   onTime:(position,duration)=>handleTime(position,duration),
   onState:name=>handlePlayerState(name),
   onTracks:tracks=>handleTracks(tracks),
-  onFrame:type=>{ $("codecScreen").dataset[type]="decoded";if(type==="video")setPlayerLoading(false); },
+  onFrame:type=>{ $("codecScreen").dataset[type]="decoded";if(type==="video"){setPlayerLoading(false);clearTimeout(state.liveTimer);} },
   onError:error=>showPlayerError(error)
 });
 
@@ -33,10 +33,16 @@ function handleStatus(text){
   if(/Audio non supportato/.test(text))toast(text);
 }
 function handleTime(position,duration){
+  if(state.live){$("time").textContent="DIRETTA";return;}
   if(!state.scrubbing&&duration>0){$("seek").value=String(Math.round(Math.max(0,Math.min(1,position/duration))*1000));$("seek").parentElement.style.setProperty("--progress",`${Math.max(0,Math.min(100,position/duration*100))}%`);}
   $("time").textContent=`${formatTime(position)} / ${formatTime(duration)}`;
 }
 function handlePlayerState(name){
+  if(state.live&&['paused','needs-gesture','ended'].includes(name))clearTimeout(state.liveTimer);
+  if(state.live&&name==="playing"){
+    if(player.mode==='native')clearTimeout(state.liveTimer);
+    send({type:'live-pause-original',token:state.liveToken}).catch(()=>{});
+  }
   if(name==="loading"){setPlayerLoading(true);$("bigPlay").hidden=true;}
   else if(name==="playing"){setPlayerLoading(false);$("bigPlay").hidden=true;hidePlayerMessage();$("playPause").innerHTML=PAUSE_ICON;$("playPause").setAttribute("aria-label","Pausa");$("stage").classList.add("playing");showControls();}
   else if(name==="paused"){setPlayerLoading(false);$("playPause").innerHTML=PLAY_ICON;$("playPause").setAttribute("aria-label","Riproduci");showControls();saveResume();}
@@ -56,6 +62,11 @@ function handleTracks(tracks){
   updatePiP();
 }
 function showPlayerError(error){
+  clearTimeout(state.liveTimer);
+  if(state.live&&!error?.mediaOrigin){
+    const next=state.groups.flatMap(group=>group.streams).find(stream=>!state.liveTried.has(stream.url));
+    if(next&&state.liveTried.size<3){toast('Sorgente non disponibile. Provo la successiva…');startStream(next);return;}
+  }
   setPlayerLoading(false);
   $("bigPlay").hidden=true;
   const message=$("playerMessage"),text=$("messageText"),action=$("messageAction");
@@ -120,7 +131,7 @@ function showPlayer(stream){
   state.view="player";state.selected=stream.id;
   document.body.classList.add("player-mode");document.body.classList.remove("addons-mode");
   $("pickerView").hidden=true;$("addonsView").hidden=true;$("playerView").hidden=false;
-  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
+  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.live?"Live · Flussi della pagina":state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
   $("backToPicker").textContent=state.direct?(state.kind==="tv"?"← Episodi":"← Sorgente"):state.kind==="tv"?"← Serie":"← Film";
   $("playerTitle").textContent=state.movie?.title??(state.kind==="tv"?"Serie":"Film");
   const presentation=present(stream),episode=state.kind==="tv"?`${episodeLabel()}${state.episodeTitle?` · ${state.episodeTitle}`:""}`:"";
@@ -139,7 +150,7 @@ function showPicker(){
   state.selected=null;
   document.body.classList.remove("player-mode","addons-mode");
   $("playerView").hidden=true;$("addonsView").hidden=true;$("pickerView").hidden=false;
-  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
+  $("manageAddons").textContent="Addon";$("manageAddons").hidden=state.direct;$("topbarTitle").textContent=state.live?"Live · Flussi della pagina":state.direct?"CB01 · Scegli come guardarlo":"Scegli come guardarlo";
   $("backToPicker").textContent=state.direct?(state.kind==="tv"?"← Episodi":"← Sorgente"):state.kind==="tv"?"← Serie":"← Film";
   closeDrawer();renderSources();notifyView();
   (state.kind==="tv"?$("seasonSelect"):$("playBest")).focus({preventScroll:true});
@@ -373,6 +384,50 @@ function renderSourceCard(stream,compact=false){
   if(stream.playable)card.addEventListener("click",event=>{if(!event.target.closest("button,a"))startStream(stream);});
   return card;
 }
+function renderLiveSources(){
+  $('sourceFilters').hidden=true;$('addonChips').hidden=true;
+  const list=$('sourceList');list.replaceChildren();
+  if(state.loading){renderSkeletons();$('sourcesStatus').textContent='Rilevo le sorgenti della pagina e dei player autorizzati…';$('playBest').disabled=true;return;}
+  const streams=state.groups.flatMap(group=>group.streams);
+  state.recommended=streams[0]??null;state.recommendedId=state.recommended?.id??null;
+  $('playBest').disabled=!streams.length;
+  $('sourcesStatus').textContent=streams.length?`${streams.length} flussi rilevati · disponibilità verificata all’avvio`:'Nessun flusso diretto rilevato.';
+  for(const stream of streams)list.append(renderSourceCard(stream));
+  const pending=state.liveResult?.pendingOrigins??[];
+  if(pending.length){
+    const card=el('div',undefined,'cm-error-card'),body=el('div');
+    body.append(el('strong','Il player usa un altro sito'),el('p','Consenti la lettura del player incorporato: '+pending.map(origin=>new URL(origin).hostname).join(', ')));
+    const grant=el('button','Consenti e cerca');grant.type='button';
+    grant.onclick=async()=>{
+      try{
+        if(!await chrome.permissions.request({origins:pending})){toast('Accesso non concesso.');return;}
+        await loadLiveSources({refresh:true,initial:!streams.length});
+      }catch(error){toast(error.message);}
+    };
+    card.append(body,grant);list.append(card);
+  }
+  if(!streams.length){
+    const empty=el('div',undefined,'cm-empty');
+    empty.append(el('h3','Apri il canale o il player dell’evento'),el('p','Il sito può caricare la sorgente soltanto dopo una scelta nel suo player. Torna alla pagina, seleziona il canale e premi di nuovo Flussi. Login, DRM e CAPTCHA richiedono il servizio originale.'));
+    list.append(empty);
+  }
+  list.append(el('p','CineMatch non aggiunge annunci. La pubblicità incorporata nel video dipende dalla sorgente.','muted'));
+}
+async function loadLiveSources({refresh=false,initial=false}={}){
+  const generation=++state.generation;state.loading=true;renderLiveSources();
+  try{
+    const result=await send({type:refresh?'live-refresh':'live-playback',token:state.liveToken});
+    if(generation!==state.generation)return;
+    state.liveResult=result;state.movie={title:result.title??'Diretta',key:result.page,genres:['Live TV / Sport']};
+    state.groups=[{key:'live',name:result.site??'Live',streams:result.streams.map((stream,index)=>({...stream,live:true,id:`live:${index}`,groupKey:'live',groupName:result.site??'Live'}))}];
+    state.liveTried.clear();renderMedia();
+    state.loading=false;renderLiveSources();
+    if(initial&&state.recommended)await startStream(state.recommended);
+  }catch(error){
+    if(generation!==state.generation)return;
+    state.loading=false;renderLiveSources();$('sourcesStatus').textContent=error.message;$('sourcesStatus').classList.add('error');
+  }
+}
 function renderDirectSources(){
   const list=$("sourceList");list.replaceChildren();
   const stream=state.directStream;
@@ -390,6 +445,7 @@ function renderDirectSources(){
 }
 function renderSources(){
   $("sourcesStatus").classList.remove("error");
+  if(state.live){renderLiveSources();return;}
   if(state.direct){$("sourceFilters").hidden=true;$("addonChips").hidden=true;renderDirectSources();return;}
   const list=$("sourceList");
   if(!state.addons.length){$("sourceFilters").hidden=true;renderEmpty();$("playBest").disabled=true;return;}
@@ -427,6 +483,7 @@ async function loadAddons(){
   }).sort((a,b)=>a.name.localeCompare(b.name,"it"));
 }
 async function loadStreams(){
+  if(state.live){await loadLiveSources();return;}
   if(state.direct){state.loading=false;renderSources();return;}
   if(!state.movie){state.loading=false;return;}
   const series=state.kind==="tv";
@@ -455,7 +512,12 @@ async function loadStreams(){
 }
 async function startStream(stream,{resumeAt=0}={}){
   if(!stream?.playable)return;
-  const previous=state.view==="player"&&player.duration>5?Math.max(0,Math.min(1,player.currentTime/player.duration)):null;
+  const previous=!state.live&&state.view==="player"&&player.duration>5?Math.max(0,Math.min(1,player.currentTime/player.duration)):null;
+  if(state.live){
+    clearTimeout(state.liveTimer);state.liveTried.add(stream.url);
+    const attempt=++state.liveGeneration;
+    state.liveTimer=setTimeout(()=>{if(attempt===state.liveGeneration&&state.view==='player')showPlayerError(new Error('La sorgente non ha avviato il video. Riprova o scegli un altro flusso.'));},40000);
+  }
   showPlayer(stream);
   try{
     await player.load(stream);
@@ -475,7 +537,7 @@ function renderMedia(){
     const meta=tv?[item.year,seasons.length?`${seasons.length} stagion${seasons.length===1?"e":"i"}`:null,...(item.genres??[])]:[item.year,...(item.genres??[])];
     $("movieMeta").replaceChildren(...meta.filter(Boolean).map(value=>el("span",value)));
     $("movieRating").hidden=true;
-    $("movieCredits").replaceChildren("CB01 · ","pubblicità bloccata");
+    $("movieCredits").replaceChildren(state.live?`${state.liveResult?.site??'Live'} · player CineMatch`:"CB01 · pubblicità bloccata");
     $("movieOverview").textContent="";
     $("tmdbLink").hidden=true;
     $("manageAddons").hidden=true;
@@ -513,6 +575,7 @@ async function loadPoster(){
   state.poster=result.data;
 }
 function resumeKey(){
+  if(state.live)return null;
   if(!state.movie)return null;
   if(state.direct){
     const key=encodeURIComponent(state.directKey??state.movie.title??"cb01");
@@ -734,6 +797,18 @@ document.addEventListener("keydown",event=>{
 /* ---------- Boot ---------- */
 async function boot(){
   const params=new URL(location.href).searchParams;
+  if(params.get('liveToken')){
+    state.live=true;state.direct=true;state.liveToken=params.get('liveToken');
+    $('manageAddons').hidden=true;$('importJson').hidden=true;
+    $('topbarTitle').textContent='Live · Flussi della pagina';
+    $('movieTitle').textContent='Cerco i flussi della pagina…';
+    $('seek').parentElement.hidden=true;
+    const liveButton=el('button','Torna in diretta');liveButton.type='button';liveButton.id='goLive';
+    liveButton.onclick=()=>player.goLive().catch(()=>toast('Ritorno in diretta non disponibile per questo formato.'));
+    $('time').after(liveButton);
+    if(embedded)parent.postMessage({type:'cinematch:ready'},'*');
+    await loadLiveSources({initial:true});return;
+  }
   if(params.get("direct")==="1"){
     if(embedded)parent.postMessage({type:"cinematch:ready"},"*");
     await startDirect(await waitForDirect());

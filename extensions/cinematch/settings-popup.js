@@ -1,3 +1,5 @@
+import {liveOrigins} from './live-core.js';
+const liveCatalog = fetch(chrome.runtime.getURL('data/live-sites.json')).then(response=>response.json());
 const $ = id => document.getElementById(id);
 const send = message => chrome.runtime.sendMessage(message);
 const TMDB_SITE_ORIGIN = "https://www.themoviedb.org/*";
@@ -75,13 +77,20 @@ async function refreshDeepSeek() {
     : "Pulsante Correnti disattivo.");
 }
 
+async function refreshLive() {
+  const result=await send({type:'live-status'});
+  if(!result?.ok)throw new Error(result?.error??'Stato Live non disponibile.');
+  $('live-toggle').checked=Boolean(result.enabled);
+  status('live-status',result.enabled?`Attivo · ${result.count} host nel catalogo. Apri un canale o evento e premi Flussi.`:result.requested?'Accesso ai siti revocato: riattiva la funzione.':'Disattivo. Si attiva senza TMDB o API sportive.');
+}
+
 async function refresh() {
   const result = await send({type:"tmdb-status"});
   $("connection").textContent = result?.configured
     ? "TMDB è configurato. Le immagini sono automatiche."
     : "Collega TMDB per attivare immagini e metadati.";
   $("remove").disabled = Boolean(result?.configured) === false;
-  await Promise.allSettled([refreshSite(), refreshCb01(), refreshDeepSeek()]);
+  await Promise.allSettled([refreshSite(), refreshCb01(), refreshDeepSeek(), refreshLive()]);
 }
 
 $("tab-connection").addEventListener("click", () => showTab("connection"));
@@ -183,6 +192,27 @@ $("deepseek-toggle").addEventListener("change", async () => {
   } finally {
     busy = false; toggle.disabled = false;
   }
+});
+
+$('live-toggle').addEventListener('change', async()=>{
+  const toggle=$('live-toggle');toggle.disabled=true;
+  try{
+    if(toggle.checked){
+      // The catalog is preloaded so the permission request follows a user click.
+      const origins=liveOrigins((await liveCatalog).sites);
+      if(!await chrome.permissions.request({origins}))throw new Error('Accesso ai siti Live non concesso.');
+      status('live-status','Attivo i pulsanti sui siti autorizzati…');
+      const result=await send({type:'live-sync'});
+      if(!result?.ok)throw new Error(result?.error??'Attivazione Live non riuscita.');
+    }else{
+      const result=await send({type:'live-disable'});
+      if(!result?.ok)throw new Error(result?.error??'Disattivazione Live non riuscita.');
+    }
+    await refreshLive();
+  }catch(error){
+    const state=await send({type:'live-status'}).catch(()=>null);toggle.checked=Boolean(state?.enabled);
+    status('live-status',error.message,true);
+  }finally{toggle.disabled=false;}
 });
 
 $("current-version").textContent = chrome.runtime.getManifest().version;

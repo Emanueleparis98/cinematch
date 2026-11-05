@@ -262,6 +262,8 @@ body.cinema-app,.cn-topbar,.cm-picker,.cm-addons,.cm-addon-form,.cm-addon-row{tr
 .cm-addon-row .main span{display:block;margin-top:2px;font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cm-addon-remove{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:5px 8px;font-size:9.5px;font-weight:700;flex:none}
 .cm-addon-remove:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+#goLive{width:auto;white-space:nowrap;padding:6px 10px;font-size:11px;border-radius:7px}
+@media(max-width:560px){#goLive{width:74px;padding:3px;white-space:normal;font-size:10px;line-height:1.1}.cm-controls-row:has(#goLive) .cm-time{min-width:45px}}
 .cm-addon-help{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 .cm-addon-help summary{font-size:11px}
 .cm-addon-help p{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.65}
