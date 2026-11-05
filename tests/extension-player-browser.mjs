@@ -273,7 +273,9 @@ try{
     try{
       await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
       const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible'});
-      const frame=await (await dialog.locator('iframe.cm-frame').elementHandle()).contentFrame();
+      const iframe=dialog.locator('iframe.cm-frame');await iframe.waitFor({state:'visible'});
+      let frame=null;for(let i=0;i<30&&!frame;i++){frame=await (await iframe.elementHandle()).contentFrame();if(!frame)await chat.waitForTimeout(100);}
+      assert.ok(frame);
       await frame.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();
       await frame.locator('#playerView').waitFor({state:'visible'});
       await frame.locator('#backToPicker').click();
