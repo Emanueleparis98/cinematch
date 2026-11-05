@@ -1,4 +1,4 @@
-# CineMatch — estensione browser 3.10.1
+# CineMatch — estensione browser 3.11.0
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -9,7 +9,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.10.1.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.11.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre direttamente le **Impostazioni**. Per il pulsante
@@ -91,8 +91,8 @@ Dalla **3.6.0** le versioni successive si installano da **Opzioni → Aggiorname
 scegli una volta la cartella da cui hai caricato l’estensione, poi CineMatch
 scarica l’ultima release, verifica lo **SHA-256**, estrae il pacchetto e aggiorna
 quella cartella. L’estensione si ricarica da sola: TMDB, addon e impostazioni
-restano perché l’ID e la cartella non cambiano. La **3.10.1** include già
-l’updater: per una nuova installazione usa lo ZIP 3.10.1, mentre chi arriva da una
+restano perché l’ID e la cartella non cambiano. La **3.11.0** include già
+l’updater: per una nuova installazione usa lo ZIP 3.11.0, mentre chi arriva da una
 versione precedente alla 3.6.0 deve fare ancora un aggiornamento manuale.
 
 L’icona delle opzioni mostra un badge quando è disponibile una nuova versione;
@@ -101,21 +101,17 @@ il controllo periodico richiede una sola autorizzazione a GitHub. La pagina
 
 ## Correnti e prompt in DeepSeek
 
-Dalla 3.10.0 il pannello laterale non esiste più. L’icona dell’estensione apre
+Dalla 3.11.0 il pannello laterale non esiste più. L’icona dell’estensione apre
 le **Impostazioni**; da lì puoi attivare **Correnti in DeepSeek**. Quando
 l’opzione è attiva, un pulsante **Correnti** compare direttamente nel composer
 di `chat.deepseek.com`, accanto a **Pensiero Profondo** e **Ricerca**.
 
-Premendolo si apre un pannello moderno in overlay con le **74 correnti**,
-ricerca, filtri, dettaglio affiancato, selezione e generatore di prompt. Il
-pannello si apre su **Componi** in **Richiesta libera**: non serve scegliere una
-corrente. Il passaggio a **Con una corrente** abilita il catalogo, fino a quattro
-voci; la richiesta libera ignora le selezioni ma le conserva per quando torni
-all’altra modalità. Il layout largo mostra elenco e dettaglio nello stesso colpo
-d’occhio; in **Componi** il form e l’anteprima del prompt stanno fianco a fianco.
-Puoi copiare il testo oppure inserirlo direttamente nel composer della chat:
-l’invio resta all’utente. La bozza e le selezioni restano nella sessione e sono
-condivise con la vista completa del pannello.
+Premendolo si apre un piccolo popover ancorato al composer, non una schermata
+intera: ricerca, elenco compatto delle **74 correnti**, selezione fino a quattro
+voci e modalità **Richiesta libera**. Le opzioni avanzate stanno in un pannello
+richiudibile; il prompt generato si può copiare o inserire direttamente nella
+chat, senza inviare il messaggio. `Esc`, il click fuori o il pulsante di chiusura
+riportano al composer.
 
 Le altre chat (ChatGPT, Claude, Gemini) non mostrano il pulsante Correnti e non
 hanno più il vecchio pulsante flottante. Conservano immagini TMDB, **Flussi** e
@@ -159,6 +155,7 @@ fallback nella scheda dedicata.
 [Modalità CB01, 3.9.0](docs/estensione-3.9.0-cb01.md).
 [Correnti in DeepSeek, 3.10.0](docs/estensione-3.10.0-deepseek.md).
 [Correnti DeepSeek persistenti, 3.10.1](docs/estensione-3.10.1-deepseek-fix.md).
+[Correnti compatte in DeepSeek, 3.11.0](docs/estensione-3.11.0-deepseek-compact.md).
 
 ## Sviluppo dell'estensione
 

@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,mkdir} from 'node:fs/promises';
+import {mkdtemp,rm,mkdir,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {readFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.CINEMATCH_PLAYWRIGHT_MODULE||'playwright');
 const extension=resolve('dist/CineMatch-Chrome');
 const profile=await mkdtemp(join(tmpdir(),'cinematch-deepseek-test-'));
@@ -25,21 +24,20 @@ textarea{width:100%;height:56px;background:#242527;color:#fff;border:0;outline:0
 <div class="ds-toggle-button ds-toggle-button--m" aria-pressed="false"><div class="ds-toggle-button__icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg></div><span>Ricerca</span></div>
 </div><textarea id="chat-input" placeholder="Scrivi un messaggio…"></textarea><button type="submit">Invia</button></form>
 <script>window.submits=0;document.getElementById('composer').addEventListener('submit',event=>{event.preventDefault();window.submits++});</script></body></html>`;
-
 const otherFixture='<!doctype html><html><body><main><h1>Altra chat</h1></main><textarea></textarea></body></html>';
 await context.route('https://chat.deepseek.com/**',route=>route.fulfill({contentType:'text/html',body:deepseekFixture}));
 await context.route('https://chatgpt.com/**',route=>route.fulfill({contentType:'text/html',body:otherFixture}));
 await context.route('https://example.org/**',route=>route.fulfill({contentType:'text/html',body:otherFixture}));
+
 let passed=0;const errors=[];const check=async(name,fn)=>{await fn();passed++;console.log(`PASS ${name}`);};
-const waitForFrame=async(page,dialog)=>{const iframe=dialog.locator('iframe.cm-prompt-frame');await iframe.waitFor({state:'visible',timeout:10000});let frame=null;for(let i=0;i<40&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await page.waitForTimeout(150);}return frame;};
+const compactFrame=async(page)=>{const popover=page.locator('.cm-currents-popover');await popover.waitFor({state:'visible',timeout:10000});const iframe=popover.locator('iframe.cm-currents-frame');await iframe.waitFor({state:'visible'});let frame=null;for(let i=0;i<40&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await page.waitForTimeout(100);}return frame;};
 
 try{
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker'),id=new URL(worker.url()).host;
   const manager=await context.newPage();manager.on('pageerror',error=>errors.push(error.message));
   await manager.goto(`chrome-extension://${id}/options.html`);await manager.waitForTimeout(400);
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-  await page.goto('https://chat.deepseek.com/test',{waitUntil:'load'});
-  await page.waitForTimeout(500);
+  await page.goto('https://chat.deepseek.com/test',{waitUntil:'load'});await page.waitForTimeout(500);
 
   await check('production manifest has no side panel and a DeepSeek-only launcher',async()=>{
     const manifest=JSON.parse(await readFile('extensions/cinematch/manifest.json','utf8'));
@@ -50,7 +48,7 @@ try{
     assert.equal(await worker.evaluate(()=>chrome.action.onClicked.hasListeners()),true);
   });
 
-  await check('the currents button is off by default and no floating launcher exists',async()=>{
+  await check('the compact currents button is off by default and no floating launcher exists',async()=>{
     assert.equal(await page.locator('.cm-deepseek-currents').count(),0);
     assert.equal(await page.locator('.cm-fab').count(),0);
     assert.equal(await manager.locator('#deepseek-currents-toggle').isChecked(),false);
@@ -63,23 +61,9 @@ try{
       const button=document.querySelector('.cm-deepseek-currents');
       const native=[...document.querySelectorAll('#toggle-row .ds-toggle-button')];
       const second=native[1];
-      return {
-        count:document.querySelectorAll('.cm-deepseek-currents').length,
-        text:button?.innerText.trim(),
-        classes:button?.className,
-        role:button?.getAttribute('role'),
-        expanded:button?.getAttribute('aria-expanded'),
-        afterSecond:button?.previousElementSibling===second,
-        style:button?{height:getComputedStyle(button).height,display:getComputedStyle(button).display,borderRadius:getComputedStyle(button).borderRadius}:null,
-        nativeStyle:second?{height:getComputedStyle(second).height,display:getComputedStyle(second).display,borderRadius:getComputedStyle(second).borderRadius}:null
-      };
+      return {count:document.querySelectorAll('.cm-deepseek-currents').length,text:button?.innerText.trim(),classes:button?.className,role:button?.getAttribute('role'),expanded:button?.getAttribute('aria-expanded'),afterSecond:button?.previousElementSibling===second,style:button?{height:getComputedStyle(button).height,display:getComputedStyle(button).display,borderRadius:getComputedStyle(button).borderRadius}:null,nativeStyle:second?{height:getComputedStyle(second).height,display:getComputedStyle(second).display,borderRadius:getComputedStyle(second).borderRadius}:null};
     });
-    assert.equal(info.count,1);
-    assert.equal(info.text,'Correnti');
-    assert.match(info.classes,/ds-toggle-button/);
-    assert.equal(info.role,'button');
-    assert.equal(info.afterSecond,true);
-    assert.deepEqual(info.style,info.nativeStyle);
+    assert.equal(info.count,1);assert.equal(info.text,'Correnti');assert.match(info.classes,/ds-toggle-button/);assert.equal(info.role,'button');assert.equal(info.afterSecond,true);assert.deepEqual(info.style,info.nativeStyle);
   });
 
   await check('the enabled button survives a DeepSeek reload without touching the setting',async()=>{
@@ -89,33 +73,38 @@ try{
     assert.equal(await manager.locator('#deepseek-currents-toggle').isChecked(),true);
   });
 
-  await check('the integrated button opens the real CineMatch panel in an overlay and returns focus',async()=>{
-    await page.bringToFront();
-    await page.locator('.cm-deepseek-currents').click();
-    const dialog=page.locator('dialog.cm-prompt-dialog');await dialog.waitFor({state:'visible',timeout:10000});
-    const frame=await waitForFrame(page,dialog);assert.ok(frame);
-    await frame.locator('#question').waitFor({timeout:20000});
-    assert.equal(await frame.locator('#prompt-tab').getAttribute('aria-selected'),'true');
-    assert.equal(await frame.locator('#mode-free').getAttribute('aria-checked'),'true');
-    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden',timeout:5000});
-    await page.waitForTimeout(250);
+  await check('the compact popover lists 74 currents and inserts a generated prompt',async()=>{
+    await page.bringToFront();await page.locator('.cm-deepseek-currents').click();
+    const frame=await compactFrame(page);assert.ok(frame);
+    await frame.locator('#search').waitFor({timeout:20000});
+    assert.equal(await frame.locator('.cc-row').count(),74);
+    assert.equal(await frame.locator('.cc-tabs [aria-selected="true"]').innerText(),'Correnti');
+    await frame.locator('.cc-row').first().click();
+    assert.equal(await frame.locator('.cc-chip').count(),1);
+    await frame.locator('#generate').click();
+    await frame.locator('#prompt-preview').waitFor({state:'visible',timeout:10000});
+    const prompt=await frame.locator('#prompt-preview').inputValue();assert.ok(prompt.length>200);
+    await frame.locator('#insert').click();
+    await page.locator('.cm-currents-popover').waitFor({state:'hidden',timeout:10000});
+    await page.waitForFunction(()=>document.querySelector('#chat-input').value.length>200,{},{timeout:10000});
+    assert.ok((await page.locator('#chat-input').inputValue()).includes(prompt.trim().slice(0,80)));
+    assert.equal(await page.evaluate(()=>window.submits),0);
+    await page.waitForTimeout(200);
     assert.equal(await page.evaluate(()=>document.activeElement?.classList.contains('cm-deepseek-currents')),true);
   });
 
-  await check('the panel can generate and insert a free prompt without submitting',async()=>{
-    await page.bringToFront();
-    await page.locator('.cm-deepseek-currents').click();
-    const dialog=page.locator('dialog.cm-prompt-dialog');await dialog.waitFor({state:'visible'});
-    const frame=await waitForFrame(page,dialog);assert.ok(frame);
-    await frame.locator('#question').fill('Un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia.');
+  await check('free request mode generates a compact prompt and can go back',async()=>{
+    await page.bringToFront();await page.locator('.cm-deepseek-currents').click();
+    const frame=await compactFrame(page);assert.ok(frame);
+    await frame.locator('#tab-free').click();
+    await frame.locator('#free-question').fill('Un film italiano degli anni ’70 sull’emigrazione, da vedere in coppia.');
     await frame.locator('#generate').click();
-    await frame.waitForFunction(()=>document.querySelector('#prompt-preview').value.length>200);
-    const prompt=await frame.locator('#prompt-preview').inputValue();
-    await frame.locator('#insert').click();
-    await dialog.waitFor({state:'hidden',timeout:10000});
-    await page.waitForFunction(()=>document.querySelector('#chat-input').value.length>200);
-    assert.ok((await page.locator('#chat-input').inputValue()).includes(prompt.trim().slice(0,80)));
-    assert.equal(await page.evaluate(()=>window.submits),0);
+    await frame.locator('#prompt-preview').waitFor({state:'visible'});
+    assert.ok((await frame.locator('#prompt-preview').inputValue()).length>100);
+    await frame.locator('#back').click();
+    assert.equal(await frame.locator('#free-question').isVisible(),true);
+    await frame.locator('#close').click();
+    await page.locator('.cm-currents-popover').waitFor({state:'hidden',timeout:5000});
   });
 
   await check('a DeepSeek rerender restores exactly one button',async()=>{
@@ -124,39 +113,38 @@ try{
     assert.equal(await page.locator('.cm-deepseek-currents').count(),1);
   });
 
-  await check('turning the setting off removes the button and closes the overlay',async()=>{
+  await check('turning the setting off removes the button and closes the popover',async()=>{
     await page.locator('.cm-deepseek-currents').click();
-    const dialog=page.locator('dialog.cm-prompt-dialog');await dialog.waitFor({state:'visible'});
-    await manager.bringToFront();
-    await manager.locator('#deepseek-currents-toggle').uncheck();
+    await page.locator('.cm-currents-popover').waitFor({state:'visible'});
+    await manager.bringToFront();await manager.locator('#deepseek-currents-toggle').uncheck();
     await page.waitForFunction(()=>document.querySelectorAll('.cm-deepseek-currents').length===0,{},{timeout:10000});
     await page.waitForTimeout(300);
-    assert.equal(await page.locator('.cm-deepseek-currents').count(),0);
-    assert.equal(await dialog.isVisible().catch(()=>false),false);
+    assert.equal(await page.locator('.cm-currents-popover').count(),1);
+    assert.equal(await page.locator('.cm-currents-popover').evaluate(node=>node.classList.contains('open')),false);
   });
 
   await check('other chats never receive the currents button or the old floating launcher',async()=>{
     const other=await context.newPage();other.on('pageerror',error=>errors.push(error.message));
     await other.goto('https://chatgpt.com/test');await other.waitForTimeout(500);
-    assert.equal(await other.locator('.cm-deepseek-currents').count(),0);
-    assert.equal(await other.locator('.cm-fab').count(),0);
+    assert.equal(await other.locator('.cm-deepseek-currents').count(),0);assert.equal(await other.locator('.cm-fab').count(),0);
     await other.close();
   });
 
-  await check('the DeepSeek button fits narrow layouts without overflow',async()=>{
+  await check('the compact popover fits a narrow DeepSeek layout',async()=>{
     await manager.locator('#deepseek-currents-toggle').check();
-    await page.setViewportSize({width:320,height:800});await page.waitForTimeout(400);
-    const result=await page.evaluate(()=>({button:document.querySelector('.cm-deepseek-currents')?.getBoundingClientRect().width??0,body:document.documentElement.scrollWidth,viewport:innerWidth}));
-    assert.ok(result.button>20);assert.ok(result.body<=result.viewport);
-    await page.setViewportSize({width:1280,height:900});
+    await page.setViewportSize({width:360,height:800});await page.bringToFront();await page.waitForTimeout(400);
+    await page.locator('.cm-deepseek-currents').click();
+    const popover=page.locator('.cm-currents-popover');await popover.waitFor({state:'visible'});
+    const result=await popover.evaluate(node=>({width:node.getBoundingClientRect().width,viewport:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth}));
+    assert.ok(result.width<=result.viewport);assert.equal(result.overflow,false);
+    await page.keyboard.press('Escape');await page.waitForTimeout(300);
   });
 
   await mkdir('test-results',{recursive:true});
   await manager.screenshot({path:'test-results/deepseek-settings.png'});
-  await page.screenshot({path:'test-results/deepseek-currents.png'});
+  await page.screenshot({path:'test-results/deepseek-currents-compact.png'});
   assert.deepEqual(errors,[]);
-  console.log(`${passed} DeepSeek currents checks passed. No real account or AI calls.`);
+  console.log(`${passed} DeepSeek compact checks passed. No real account or AI calls.`);
 }finally{
-  await context.close();
-  await rm(profile,{recursive:true,force:true});
+  await context.close();await rm(profile,{recursive:true,force:true});
 }

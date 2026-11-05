@@ -208,6 +208,17 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     })().catch(error=>respond({ok:false,error:error.message}));
     return true;
   }
+  if(message?.type==='deepseek-insert-prompt'){
+    if(!extensionPage(sender,'compact.html'))return false;
+    const tab=sender.tab;
+    if(!tab?.id||providerForUrl(tab.url)?.id!=='deepseek'||typeof message.prompt!=='string')return false;
+    const mode=['empty','append','replace'].includes(message.mode)?message.mode:'empty';
+    (async()=>{
+      const results=await chrome.scripting.executeScript({target:{tabId:tab.id},func:insertIntoComposer,args:[{provider:'deepseek',prompt:message.prompt,mode}]});
+      respond(results[0]?.result??{ok:false,code:'no-editor'});
+    })().catch(error=>respond({ok:false,error:error.message}));
+    return true;
+  }
   return false;
 });
 const mediaKind=value=>value===undefined||value==='movie'?'movie':value==='tv'?'tv':null;

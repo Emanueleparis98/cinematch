@@ -1,4 +1,4 @@
-# CineMatch - estensione browser 3.10.1
+# CineMatch - estensione browser 3.11.0
 
 74 voci sulle correnti del cinema, richiesta libera senza corrente, generatore
 locale di richieste, immagini automatiche nelle risposte di ChatGPT, DeepSeek,
@@ -7,7 +7,7 @@ e modalità **CB01** senza pubblicità per film e serie TV.
 
 ## Installazione
 
-1. Estrai completamente `CineMatch-Chrome-3.10.1.zip` in una cartella stabile.
+1. Estrai completamente `CineMatch-Chrome-3.11.0.zip` in una cartella stabile.
 2. Apri `chrome://extensions`, attiva **Modalità sviluppatore** e premi
    **Carica estensione non pacchettizzata**.
 3. Seleziona la cartella con `manifest.json`. Fissa CineMatch alla barra dal menu
@@ -86,16 +86,18 @@ principale, aprono lo stesso selettore sorgenti dell’estensione.
 
 ## Correnti in DeepSeek
 
-Dalla 3.10.0 non esiste più il pannello laterale e il vecchio pulsante
+Dalla 3.11.0 non esiste più il pannello laterale e il vecchio pulsante
 flottante. L’icona dell’estensione apre le **Impostazioni**. Attiva
 **Correnti in DeepSeek** per far comparire un pulsante **Correnti** nel composer
 di `chat.deepseek.com`, accanto a **Pensiero Profondo** e **Ricerca**.
 
-Il pulsante usa lo stile nativo di DeepSeek e apre il pannello CineMatch completo
-in overlay: ricerca, filtri, fino a quattro correnti, dettaglio, composer e
-inserimento nella chat. Non è un pannello laterale e non si apre da solo. Le
-altre chat non mostrano il pulsante Correnti e non hanno più il pulsante
-flottante; conservano immagini TMDB, **Flussi** e player.
+Il pulsante usa lo stile nativo di DeepSeek e apre un piccolo popover ancorato al
+composer: ricerca, elenco compatto delle **74 correnti**, fino a quattro
+selezioni, **Richiesta libera**, opzioni richiudibili e anteprima del prompt.
+Puoi copiare il prompt o inserirlo direttamente nella chat; l’invio resta
+all’utente. Non è un pannello laterale e non si apre da solo. Le altre chat non
+mostrano il pulsante Correnti e non hanno più il pulsante flottante; conservano
+immagini TMDB, **Flussi** e player.
 
 ## Modalità CB01
 
