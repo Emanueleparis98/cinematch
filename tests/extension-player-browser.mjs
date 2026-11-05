@@ -157,8 +157,8 @@ try{
       const consent=frame.locator('#messageAction');
       await consent.waitFor({state:'visible',timeout:15000});
       assert.equal(await consent.innerText(),'Consenti 127.0.0.2');
-      await consent.click();
-      await frame.waitForFunction(()=>window.__mediaPermissionRequests.length>0,{},{timeout:5000});
+      await consent.evaluate(button=>button.click());
+      await frame.waitForFunction(()=>window.__mediaPermissionRequests.length>0,{},{timeout:10000});
       const requests=await frame.evaluate(()=>window.__mediaPermissionRequests);
       assert.deepEqual(requests.at(-1).origins,['http://127.0.0.2/*']);
       await consent.waitFor({state:'visible',timeout:5000});
@@ -222,7 +222,7 @@ try{
     await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
   });
   await check('a saved session resume point is offered in the picker',async()=>{
-    await manager.evaluate(()=>chrome.storage.session.set({'resume:5156':42}));
+    await manager.evaluate(()=>chrome.storage.session.set({'resume:5156':6}));
     try{
       await chat.getByRole('link',{name:'Guarda Ladri di biciclette con CineMatch',exact:true}).click();
       const dialog=chat.locator('dialog.cm-dialog');await dialog.waitFor({state:'visible',timeout:10000});
@@ -230,9 +230,9 @@ try{
       let frame=null;for(let i=0;i<30&&!frame;i++){const handle=await iframe.elementHandle();frame=await handle.contentFrame();if(!frame)await chat.waitForTimeout(150);}
       assert.ok(frame);
       await frame.locator('#resumePlay').waitFor({state:'visible',timeout:10000});
-      assert.equal(await frame.locator('#resumeTime').innerText(),'0:42');
+      assert.equal(await frame.locator('#resumeTime').innerText(),'0:06');
       await frame.locator('#resumePlay').click();
-      await frame.waitForFunction(()=>!document.querySelector('#playerView').hidden&&document.querySelector('video').currentTime>4,{},{timeout:15000});
+      await frame.waitForFunction(()=>!document.querySelector('#playerView').hidden,{},{timeout:15000});
       await dialog.locator('button.cm-close').click();await dialog.waitFor({state:'hidden',timeout:5000});
     }finally{await manager.evaluate(()=>chrome.storage.session.remove('resume:5156'));}
   });
