@@ -24,15 +24,15 @@ Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 ### Arch · pacchetto nativo
 
 ```sh
-curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.0/cinematch-0.3.0-1-any.pkg.tar.zst
-sudo pacman -U ./cinematch-0.3.0-1-any.pkg.tar.zst
+curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.1/cinematch-0.3.1-1-any.pkg.tar.zst
+sudo pacman -U ./cinematch-0.3.1-1-any.pkg.tar.zst
 cinematch
 ```
 
 È un pacchetto del progetto, non un pacchetto nei repository ufficiali Arch o
 nell’AUR. Se passi dall’installer uv a pacman, esegui prima `uv tool uninstall cinematch`
 per evitare che la copia in `~/.local/bin` preceda quella di sistema.
-La release contiene anche `PKGBUILD`, `cinematch-0.3.0-arch-build.tar.gz` e i
+La release contiene anche `PKGBUILD`, `cinematch-0.3.1-arch-build.tar.gz` e i
 sorgenti per una build con `makepkg`.
 
 ## Windows · PowerShell
@@ -67,7 +67,7 @@ cinematch
 È supportato anche `pipx install git+https://github.com/Emanueleparis98/cinematch.git`
 con Python 3.11 o successivo e Git installato. I wheel della release sono comuni
 a Linux, macOS e Windows; per installarli manualmente:
-`uv tool install --python 3.13 ./cinematch-0.3.0-py3-none-any.whl`.
+`uv tool install --python 3.13 ./cinematch-0.3.1-py3-none-any.whl`.
 
 ## Aggiornamento
 
