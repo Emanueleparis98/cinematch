@@ -3,7 +3,6 @@ name: CineMatch Terminal
 on:
   push:
     branches: [main, feat/terminal]
-    tags: ['terminal-v*']
     paths: ['terminal/**', 'bucket/**', 'pyproject.toml', '.github/workflows/terminal.yml', 'plugins/cinema-currents/assets/movements.json']
   pull_request:
     paths: ['terminal/**', 'bucket/**', 'pyproject.toml', '.github/workflows/terminal.yml', 'plugins/cinema-currents/assets/movements.json']
