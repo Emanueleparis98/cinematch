@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$Wheel = "",
     [string]$Python = "3.13",
     [switch]$NoPath
@@ -9,17 +9,20 @@ New-Item -ItemType Directory -Path $CinematchTemp | Out-Null
 try {
     if (-not $Wheel) {
         $CinematchBase = 'https://github.com/Emanueleparis98/cinematch/releases'
-        $CinematchRelease = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/latest.json"
+        $CinematchRelease = Invoke-RestMethod -Uri "$CinematchBase/latest/download/latest.json"
         $CinematchVersion = [string]$CinematchRelease.version
         if ($CinematchVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Versione della release non valida.' }
         $CinematchWheelName = "cinematch-$CinematchVersion-py3-none-any.whl"
         $Wheel = Join-Path $CinematchTemp $CinematchWheelName
         Invoke-WebRequest -Uri "$CinematchBase/download/terminal-v$CinematchVersion/$CinematchWheelName" -OutFile $Wheel
-        Invoke-WebRequest -Uri "$CinematchBase/download/terminal-v$CinematchVersion/SHA256SUMS-terminal.txt" -OutFile (Join-Path $CinematchTemp 'SHA256SUMS-terminal.txt')
+        Invoke-WebRequest -Uri "$CinematchBase/download/terminal-v$CinematchVersion/SHA256SUMS" -OutFile (Join-Path $CinematchTemp 'SHA256SUMS')
     }
     $Wheel = (Resolve-Path -LiteralPath $Wheel).Path
-    $CinematchChecksums = Join-Path (Split-Path -Parent $Wheel) 'SHA256SUMS-terminal.txt'
-    if (-not (Test-Path -LiteralPath $CinematchChecksums)) { throw 'Manca SHA256SUMS-terminal.txt accanto al pacchetto.' }
+    $CinematchChecksums = Join-Path (Split-Path -Parent $Wheel) 'SHA256SUMS'
+    if (-not (Test-Path -LiteralPath $CinematchChecksums)) {
+        $CinematchChecksums = Join-Path (Split-Path -Parent $Wheel) 'SHA256SUMS-terminal.txt'
+    }
+    if (-not (Test-Path -LiteralPath $CinematchChecksums)) { throw 'Manca SHA256SUMS accanto al pacchetto.' }
     $CinematchName = [IO.Path]::GetFileName($Wheel)
     $CinematchExpected = @((Get-Content -LiteralPath $CinematchChecksums) | ForEach-Object {
         if ($_ -match '^([a-fA-F0-9]{64})\s+(.+)$' -and $Matches[2] -ceq $CinematchName) { $Matches[1] }

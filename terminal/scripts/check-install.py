@@ -23,14 +23,14 @@ def main():
         env = {**os.environ, "CINEMATCH_UV": uv, "UV_TOOL_DIR": str(base/"tools"),
                "UV_TOOL_BIN_DIR": str(base/"bin"), "UV_CACHE_DIR": str(base/"cache")}
         if public:
-            manifest = json.load(urllib.request.urlopen("https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/latest.json", timeout=30))
+            manifest = json.load(urllib.request.urlopen("https://github.com/Emanueleparis98/cinematch/releases/latest/download/latest.json", timeout=30))
             version = manifest["version"]
             assert re.fullmatch(r"\d+\.\d+\.\d+", version)
             wheel = base/f"cinematch-{version}-py3-none-any.whl"
             url = f"https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v{version}/"
             wheel.write_bytes(urllib.request.urlopen(url+wheel.name, timeout=60).read())
             installer = base/installer.name
-            installer.write_bytes(urllib.request.urlopen(url+("install-terminal.ps1" if os.name == "nt" else "install-terminal.sh"), timeout=30).read())
+            installer.write_bytes(urllib.request.urlopen(url+("install.ps1" if os.name == "nt" else "install.sh"), timeout=30).read())
         if os.name == "nt":
             command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(installer),
                        "-Python", sys.executable, "-NoPath"]
@@ -52,7 +52,7 @@ def main():
         corrupted = base/"bad"/wheel.name
         corrupted.parent.mkdir()
         corrupted.write_bytes(wheel.read_bytes()+b"corrupted")
-        (corrupted.parent/"SHA256SUMS-terminal.txt").write_text(hashlib.sha256(wheel.read_bytes()).hexdigest()+"  "+wheel.name+"\n")
+        (corrupted.parent/"SHA256SUMS").write_text(hashlib.sha256(wheel.read_bytes()).hexdigest()+"  "+wheel.name+"\n")
         bad = command + [wheel_flag, str(corrupted)]
         result = subprocess.run(bad, check=False, env=env, capture_output=True, text=True, timeout=30)
         assert result.returncode != 0 and "Checksum" in result.stdout+result.stderr

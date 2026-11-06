@@ -22,9 +22,14 @@ def main():
     DIST.mkdir(parents=True)
     subprocess.run([sys.executable, "-m", "build", "--wheel", "--sdist", "--outdir", str(DIST)], cwd=ROOT, check=True)
     for name in ["install.sh", "install.ps1"]:
+        shutil.copy2(ROOT/"terminal"/name, DIST/name)
+        # Keep the previous artifact names so older installers keep working.
         shutil.copy2(ROOT/"terminal"/name, DIST/("install-terminal"+Path(name).suffix))
     version = tomllib.loads((ROOT/"pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    (DIST/"latest-terminal.json").write_text(json.dumps({"version": version}, indent=2)+"\n")
+    latest = json.dumps({"version": version}, indent=2)+"\n"
+    (DIST/"latest.json").write_text(latest, encoding="utf-8")
+    (DIST/"latest-terminal.json").write_text(latest, encoding="utf-8")
+    (ROOT/"terminal/latest.json").write_text(latest, encoding="utf-8")
     wheel = next(DIST.glob("*.whl"))
     scoop_zip = DIST/f"CineMatch-{version}-scoop.zip"
     with zipfile.ZipFile(scoop_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -47,21 +52,23 @@ def main():
         ]},
         "bin": "venv\\Scripts\\cinematch.exe",
         "notes": "Install mpv or VLC for video playback. Run: cinematch",
-
+        "checkver": {"github": "https://github.com/Emanueleparis98/cinematch", "regex": "terminal-v([\\d.]+)"},
     }
     bucket = ROOT/"bucket"
     bucket.mkdir(exist_ok=True)
-    (bucket/"cinematch.json").write_text(json.dumps(scoop, indent=2)+"\n")
+    (bucket/"cinematch.json").write_text(json.dumps(scoop, indent=2)+"\n", encoding="utf-8")
     source = DIST/f"cinematch-{version}.tar.gz"
     recipe = (ROOT/"terminal/packaging/arch/PKGBUILD.in").read_text(encoding="utf-8").replace("@VERSION@", version).replace("@SOURCE_SHA256@", hashlib.sha256(source.read_bytes()).hexdigest())
     arch_dir = ROOT/"terminal/build/arch"
     arch_dir.mkdir(parents=True, exist_ok=True)
-    (arch_dir/"PKGBUILD").write_text(recipe)
+    (arch_dir/"PKGBUILD").write_text(recipe, encoding="utf-8")
     with tarfile.open(DIST/f"cinematch-{version}-arch-build.tar.gz", "w:gz") as archive:
         archive.add(arch_dir/"PKGBUILD", arcname="cinematch/PKGBUILD")
     shutil.copy2(arch_dir/"PKGBUILD", DIST/"PKGBUILD")
     lines = [hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.name for p in sorted(DIST.iterdir()) if p.is_file()]
-    (DIST/"SHA256SUMS-terminal.txt").write_text("\n".join(lines)+"\n", encoding="utf-8")
+    checksums = "\n".join(lines)+"\n"
+    (DIST/"SHA256SUMS").write_text(checksums, encoding="utf-8")
+    (DIST/"SHA256SUMS-terminal.txt").write_text(checksums, encoding="utf-8")
     print(f"Release: {DIST}")
 
 

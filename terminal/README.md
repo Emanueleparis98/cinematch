@@ -5,17 +5,18 @@ interfaccia da terminale. Avvio: `cinematch`.
 
 ![CineMatch Terminal](docs/terminal.png)
 
-## Installazione Linux · Arch, CachyOS, Ubuntu e derivate
+## Installazione rapida — Linux / Ubuntu / Arch
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/install.sh | sh
+curl -fsSL https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.sh | sh
 cinematch
 ```
 
-L’installer scarica la release del **terminale**, controlla lo SHA-256 e crea
-un ambiente isolato con uv e Python 3.13. Non richiede Git, Node, Rust o un
-login GitHub. Non usa pip di sistema. Se il comando non compare subito, riapri
-il terminale. Ripeti la stessa riga per aggiornare; impostazioni e libreria rimangono.
+L’installer scarica l’ultima release pubblicata, verifica lo SHA-256 e crea un
+ambiente isolato con uv e Python 3.13. Non richiede Git, Node, Rust o un login
+GitHub. Non usa pip di sistema. Se il comando non compare subito, riapri il
+terminale. Per aggiornare riesegui la stessa riga: impostazioni e libreria
+restano in `~/.config/cinematch` e `~/.local/share/cinematch`.
 
 Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 `sudo apt install mpv` su Ubuntu. VLC e ffplay sono alternative.
@@ -23,24 +24,25 @@ Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 ### Arch · pacchetto nativo
 
 ```sh
-curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.2.1/cinematch-0.2.1-1-any.pkg.tar.zst
-sudo pacman -U ./cinematch-0.2.1-1-any.pkg.tar.zst
+curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.0/cinematch-0.3.0-1-any.pkg.tar.zst
+sudo pacman -U ./cinematch-0.3.0-1-any.pkg.tar.zst
 cinematch
 ```
 
 È un pacchetto del progetto, non un pacchetto nei repository ufficiali Arch o
 nell’AUR. Se passi dall’installer uv a pacman, esegui prima `uv tool uninstall cinematch`
-per evitare che la vecchia copia in `~/.local/bin` preceda quella di sistema.
-La release contiene anche PKGBUILD e sorgenti per una build con `makepkg`.
+per evitare che la copia in `~/.local/bin` preceda quella di sistema.
+La release contiene anche `PKGBUILD`, `cinematch-0.3.0-arch-build.tar.gz` e i
+sorgenti per una build con `makepkg`.
 
 ## Windows · PowerShell
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.ps1 | iex"
 cinematch
 ```
 
-Oppure, se hai già Scoop:
+## Windows · Scoop
 
 ```powershell
 scoop bucket add cinematch https://github.com/Emanueleparis98/cinematch
@@ -48,10 +50,36 @@ scoop install cinematch/cinematch
 cinematch
 ```
 
-Aggiornamento Scoop: `scoop update; scoop update cinematch`.
+Aggiornamento: `scoop update; scoop update cinematch`.
 È un bucket del progetto; non è una pubblicazione nel catalogo WinGet.
 Installa [mpv](https://mpv.io/installation/) o [VLC](https://www.videolan.org/vlc/).
 Il player trova anche VLC nella cartella standard di Windows.
+
+## Alternativa universale con uv / pipx
+
+Con uv già presente:
+
+```sh
+uv tool install --python 3.13 git+https://github.com/Emanueleparis98/cinematch.git
+cinematch
+```
+
+È supportato anche `pipx install git+https://github.com/Emanueleparis98/cinematch.git`
+con Python 3.11 o successivo e Git installato. I wheel della release sono comuni
+a Linux, macOS e Windows; per installarli manualmente:
+`uv tool install --python 3.13 ./cinematch-0.3.0-py3-none-any.whl`.
+
+## Aggiornamento
+
+- Installer rapido Linux/Windows: riesegui lo stesso comando; le impostazioni restano.
+- Scoop: `scoop update; scoop update cinematch`.
+- Arch: scarica il nuovo pacchetto e installalo con `sudo pacman -U`.
+- uv/pipx da Git: reinstalla con `uv tool install --force …` o `pipx reinstall cinematch`.
+- Rimozione: `uv tool uninstall cinematch`.
+
+Gli indici ufficiali apt/Ubuntu, Arch e WinGet seguono procedure separate: il
+progetto non dichiara `apt install cinematch`, `pacman -S cinematch` o
+`winget install cinematch` come comandi già disponibili.
 
 ## Come si usa
 
@@ -176,6 +204,10 @@ tema TUI. Il workflow **CineMatch Terminal** controlla Linux e Windows con Pytho
 3.11, 3.13 e 3.14, l’installazione in un ambiente isolato e il pacchetto nativo Arch.
 La verifica post-pubblicazione controlla anche il download anonimo e Scoop.
 
-I tag `terminal-v*` e `terminal/latest.json` identificano le release del terminale.
+I tag `terminal-v*` e il file `latest.json` nella release identificano l’ultima versione.
+La release contiene wheel, sdist, installer, `SHA256SUMS`, scoop zip, `PKGBUILD`,
+`arch-build` e il pacchetto Arch. Il pacchetto nativo viene prodotto nel job `arch`.
+Per pubblicare, crea il tag `terminal-v<versione>` e una release GitHub con gli asset
+di `terminal/dist/release`, includendo il pacchetto Arch e marcandola come **Latest**.
 
 Questa cartella contiene l’applicazione Python principale.

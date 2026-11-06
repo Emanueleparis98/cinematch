@@ -1,19 +1,23 @@
 {
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Film, series, anime, TV and cinema prompts in your terminal",
   "homepage": "https://github.com/Emanueleparis98/cinematch",
   "license": "MIT",
   "depends": "main/uv",
-  "url": "https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.2.1/CineMatch-0.2.1-scoop.zip",
-  "hash": "953d1aa7287fb3be6754810803f03e46aa3ab026e50da69ccee7dc24c30f80e1",
+  "url": "https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.0/CineMatch-0.3.0-scoop.zip",
+  "hash": "a799692492445fb893ebcb0f8ae2d39c3e7efd4a364d7a854e1182b8638885a7",
   "installer": {
     "script": [
       "& uv venv --python 3.13 \"$dir\\venv\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot create CineMatch environment' }",
-      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\cinematch-0.2.1-py3-none-any.whl\"",
+      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\cinematch-0.3.0-py3-none-any.whl\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot install CineMatch' }"
     ]
   },
   "bin": "venv\\Scripts\\cinematch.exe",
-  "notes": "Install mpv or VLC for video playback. Run: cinematch"
+  "notes": "Install mpv or VLC for video playback. Run: cinematch",
+  "checkver": {
+    "github": "https://github.com/Emanueleparis98/cinematch",
+    "regex": "terminal-v([\\d.]+)"
+  }
 }

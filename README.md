@@ -1,15 +1,24 @@
 # CineMatch — nel terminale
 
-**CineMatch Terminal 0.2.1** porta ricerca di film, serie, anime e TV, addon JSON,
+**CineMatch Terminal 0.3.0** porta ricerca di film, serie, anime e TV, addon JSON,
 Real-Debrid/TorBox, preferiti, cronologia, 74 correnti cinematografiche e
-generazione locale di prompt in un’app TUI per Linux e Windows.
+generazione locale di prompt in un’app TUI per Linux, macOS e Windows.
+
+Linux, Ubuntu e Arch:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/install.sh | sh
+curl -fsSL https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.sh | sh
 cinematch
 ```
 
-Su Windows, con Scoop già installato:
+Windows, da PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.ps1 | iex"
+cinematch
+```
+
+Windows, con Scoop:
 
 ```powershell
 scoop bucket add cinematch https://github.com/Emanueleparis98/cinematch
@@ -19,11 +28,19 @@ cinematch
 
 ![CineMatch Terminal](terminal/docs/terminal.png)
 
-[Installazione completa, Arch/pacman, Windows PowerShell, uso e privacy](terminal/README.md)
-· [Release terminale 0.2.1](https://github.com/Emanueleparis98/cinematch/releases/tag/terminal-v0.2.1)
+[Installazione completa, Arch/pacman, macOS con uv/pipx, uso e privacy](terminal/README.md)
+· [Release terminale 0.3.0](https://github.com/Emanueleparis98/cinematch/releases/tag/terminal-v0.3.0)
 
 Per i video aggiungi i tuoi addon e installa mpv o VLC. Per i prompt non serve
-alcuna API AI. L’app terminale ha un proprio canale di aggiornamento.
+alcuna API AI. Le release terminal-v* sono pubblicate come ultima release del
+repository e includono installer Linux/Windows, pacchetto Arch e bucket Scoop.
+
+## Aggiornamento
+
+- Linux/Windows: riesegui lo stesso comando di installazione; impostazioni e libreria restano.
+- Scoop: `scoop update; scoop update cinematch`.
+- Arch: scarica il nuovo `cinematch-<versione>-1-any.pkg.tar.zst` e installalo con `sudo pacman -U`.
+- macOS/Linux con uv o pipx: reinstalla da Git o dal wheel della release.
 
 ## Cosa include
 
@@ -33,8 +50,8 @@ alcuna API AI. L’app terminale ha un proprio canale di aggiornamento.
 - 74 correnti cinematografiche consultabili offline e un compositore di prompt
   locale per ChatGPT, DeepSeek, Claude e Gemini.
 - Player esterno mpv, VLC o ffplay; nessun client torrent P2P viene avviato.
-- Interfaccia Textual per Linux e Windows, con installer, pacchetto Arch e bucket
-  Scoop del progetto.
+- Interfaccia Textual per Linux, macOS e Windows, con installer, pacchetto
+  Arch e bucket Scoop del progetto.
 
 Il flusso di ricerca e riproduzione usa esclusivamente gli addon collegati e i
 servizi configurati dall’utente. La disponibilità dei cataloghi e dei flussi

@@ -17,7 +17,7 @@ cinematch_temp=$(mktemp -d)
 trap 'rm -rf "$cinematch_temp"' EXIT HUP INT TERM
 if [ -z "$cinematch_wheel" ]; then
     cinematch_base=https://github.com/Emanueleparis98/cinematch/releases
-    curl --proto '=https' --tlsv1.2 -fsSL "https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/latest.json" -o "$cinematch_temp/latest.json"
+    curl --proto '=https' --tlsv1.2 -fsSL "$cinematch_base/latest/download/latest.json" -o "$cinematch_temp/latest.json"
     cinematch_version=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([0-9.]*\)".*/\1/p' "$cinematch_temp/latest.json")
     case "$cinematch_version" in ''|*[!0-9.]*) echo 'Versione della release non valida.' >&2; exit 2 ;; esac
     if ! printf '%s\n' "$cinematch_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -25,15 +25,18 @@ if [ -z "$cinematch_wheel" ]; then
     fi
     cinematch_wheel_name="cinematch-$cinematch_version-py3-none-any.whl"
     curl --proto '=https' --tlsv1.2 -fsSL "$cinematch_base/download/terminal-v$cinematch_version/$cinematch_wheel_name" -o "$cinematch_temp/$cinematch_wheel_name"
-    curl --proto '=https' --tlsv1.2 -fsSL "$cinematch_base/download/terminal-v$cinematch_version/SHA256SUMS-terminal.txt" -o "$cinematch_temp/SHA256SUMS-terminal.txt"
+    curl --proto '=https' --tlsv1.2 -fsSL "$cinematch_base/download/terminal-v$cinematch_version/SHA256SUMS" -o "$cinematch_temp/SHA256SUMS"
     cinematch_wheel="$cinematch_temp/$cinematch_wheel_name"
 fi
 cinematch_wheel_dir=$(CDPATH= cd -- "$(dirname -- "$cinematch_wheel")" && pwd)
 cinematch_wheel_name=$(basename -- "$cinematch_wheel")
 cinematch_wheel="$cinematch_wheel_dir/$cinematch_wheel_name"
-cinematch_checksums="$cinematch_wheel_dir/SHA256SUMS-terminal.txt"
+cinematch_checksums="$cinematch_wheel_dir/SHA256SUMS"
 if [ ! -f "$cinematch_checksums" ]; then
-    echo 'Manca SHA256SUMS-terminal.txt accanto al pacchetto. Scaricalo dalla stessa release.' >&2; exit 2
+    cinematch_checksums="$cinematch_wheel_dir/SHA256SUMS-terminal.txt"
+fi
+if [ ! -f "$cinematch_checksums" ]; then
+    echo 'Manca SHA256SUMS accanto al pacchetto. Scaricalo dalla stessa release.' >&2; exit 2
 fi
 cinematch_expected=$(awk -v name="$cinematch_wheel_name" '$2 == name {print $1}' "$cinematch_checksums")
 cinematch_actual=$(sha256sum "$cinematch_wheel" | awk '{print $1}')

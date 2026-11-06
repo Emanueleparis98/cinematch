@@ -1,6 +1,6 @@
 # CineMatch
 
-CineMatch è un’applicazione TUI per Linux e Windows dedicata a film, serie, anime,
+CineMatch è un’applicazione TUI per Linux, macOS e Windows dedicata a film, serie, anime,
 TV e alle correnti del cinema. Riunisce ricerca nei cataloghi degli addon
 Stremio/Nuvio, metadati TMDB facoltativi, flussi video, Real-Debrid/TorBox,
 preferiti, cronologia e un compositore di prompt locale.
