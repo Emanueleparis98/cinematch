@@ -234,9 +234,11 @@ class CinemaApp(App):
             self.clear_detail()
 
     @on(DataTable.RowHighlighted, "#results")
-    def highlight(self):
-        row = self.query_one("#results", DataTable).cursor_row
-        if 0 <= row < len(getattr(self, "visible_items", [])):
+    def highlight(self, event: DataTable.RowHighlighted):
+        # Use the message payload rather than querying the DOM: a highlight can
+        # already be queued while the app is being torn down in tests.
+        row = event.cursor_row
+        if self.is_mounted and 0 <= row < len(getattr(self, "visible_items", [])):
             self.detail_generation += 1
             self.show_detail(self.visible_items[row], self.detail_generation)
 
