@@ -28,8 +28,10 @@ function status(id, message, error = false) {
   $(id).className = `cc-status${error ? " error" : ""}`;
 }
 function showTab(name) {
-  const selected = ["connection","functions","updates"].includes(name) ? name : "connection";
+  const selected = ["connection","streams","functions","updates"].includes(name) ? name : "connection";
   $("tab-connection").setAttribute("aria-selected", String(selected === "connection"));
+  $("tab-streams").setAttribute("aria-selected", String(selected === "streams"));
+  $("streams-view").hidden = selected !== "streams";
   $("tab-functions").setAttribute("aria-selected", String(selected === "functions"));
   $("tab-updates").setAttribute("aria-selected", String(selected === "updates"));
   $("connection-view").hidden = selected !== "connection";
@@ -85,6 +87,7 @@ async function refresh() {
 }
 
 $("tab-connection").addEventListener("click", () => showTab("connection"));
+$("tab-streams").addEventListener("click",()=>showTab("streams"));
 $("tab-functions").addEventListener("click", () => showTab("functions"));
 $("tab-updates").addEventListener("click", () => showTab("updates"));
 $("close").addEventListener("click", () => window.close());

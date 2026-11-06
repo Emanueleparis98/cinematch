@@ -1,6 +1,6 @@
 html:has(body.ss-page){background:var(--deep)}
 body.ss-page{width:100%;max-width:420px;margin:0 auto;border-inline:1px solid var(--line)}
-.cc-tabs{grid-template-columns:repeat(3,1fr)}
+.cc-tabs{grid-template-columns:repeat(4,1fr)}
 .ss-update-intro{margin:0 0 8px;color:var(--muted);font-size:10.5px;line-height:1.45}
 .ss-update-intro strong{color:var(--text)}
 .ss-update-card{border:1px solid var(--line);border-radius:8px;padding:9px;background:var(--deep)}
@@ -47,3 +47,6 @@ html[data-theme="light"] #update-status.error{color:#b42318}
 .ss-footer strong{color:var(--text);font-weight:650}
 .ss-footer button{padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--accent);font-size:9.5px}
 .ss-footer button:hover{background:var(--hover)}
+
+.ss-section-title{font-size:12px;margin:12px 0 8px}.ss-form input[type="url"],.ss-form select{width:100%;min-height:30px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--deep);color:var(--text)}.ss-addon{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}.ss-addon span{flex:1;overflow-wrap:anywhere}.ss-addon button{padding:5px;border:1px solid var(--line);border-radius:5px;background:var(--deep);color:var(--text)}
+#stream-addon-form>button{min-height:30px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--accent-text);font-size:11px;font-weight:650;cursor:pointer}

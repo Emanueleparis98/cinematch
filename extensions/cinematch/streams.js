@@ -46,13 +46,16 @@ export function parseStreams(data){
     let url=null,externalUrl=null;try{if(s.url)url=httpUrl(s.url).href;}catch{}
     try{if(s.externalUrl)externalUrl=httpUrl(s.externalUrl).href;}catch{}
     const torrent=typeof s.infoHash==='string'||/^magnet:/i.test(s.url??'');
+    let infoHash=typeof s.infoHash==='string'?s.infoHash:null;
+    if(!infoHash&&/^magnet:/i.test(s.url??'')){try{infoHash=new URL(s.url).searchParams.get('xt')?.replace(/^urn:btih:/i,'');}catch{}}
+    infoHash=/^[a-f0-9]{40}$/i.test(infoHash??'')?infoHash.toLowerCase():null;
     const headers=s.behaviorHints?.proxyHeaders;
     const needsHeaders=Boolean(headers&&((headers.request&&Object.keys(headers.request).length)||(headers.response&&Object.keys(headers.response).length)));
     const dash=Boolean(url&&/\.mpd(?:\?|$)/i.test(url));
     const kind=url?(needsHeaders?'headers':dash?'dash':/\.m3u8(?:\?|$)/i.test(url)?'hls':'video'):externalUrl?'external':torrent?'torrent':'unsupported';
     const key=url??externalUrl??(torrent?`${s.infoHash??s.url}:${s.fileIdx??''}`:`unknown:${index}`);if(seen.has(key))return [];seen.add(key);
     const reasons={headers:'Richiede un proxy configurato nell’addon per gli header video.',dash:'DASH non supportato da questo player. Scegli una sorgente MP4 o HLS.',torrent:'Torrent: configura nell’addon un servizio che restituisca un flusso HTTP.',unsupported:'Questo tipo di sorgente non è riproducibile nel browser.'};
-    return [{name:text(s.name,100)||'Sorgente video',description:text(s.description??s.title,700),filename:text(s.behaviorHints?.filename,300),url,externalUrl,kind,playable:['video','hls','dash'].includes(kind),reason:kind==='dash'?'':reasons[kind]??'',subtitles:(Array.isArray(s.subtitles)?s.subtitles:[]).slice(0,30).flatMap(sub=>{try{return [{url:httpUrl(sub.url).href,lang:text(sub.lang,30)||'Sottotitoli'}];}catch{return [];}})}];
+    return [{name:text(s.name,100)||'Sorgente video',description:text(s.description??s.title,700),filename:text(s.behaviorHints?.filename,300),infoHash,fileIdx:Number.isSafeInteger(s.fileIdx)&&s.fileIdx>=0?s.fileIdx:null,url,externalUrl,kind,playable:['video','hls','dash'].includes(kind),reason:kind==='dash'?'':reasons[kind]??'',subtitles:(Array.isArray(s.subtitles)?s.subtitles:[]).slice(0,30).flatMap(sub=>{try{return [{url:httpUrl(sub.url).href,lang:text(sub.lang,30)||'Sottotitoli'}];}catch{return [];}})}];
   });
 }
 export async function fetchJson(url,{signal,fetcher=fetch}={}){

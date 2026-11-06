@@ -1,3 +1,4 @@
+import {enableDebridStreams} from './debrid.js';
 import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from './streams.js';
 import {enhanceSelects,refreshSelects} from './controls.js';
 import {declaredCodecs,compatibility,probePlayback,containerExtension,likelyIntegrated,nativePlaybackError} from './playback.js';
@@ -57,11 +58,12 @@ function renderStreams(){
   $('setup-addons').textContent=addons.length?'Gestisci addon':'Aggiungi il primo addon';
 }
 async function loadStreams(){
+  await readAddons();
   const current=++generation;searchAbort?.abort();searchAbort=new AbortController();const signal=searchAbort.signal;
   groups=groups.filter(g=>g.imported);renderStreams();if(!movie)return;
   const queue=addons.filter(a=>a.enabled);if(queue.length)status('sources-status','Ricerca dei flussi negli addon…');
   async function next(){while(queue.length){const addon=queue.shift();let group={key:addon.key,name:addon.name,streams:[]};
-    try{const url=resourceUrl(addon,movie);if(!url){group.error='Identificativo del film non supportato da questo addon.';}else if(!await allowed(url)){group.error='Il collegamento al sito deve essere autorizzato di nuovo.';group.permission=url;}else{group.streams=parseStreams(await fetchJson(url,{signal}));if(!group.streams.length)group.error='Nessun flusso disponibile per questo film.';}}
+    try{const url=resourceUrl(addon,movie);if(!url){group.error='Identificativo del film non supportato da questo addon.';}else if(!await allowed(url)){group.error='Il collegamento al sito deve essere autorizzato di nuovo.';group.permission=url;}else{group.streams=enableDebridStreams(parseStreams(await fetchJson(url,{signal})),(await chrome.runtime.sendMessage({type:'debrid-status'}))?.enabled);if(!group.streams.length)group.error='Nessun flusso disponibile per questo film.';}}
     catch(error){group.error=error.message;}if(current!==generation)return;groups.push(group);renderStreams();
   }}
   await Promise.all([next(),next(),next()]);if(current===generation)renderStreams();
@@ -70,6 +72,12 @@ $('source-filter').onchange=renderStreams;$('refresh-streams').onclick=loadStrea
 async function playStream(stream){
   const current=++playGeneration;selected=stream;stopVideo();failure=null;probeAbort=new AbortController();renderStreams();status('playback-status','Verifica della sorgente e del formato…');
   try{
+    if(stream.kind==='torrent'){
+      const result=await chrome.runtime.sendMessage({type:'debrid-resolve',stream:{infoHash:stream.infoHash,fileIdx:stream.fileIdx}});
+      if(current!==playGeneration)return;
+      if(!result?.ok)throw new Error(result?.error??'Torrent non disponibile.');
+      stream={...stream,url:result.url,filename:result.filename,kind:'video'};
+    }
     // Request directly in the click handler, before asynchronous cleanup can
     // expire Chrome's user activation. Known RD streams include rotating CDNs.
     const origins=playbackPermissions(stream);
