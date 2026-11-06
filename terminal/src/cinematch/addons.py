@@ -4,9 +4,15 @@ import asyncio
 import re
 from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
+from .cache import AsyncTTLCache
 from .models import CineError, Stream, parse_media, plain, web_url
 
 DEFAULTS = ["https://v3-cinemeta.strem.io/manifest.json", "https://anime-kitsu.strem.fun/manifest.json"]
+REQUEST_TIMEOUT = 12.0
+SEARCH_TIMEOUT = 25.0
+STREAMS_TIMEOUT = 18.0
+JSON_TTL = 60.0
+STREAMS_TTL = 60.0
 
 
 def manifest_url(value):
@@ -110,10 +116,20 @@ class Addons:
         self.defaults = []
         self.errors = []
         self.offsets = {}
+        self._json_cache = AsyncTTLCache(ttl=JSON_TTL, maxsize=256)
+        self._streams_cache = AsyncTTLCache(ttl=STREAMS_TTL, maxsize=128)
+
+    @property
+    def all(self):
+        return [a for a in [*self.defaults, *self.store.config["addons"]] if a.get("enabled", True)]
+
+    @property
+    def signature(self):
+        return tuple((a["url"], bool(a.get("enabled", True))) for a in self.all)
 
     async def add(self, url, *, default=False):
         url = manifest_url(url)
-        addon = parse_manifest(await self.net.json(url, redirects=True), url)
+        addon = parse_manifest(await self.json(url), url)
         # idPrefixes can be specified globally as well as on individual resources.
         if default:
             self.defaults = [a for a in self.defaults if a["url"] != addon["url"]]
@@ -132,13 +148,16 @@ class Addons:
                 self.errors.append("Un catalogo integrato non è raggiungibile.")
         await asyncio.gather(*(load(url) for url in DEFAULTS))
 
-    @property
-    def all(self):
-        return [a for a in [*self.defaults, *self.store.config["addons"]] if a.get("enabled", True)]
+    async def _load_json(self, url):
+        async with self.semaphore:
+            try:
+                async with asyncio.timeout(REQUEST_TIMEOUT):
+                    return await self.net.json(url, redirects=True)
+            except TimeoutError:
+                raise CineError("Il server dell’addon non ha risposto in tempo.") from None
 
     async def json(self, url):
-        async with self.semaphore:
-            return await self.net.json(url, redirects=True)
+        return await self._json_cache.get(url, lambda: self._load_json(url))
 
     async def search(self, query, section="all", skip=0):
         self.errors = []
@@ -173,7 +192,7 @@ class Addons:
                 self.offsets[key] = offset+len(raw) if raw else 0
                 items = [m for item in raw if isinstance(item, dict) and (m := parse_media({"type": kind, **item}, source=addon["name"], addon_url=addon["url"]))]
                 return [m for m in items if query.casefold() in m.title.casefold()] if query and not searchable else items
-            except (CineError, ValueError, TypeError, AttributeError):
+            except (CineError, ValueError, TypeError, AttributeError, KeyError, TimeoutError):
                 self.errors.append(addon["name"]+": catalogo non disponibile.")
                 return []
         tasks = []
@@ -189,10 +208,31 @@ class Addons:
                 kind = cat.get("type")
                 if section == "movie" and kind != "movie" or section == "series" and kind != "series" or section == "tv" and kind not in {"tv", "channel"}:
                     continue
-                tasks.append(one(addon, cat))
-        results = await asyncio.gather(*tasks)
+                tasks.append(asyncio.create_task(one(addon, cat)))
+        if not tasks:
+            return []
+        try:
+            done, pending = await asyncio.wait(tasks, timeout=SEARCH_TIMEOUT)
+        except BaseException:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        if pending:
+            self.errors.append("Alcune fonti non hanno risposto in tempo.")
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
         seen, items = set(), []
-        for group in results:
+        for task in tasks:
+            if task not in done or task.cancelled():
+                continue
+            try:
+                group = task.result()
+            except Exception:
+                self.errors.append("Una fonte non ha risposto.")
+                continue
             for media in group:
                 if media.key not in seen:
                     seen.add(media.key)
@@ -208,12 +248,18 @@ class Addons:
                     detail = parse_media(data.get("meta"), source=addon["name"], addon_url=addon["url"])
                     if detail:
                         return detail
-                except (CineError, AttributeError, ValueError, TypeError):
+                except (CineError, AttributeError, ValueError, TypeError, KeyError, TimeoutError):
                     continue
         return media
 
     async def streams(self, media, video_id=""):
         self.errors = []
+        addons = self.all
+        signature = tuple((a["url"], bool(a.get("enabled", True))) for a in addons)
+        key = (media.key, media.imdb, media.tmdb, media.addon_url, video_id, signature)
+        return await self._streams_cache.get(key, lambda: self._load_streams(media, video_id, addons))
+
+    async def _load_streams(self, media, video_id, addons):
         mid = video_id or media.id
         # Prefer native IDs; TMDB results obtain IMDb in the detail request.
         if media.tmdb:
@@ -226,7 +272,42 @@ class Addons:
                 return []
             try:
                 return parse_streams(await self.json(endpoint(addon, "stream", media.type, candidate)), addon["name"])
-            except (CineError, AttributeError, TypeError, ValueError):
+            except (CineError, AttributeError, TypeError, ValueError, KeyError, TimeoutError):
                 self.errors.append(addon["name"]+": flussi non disponibili.")
                 return []
-        return [s for group in await asyncio.gather(*(one(a) for a in self.all)) for s in group]
+        tasks = [asyncio.create_task(one(addon)) for addon in addons]
+        if not tasks:
+            return []
+        try:
+            done, pending = await asyncio.wait(tasks, timeout=STREAMS_TIMEOUT)
+        except BaseException:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+        if pending:
+            self.errors.append("Alcune fonti non hanno risposto in tempo.")
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+        streams, seen = [], set()
+        for task in tasks:
+            if task not in done or task.cancelled():
+                continue
+            try:
+                group = task.result()
+            except Exception:
+                self.errors.append("Una fonte non ha risposto.")
+                continue
+            for stream in group:
+                identity = (stream.info_hash, stream.file_idx, stream.url) if stream.info_hash else (stream.url, stream.kind)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                streams.append(stream)
+        return streams
+
+    def clear_cache(self):
+        self._json_cache.clear()
+        self._streams_cache.clear()

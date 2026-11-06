@@ -29,7 +29,10 @@ def choose_file(files, *, file_idx=None, season=None, episode=None):
         raise CineError("Non posso identificare con certezza l’episodio. Scegli un risultato con file indicizzato.")
     if not videos:
         raise CineError("Il torrent non contiene video supportati.")
-    return max(videos, key=lambda f: f.get("bytes") or f.get("size") or 0)
+    def size(file):
+        value = file.get("bytes") or file.get("size") or 0
+        return value if isinstance(value, (int, float)) else 0
+    return max(videos, key=size)
 
 
 class Debrid:

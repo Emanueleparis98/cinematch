@@ -4,6 +4,7 @@ import asyncio
 import re
 
 from .addons import Addons
+from .cache import AsyncTTLCache
 from .debrid import Debrid
 from .models import CineError
 from .player import Player
@@ -17,6 +18,8 @@ class Cinema:
         self.tmdb = Tmdb(net, store)
         self.debrid = Debrid(net, store)
         self.player = Player(store)
+        self._details_cache = AsyncTTLCache(ttl=300, maxsize=128)
+        self._episodes_cache = AsyncTTLCache(ttl=300, maxsize=128)
         self.errors = []
         self.current = None
         self.video_id = ""
@@ -44,14 +47,22 @@ class Cinema:
         return items
 
     async def details(self, media):
+        key = (media.key, media.tmdb, media.imdb, media.addon_url, self.addons.signature)
+        return await self._details_cache.get(key, lambda: self._load_details(media))
+
+    async def _load_details(self, media):
         if media.tmdb:
             return await self.tmdb.details(media)
         return await self.addons.details(media)
 
     async def episodes(self, media, season):
         if media.tmdb:
-            return await self.tmdb.episodes(media, season)
+            key = (media.key, media.tmdb, season)
+            return await self._episodes_cache.get(key, lambda: self._load_episodes(media, season))
         return [v for v in media.videos if int(v.get("season") or 1) == season]
+
+    async def _load_episodes(self, media, season):
+        return await self.tmdb.episodes(media, season)
 
     async def streams(self, media, video_id=""):
         if media.type in {"series", "anime"} and media.videos and not video_id:
@@ -85,6 +96,11 @@ class Cinema:
         # Mark near-complete titles as watched rather than resuming at end credits.
         self.store.data.setdefault("progress", {})[self.current.key+":"+self.video_id] = 0 if duration and position > duration*0.95 else position
         self.store.save_data()
+
+    def clear_cache(self):
+        self._details_cache.clear()
+        self._episodes_cache.clear()
+        self.addons.clear_cache()
 
     async def close(self):
         await self.save_progress()

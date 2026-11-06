@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -5,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 from cinematch.addons import (
+    Addons,
     endpoint,
     manifest_url,
     parse_manifest,
@@ -230,3 +232,72 @@ def test_player_uses_argv_and_never_shell(monkeypatch, tmp_path):
     command = player.command(Stream("Movie", url="https://cdn.example.org/film.mkv?x=$(touch-pwned)"), resume=90)
     assert command[-2] == "--" and "--start=90" in command
     assert command[-1].endswith("$(touch-pwned)")
+
+
+async def test_network_retries_one_transient_get_but_not_post():
+    calls = []
+    async def api(request):
+        calls.append(request.method)
+        return httpx.Response(503, text="busy") if len(calls) == 1 else httpx.Response(200, text="ok")
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    try:
+        assert await net.request("https://site.test/retry") == b"ok"
+        assert calls == ["GET", "GET"]
+    finally:
+        await net.close()
+    calls.clear()
+    async def refused(request):
+        calls.append(request.method)
+        return httpx.Response(503, text="busy")
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(refused)))
+    try:
+        with pytest.raises(CineError, match="temporaneamente"):
+            await net.request("https://site.test/mutation", method="POST")
+        assert calls == ["POST"]
+    finally:
+        await net.close()
+
+
+async def test_addon_streams_are_cached_deduplicated_and_bounded(tmp_path):
+    calls = []
+    async def api(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, json={"streams": [
+            {"name": "A", "url": "https://cdn.test/live.m3u8"},
+            {"name": "A duplicate", "url": "https://cdn.test/live.m3u8"},
+        ]})
+    store = Store(tmp_path)
+    manifest = {"id": "demo", "name": "Demo", "types": ["movie"], "resources": ["stream"], "catalogs": []}
+    store.config["addons"] = [parse_manifest(manifest, "https://addon.test/manifest.json")]
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    addons = Addons(net, store)
+    try:
+        media = Media("tt123", "movie", "Film")
+        first = await addons.streams(media)
+        second = await addons.streams(media)
+        assert len(first) == 1 and len(second) == 1
+        assert len(calls) == 1
+    finally:
+        await net.close()
+
+
+async def test_addon_streams_timeout_keeps_completed_sources(tmp_path, monkeypatch):
+    import cinematch.addons as module
+    store = Store(tmp_path)
+    fast = parse_manifest({"id": "fast", "name": "Fast", "types": ["movie"], "resources": ["stream"], "catalogs": []}, "https://fast.test/manifest.json")
+    slow = parse_manifest({"id": "slow", "name": "Slow", "types": ["movie"], "resources": ["stream"], "catalogs": []}, "https://slow.test/manifest.json")
+    store.config["addons"] = [fast, slow]
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"streams": []}))))
+    addons = module.Addons(net, store)
+    async def fake_json(url):
+        if "slow.test" in url:
+            await asyncio.sleep(10)
+        return {"streams": [{"name": "Video", "url": "https://cdn.test/live.m3u8"}]}
+    monkeypatch.setattr(addons, "json", fake_json)
+    monkeypatch.setattr(module, "STREAMS_TIMEOUT", 0.05)
+    try:
+        result = await addons.streams(Media("tt123", "movie", "Film"))
+        assert len(result) == 1 and result[0].url == "https://cdn.test/live.m3u8"
+        assert any("tempo" in error for error in addons.errors)
+    finally:
+        await net.close()

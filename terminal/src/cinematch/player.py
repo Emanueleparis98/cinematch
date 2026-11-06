@@ -120,9 +120,10 @@ class Player:
             await self.progress()
             try:
                 self.process.terminate()
-                await asyncio.wait_for(self.process.wait(), 3)
             except ProcessLookupError:
                 pass
+            try:
+                await asyncio.wait_for(self.process.wait(), 3)
             except TimeoutError:
                 self.process.kill()
                 await self.process.wait()

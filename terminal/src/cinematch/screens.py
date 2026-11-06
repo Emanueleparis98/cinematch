@@ -72,6 +72,7 @@ class SettingsScreen(DialogScreen):
                       debrid_key=self.query_one("#debrid-key", Input).value.strip(),
                       player=str(self.query_one("#player-choice", Select).value))
         self.app.service.store.save_config()
+        self.app.service.clear_cache()
 
     @on(Button.Pressed, "#save-settings")
     def save_settings(self):
@@ -141,6 +142,7 @@ class AddonsScreen(DialogScreen):
         status.update("Leggo il manifest…")
         try:
             addon = await self.app.service.addons.add(self.query_one("#addon-url", Input).value)
+            self.app.service.clear_cache()
             self.query_one("#addon-url", Input).value = ""
             self.fill()
             status.update(addon["name"]+" aggiunto. La chiave debrid globale sarà usata per i torrent restituiti dall’addon.")
@@ -199,16 +201,24 @@ class StreamsScreen(DialogScreen):
         self.query_one(DataTable).add_columns("Definizione", "Lingua", "Fonte", "Nome", "Tipo")
         self.load()
 
+    def on_unmount(self):
+        self.workers.cancel_group(self, "streams")
+        self.workers.cancel_group(self, "play")
+
     @work(exclusive=True, group="streams")
     async def load(self):
         status = self.query_one("#streams-status", Static)
         try:
-            self.items = self.imported if self.imported is not None else await self.app.service.streams(self.media, self.video_id)
+            items = self.imported if self.imported is not None else await self.app.service.streams(self.media, self.video_id)
+            if not self.is_mounted:
+                return
+            self.items = items
             self.fill()
             errors = self.app.service.addons.errors
             status.update("Lingua e definizione sono quelle dichiarate dalle fonti."+(" · "+" · ".join(errors[:2]) if errors else "") if self.items else "Nessun flusso. Collega un addon video compatibile da Addon; per serie e anime verifica l’episodio e gli ID supportati.")
         except CineError as e:
-            status.update(str(e))
+            if self.is_mounted:
+                status.update(str(e))
 
     @on(Input.Changed, "#stream-filter")
     @on(Select.Changed, "#stream-language")
@@ -257,12 +267,17 @@ class StreamsScreen(DialogScreen):
         button.disabled = True
         status.update("Preparo la sorgente e avvio il player…")
         try:
+            if not self.is_mounted:
+                return
             await self.app.service.play(stream, self.media, self.video_id)
-            status.update("Player avviato. I controlli sono nella finestra video.")
+            if self.is_mounted:
+                status.update("Player avviato. I controlli sono nella finestra video.")
         except (CineError, OSError) as e:
-            status.update(str(e) if isinstance(e, CineError) else "Impossibile avviare il player.")
+            if self.is_mounted:
+                status.update(str(e) if isinstance(e, CineError) else "Impossibile avviare il player.")
         finally:
-            button.disabled = not bool(self.visible_items)
+            if self.is_mounted:
+                button.disabled = not bool(self.visible_items)
 
     @on(Button.Pressed, "#browser")
     def browser(self):
