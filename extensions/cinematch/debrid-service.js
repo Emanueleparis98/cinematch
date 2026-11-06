@@ -31,7 +31,7 @@ export function installDebridService(){
         const stream=message.stream??{};
         const hash=torrentHash(stream);
         const context={season:message.season,episode:message.episode};
-        const id=JSON.stringify([value.provider,hash,stream.fileIdx,context.season,context.episode]);
+        const id=JSON.stringify([value.provider,value.key,hash,stream.fileIdx,context.season,context.episode]);
         if(!active.has(id))active.set(id,client(value).then(api=>api.resolve(stream,context)).finally(()=>active.delete(id)));
         const result=await active.get(id);const current=await credential();
         if(!current||current.provider!==value.provider||current.key!==value.key)throw new Error('Servizio scollegato o modificato. Riapri le sorgenti e riprova.');
