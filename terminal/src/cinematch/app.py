@@ -191,6 +191,8 @@ class CinemaApp(App):
                     await self.service.addons.initialize()
                     self.initialized = True
                 items = await self.service.search(query, section, source, self.skip)
+            if not self.is_mounted:
+                return
             if append:
                 existing = {m.key for m in self.items}
                 self.items += [m for m in items if m.key not in existing]
@@ -207,11 +209,15 @@ class CinemaApp(App):
             else:
                 status.update(f"{len(self.items)} titoli"+(" · "+errors if errors else " · seleziona un titolo per dettagli ed episodi"))
         except (CineError, OSError) as e:
-            status.update(str(e) if isinstance(e, CineError) else "Non riesco a leggere i dati locali.")
+            if self.is_mounted:
+                status.update(str(e) if isinstance(e, CineError) else "Non riesco a leggere i dati locali.")
         finally:
-            table.loading = False
+            if self.is_mounted:
+                table.loading = False
 
     def clear_detail(self):
+        if not self.is_mounted:
+            return
         self.current = None
         self.detail_generation += 1
         self.workers.cancel_group(self, "detail")
@@ -224,6 +230,8 @@ class CinemaApp(App):
             self.query_one("#"+bid, Button).disabled = True
 
     def fill(self):
+        if not self.is_mounted:
+            return
         self.visible_items = self.items[:]
         table = self.query_one("#results", DataTable)
         table.clear()
@@ -244,6 +252,8 @@ class CinemaApp(App):
 
     @work(exclusive=True, group="detail")
     async def show_detail(self, media, generation):
+        if not self.is_mounted:
+            return
         self.current = media
         for bid in ("favorite", "browser"):
             self.query_one("#"+bid, Button).disabled = False
@@ -253,7 +263,7 @@ class CinemaApp(App):
         self.query_one("#streams", Button).disabled = True
         try:
             detail = await self.service.details(media)
-            if generation != self.detail_generation:
+            if generation != self.detail_generation or not self.is_mounted:
                 return
             detail.resume_video_id = media.resume_video_id
             self.current = detail
@@ -275,28 +285,39 @@ class CinemaApp(App):
                 select.value = chosen
                 self.load_episodes(detail, chosen)
         except (CineError, ValueError, TypeError) as e:
-            if generation == self.detail_generation:
+            if generation == self.detail_generation and self.is_mounted:
                 self.query_one("#media-meta", Static).update(str(e) if isinstance(e, CineError) else "Scheda parziale: alcuni metadati non sono disponibili.")
         finally:
-            if generation == self.detail_generation:
+            if generation == self.detail_generation and self.is_mounted:
                 self.query_one("#streams", Button).disabled = False
 
     @on(Select.Changed, "#season")
     def change_season(self, event):
         if self.current and isinstance(event.value, int):
-            self.load_episodes(self.current, event.value)
+            if self.current.tmdb:
+                self.load_episodes(self.current, event.value)
+            else:
+                self.set_episode_options(self.current, [v for v in self.current.videos if int(v.get("season") or 1) == event.value])
+
+    def set_episode_options(self, media, episodes):
+        if not self.is_mounted or self.current is not media:
+            return
+        select = self.query_one("#episode", Select)
+        select.set_options([(f"{v.get('episode', i+1):02} · {plain_title(v)}", v["id"]) for i, v in enumerate(episodes)] or [("Nessun episodio disponibile", "")])
+        select.value = media.resume_video_id if any(v["id"] == media.resume_video_id for v in episodes) else episodes[0]["id"] if episodes else ""
 
     @work(exclusive=True, group="episodes")
     async def load_episodes(self, media, season):
+        if not self.is_mounted:
+            return
         try:
             episodes = await self.service.episodes(media, season)
-            if self.current is not media:
+            if self.current is not media or not self.is_mounted:
                 return
-            select = self.query_one("#episode", Select)
-            select.set_options([(f"{v.get('episode', i+1):02} · {plain_title(v)}", v["id"]) for i, v in enumerate(episodes)] or [("Nessun episodio disponibile", "")])
-            select.value = media.resume_video_id if any(v["id"] == media.resume_video_id for v in episodes) else episodes[0]["id"] if episodes else ""
+            self.set_episode_options(media, episodes)
         except (CineError, ValueError, TypeError):
-            self.query_one("#status", Static).update("Non riesco a leggere gli episodi. Riprova o scegli un’altra fonte.")
+            if self.is_mounted:
+                self.query_one("#status", Static).update("Non riesco a leggere gli episodi. Riprova o scegli un’altra fonte.")
 
     @on(DataTable.RowSelected, "#results")
     @on(Button.Pressed, "#streams")
