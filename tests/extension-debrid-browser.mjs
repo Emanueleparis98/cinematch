@@ -8,6 +8,7 @@ const manifest=JSON.parse(await readFile(join(extension,'manifest.json'),'utf8')
 assert.equal(manifest.host_permissions.some(host=>/real-debrid|torbox/.test(host)),false);
 manifest.host_permissions.push('https://addon.test/*','https://api.real-debrid.com/*','https://api.torbox.app/*','https://cdn.test/*');await writeFile(join(extension,'manifest.json'),JSON.stringify(manifest));
 const context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,viewport:{width:420,height:850},args:[`--load-extension=${extension}`,`--disable-extensions-except=${extension}`]});
+let holdOld=false,releaseOld=null;
 const calls=[];const hash='a'.repeat(40);
 const media=await readFile('tests/fixtures/player/pattern.mp4');
 await context.route('https://cdn.test/**',route=>{assert.equal(route.request().headers().authorization,undefined);return route.fulfill({contentType:'video/mp4',headers:{'Access-Control-Allow-Origin':'*'},body:media});});
@@ -17,8 +18,9 @@ await context.route('https://addon.test/**',route=>{
  if(route.request().url().includes('/stream/'))return route.fulfill({contentType:'application/json',body:JSON.stringify({streams:[{name:'Torrent di prova',infoHash:hash}]})});
  return route.fulfill({contentType:'application/json',body:JSON.stringify({id:'fixture',name:'Addon di prova',version:'1',types:['movie'],resources:['stream']})});
 });
-await context.route('https://api.real-debrid.com/**',route=>{
+await context.route('https://api.real-debrid.com/**',async route=>{
  const request=route.request(),path=new URL(request.url()).pathname;calls.push({provider:'rd',path,auth:request.headers().authorization});
+ if(holdOld&&path.endsWith('/unrestrict/link')&&request.headers().authorization==='Bearer personal-key-rd')await new Promise(resolve=>{releaseOld=resolve;});
  let body=path.endsWith('/user')?{username:'fixture'}:path.endsWith('addMagnet')?{id:'torrent'}:path.includes('/info/')?{status:'downloaded',files:[{id:1,path:'movie.mkv',selected:1}],links:['https://host.test/link']}:{download:'https://cdn.test/movie.mkv'};
  return route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
 });
@@ -51,6 +53,18 @@ try{
  await check('player resolves hashes with the saved RD key without adding addon credentials',async()=>{
   const result=await player.evaluate(infoHash=>chrome.runtime.sendMessage({type:'debrid-resolve',stream:{infoHash}}),hash);
   assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.url,'https://cdn.test/movie.mkv');assert.equal(calls.filter(call=>call.provider==='rd').every(call=>call.auth==='Bearer personal-key-rd'),true);
+ });
+ await check('rotating the key isolates concurrent requests and rejects the old account result',async()=>{
+  holdOld=true;const old=player.evaluate(infoHash=>chrome.runtime.sendMessage({type:'debrid-resolve',stream:{infoHash}}),'b'.repeat(40));
+  for(let i=0;i<100&&!releaseOld;i++)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.ok(releaseOld);
+  try{
+   await page.locator('#debrid-key').fill('personal-key-rd2');await page.locator('#debrid-form button[type=submit]').click();
+   await page.waitForFunction(()=>document.querySelector('#debrid-key').value==='');
+   const result=await Promise.race([player.evaluate(infoHash=>chrome.runtime.sendMessage({type:'debrid-resolve',stream:{infoHash}}),'b'.repeat(40)),new Promise((_,reject)=>setTimeout(()=>reject(new Error('New credential reused the old request')),5000))]);
+   assert.equal(result.ok,true);
+  }finally{holdOld=false;releaseOld();}
+  assert.equal((await old).ok,false);
  });
  await check('switching to TorBox uses the new global key and cached-only torrent resolution',async()=>{
   await page.locator('#debrid-provider').selectOption('torbox');await page.locator('#debrid-key').fill('personal-key-torbox');await page.locator('#debrid-form button[type=submit]').click();
