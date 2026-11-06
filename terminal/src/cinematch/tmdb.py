@@ -54,7 +54,7 @@ class Tmdb:
         if section in {"tv", "anime"}:
             return []
         kind = "tv" if section == "series" else "movie" if section == "movie" else "multi"
-        data = await self.request(f"/search/{kind}" if query else f"/trending/{'all' if kind == 'multi' else kind}/week", **({"query": query, "include_adult": "false"} if query else {}), page=skip//20+1)
+        data = await self.request(f"/search/{kind}" if query else f"/trending/{'all' if kind == 'multi' else kind}/week", **({"query": query, "include_adult": "false"} if query else {}), page=skip+1)
         return [m for item in data.get("results", []) if (m := self.parse(item, item.get("media_type", kind)))]
 
     async def details(self, media):

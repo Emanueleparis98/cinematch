@@ -141,7 +141,7 @@ class CinemaApp(App):
 
     @on(Button.Pressed, "#more")
     def more(self):
-        self.skip += 100 if not self.service.store.config["tmdb_key"] else 20
+        self.skip += 1
         self.load_results(append=True)
 
     @work(exclusive=True, group="search")
@@ -244,6 +244,8 @@ class CinemaApp(App):
             select = self.query_one("#episode", Select)
             select.set_options([(f"{v.get('episode', i+1):02} · {plain_title(v)}", v["id"]) for i, v in enumerate(episodes)] or [("Nessun episodio disponibile", "")])
             select.value = media.resume_video_id if any(v["id"] == media.resume_video_id for v in episodes) else episodes[0]["id"] if episodes else ""
+            if not episodes and media.source == "CB01":
+                self.query_one("#status", Static).update("La pagina non espone singoli episodi leggibili. Usa Apri scheda per verificare l’eventuale cartella della serie.")
         except (CineError, ValueError, TypeError):
             self.query_one("#status", Static).update("Non riesco a leggere gli episodi. Riprova o scegli un altro catalogo.")
 

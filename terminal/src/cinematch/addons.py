@@ -107,6 +107,7 @@ class Addons:
         self.semaphore = asyncio.Semaphore(5)
         self.defaults = []
         self.errors = []
+        self.offsets = {}
 
     async def add(self, url, *, default=False):
         url = manifest_url(url)
@@ -138,6 +139,8 @@ class Addons:
 
     async def search(self, query, section="all", skip=0):
         self.errors = []
+        if not skip:
+            self.offsets = {}
         async def one(addon, cat):
             kind, cid = cat.get("type"), cat.get("id")
             if not isinstance(kind, str) or not isinstance(cid, str):
@@ -153,13 +156,19 @@ class Addons:
             parts = []
             if query and searchable:
                 parts.append("search="+quote(query, safe=""))
-            if skip and "skip" in names:
-                parts.append(f"skip={skip}")
+            key = (addon["url"], kind, cid, query, section)
+            offset = self.offsets.get(key, 0)
+            if skip and ("skip" in names or "skip" in cat.get("extraSupported", [])):
+                if not offset:
+                    return []
+                parts.append(f"skip={offset}")
             elif skip:
                 return []
             try:
                 data = await self.json(endpoint(addon, "catalog", kind, cid, "&".join(parts)))
-                items = [m for item in data.get("metas", [])[:200] if isinstance(item, dict) and (m := parse_media({"type": kind, **item}, source=addon["name"], addon_url=addon["url"]))]
+                raw = data.get("metas", [])[:200]
+                self.offsets[key] = offset+len(raw) if raw else 0
+                items = [m for item in raw if isinstance(item, dict) and (m := parse_media({"type": kind, **item}, source=addon["name"], addon_url=addon["url"]))]
                 return [m for m in items if query.casefold() in m.title.casefold()] if query and not searchable else items
             except (CineError, ValueError, TypeError, AttributeError):
                 self.errors.append(addon["name"]+": catalogo non disponibile.")

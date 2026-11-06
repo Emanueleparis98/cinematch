@@ -49,7 +49,7 @@ def sources(fragment):
             continue
         seen.add(url)
         label = plain(tag.get_text(" ", strip=True), 100)
-        name = "Maxstream" if "uprot.net" in url else "Mixdrop"
+        name = "Maxstream" if "uprot.net" in url or "maxstream" in label.lower() else "Mixdrop"
         quality = "HD" if re.search(r"/(e|mse)/", url) else "SD"
         found.append(Stream(name+" "+quality, label, "CB01", url, "page"))
     return sorted(found, key=lambda s: ("HD" not in s.name, "Mixdrop" not in s.name))
@@ -104,7 +104,7 @@ class Cb01:
         text = await self.net.text(base, params={"s": query}, redirects=True, limit=2*1024*1024)
         soup = BeautifulSoup(text, "html.parser")
         seen, items = set(), []
-        for anchor in soup.select("article h2 a[href], article h3 a[href], .entry-title a[href], h2 a[href]"):
+        for anchor in soup.select("article h2 a[href], article h3 a[href], .card-title a[href], .entry-title a[href], h2 a[href]"):
             url = urljoin(base, str(anchor.get("href", "")))
             if urlsplit(url).hostname not in {"cb01one.org", "www.cb01one.org"} or url in seen:
                 continue

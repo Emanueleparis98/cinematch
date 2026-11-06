@@ -11,7 +11,7 @@ from cinematch.addons import (
     parse_streams,
     supports,
 )
-from cinematch.cb01 import parse_article, unpack
+from cinematch.cb01 import Cb01, parse_article, unpack
 from cinematch.debrid import Debrid, choose_file
 from cinematch.models import CineError, Media, Stream, parse_media, web_url
 from cinematch.net import Network
@@ -217,6 +217,21 @@ def test_cb01_sources_and_standard_packer_without_js_execution():
     media, choices = parse_article(text, "https://cb01one.org/film/")
     assert media.title == "Film" and media.year == "2025"
     assert len(choices[""]) == 1 and choices[""][0].name == "Mixdrop HD"
+
+
+async def test_cb01_search_reads_current_card_titles_not_sidebar_or_ad_links():
+    text = '''<html><h1>2 Film Trovati</h1>
+    <h3 class="card-title"><a href="https://cb01one.org/film-hd-2025/">Film [HD] (2025)</a></h3>
+    <h3 class="rpwe-title"><a href="https://cb01one.org/other/">Sidebar film</a></h3>
+    <h3 class="card-title"><a href="https://ads.example.org/">Annuncio</a></h3></html>'''
+    async def api(request):
+        return httpx.Response(200, text=text)
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    try:
+        items = await Cb01(net).search("Film", "movie")
+        assert len(items) == 1 and items[0].title == "Film" and items[0].year == "2025"
+    finally:
+        await net.close()
 
 
 def test_player_uses_argv_and_never_shell(monkeypatch, tmp_path):
