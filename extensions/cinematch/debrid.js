@@ -26,7 +26,23 @@ export function createDebridClient({provider,key,fetcher=fetch,getTask=async()=>
     const url=new URL(path,config.base);for(const [name,value]of Object.entries(query??{}))url.searchParams.set(name,String(value));
     let response;
     try{response=await fetcher(url.href,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+key},body,credentials:'omit',referrerPolicy:'no-referrer',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});}catch{throw new Error(`${config.name} non raggiungibile. Controlla rete e permessi del servizio.`);}
-    if(!response.ok)throw Object.assign(new Error([401,403].includes(response.status)?`${config.name}: chiave non valida o account non abilitato.`:response.status===429?`${config.name}: limite di richieste raggiunto. Riprova più tardi.`:`${config.name}: richiesta non riuscita (${response.status}).`),{status:response.status});
+    if(!response.ok){
+      // Read only the documented numeric code. Never display provider bodies:
+      // they can contain account details, links or the submitted credential.
+      let code;
+      if(provider==='rd')try{const data=JSON.parse(new TextDecoder().decode(await readUpdateBody(response,{maxBytes:64*1024})));if(Number.isSafeInteger(data?.error_code))code=data.error_code;}catch{}
+      let message,recovery;
+      if(provider==='rd'&&code===35){message='Real-Debrid: file bloccato dal servizio per violazione del copyright (codice 35). Verifica i dettagli sul sito Real-Debrid; il player non può sbloccarlo.';recovery='choose';}
+      else if(response.status===451){message=`${config.name}: accesso rifiutato per una restrizione legale (451). Verifica i dettagli sul sito del servizio; il player non può sbloccare il contenuto.`;recovery='choose';}
+      else if(provider==='rd'&&code===22){message='Real-Debrid: indirizzo IP non autorizzato (codice 22). Verifica la connessione e lo stato dell’account sul sito Real-Debrid.';recovery='choose';}
+      else if(provider==='rd'&&[23,36].includes(code)){message=`Real-Debrid: limite di traffico o utilizzo dell’account raggiunto (codice ${code}). Controlla i limiti sul sito Real-Debrid.`;recovery='choose';}
+      else if(provider==='rd'&&[24,28].includes(code)){message=`Real-Debrid: file non disponibile o non consentito dal servizio (codice ${code}).`;recovery='choose';}
+      else if(provider==='rd'&&code===37){message='Real-Debrid: operazione API disabilitata dal servizio (codice 37).';recovery='choose';}
+      else if(response.status===429||(provider==='rd'&&[5,34].includes(code)))message=`${config.name}: limite di richieste raggiunto. Riprova più tardi.`;
+      else if([401,403].includes(response.status))message=`${config.name}: chiave non valida o account non abilitato. Verifica chiave e account nelle impostazioni → Flussi.`;
+      else message=`${config.name}: richiesta non riuscita (${response.status}).`;
+      throw Object.assign(new Error(message),{status:response.status,recovery});
+    }
     if(response.status===204)return null;
     let data;try{data=JSON.parse(new TextDecoder().decode(await readUpdateBody(response,{maxBytes:4*1024*1024})));}catch{throw new Error(`${config.name}: risposta non valida.`);}
     if(provider==='torbox'){if(data?.success!==true)throw new Error('TorBox: operazione non disponibile. Verifica account, disponibilità in cache e limiti del piano.');return data.data;}
