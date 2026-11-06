@@ -1,9 +1,12 @@
-# CineMatch — estensione browser 3.20.1
+# CineMatch — estensione browser 3.20.2
 
 La **3.20.0** aggiunge la scheda **Flussi** al popup: addon manifest JSON e
 una chiave globale Real-Debrid oppure TorBox per i torrent restituiti dagli
-addon compatibili. La modalità Live TV / Sport ritirata non è inclusa. La 3.20.1 isola anche
-le richieste già in corso quando si cambia la chiave del servizio.
+addon compatibili. La modalità Live TV / Sport ritirata non è inclusa. Le richieste restano isolate
+quando si cambia la chiave del servizio. La **3.20.2** spiega i rifiuti Real-Debrid
+451/codice 35 e distingue errori di IP e quota da una chiave non valida.
+Il player torna alle sorgenti invece di proporre un nuovo tentativo sul file bloccato.
+Questa correzione non rende disponibili i contenuti rifiutati dal servizio.
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -14,7 +17,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.20.1.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.20.2.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
@@ -130,8 +133,8 @@ la cartella già salvata senza riaprire la scelta della cartella. Il pulsante
 **Aggiorna ora** apre una finestra persistente e continua automaticamente quando
 l’accesso è già autorizzato. Prima di modificare i file, CineMatch verifica che
 la cartella scelta sia quella effettivamente caricata dal browser.
-La **3.20.1** include già l’updater: per una nuova installazione usa lo ZIP
-3.20.1, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
+La **3.20.2** include già l’updater: per una nuova installazione usa lo ZIP
+3.20.2, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
 un aggiornamento manuale.
 
 L’icona dell’estensione mostra un badge quando è disponibile una nuova versione;

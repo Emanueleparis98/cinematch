@@ -8,7 +8,7 @@ const manifest=JSON.parse(await readFile(join(extension,'manifest.json'),'utf8')
 assert.equal(manifest.host_permissions.some(host=>/real-debrid|torbox/.test(host)),false);
 manifest.host_permissions.push('https://addon.test/*','https://api.real-debrid.com/*','https://api.torbox.app/*','https://cdn.test/*');await writeFile(join(extension,'manifest.json'),JSON.stringify(manifest));
 const context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,viewport:{width:420,height:850},args:[`--load-extension=${extension}`,`--disable-extensions-except=${extension}`]});
-let holdOld=false,releaseOld=null;
+let holdOld=false,releaseOld=null,rdRefusal=false;
 const calls=[];const hash='a'.repeat(40);
 const media=await readFile('tests/fixtures/player/pattern.mp4');
 await context.route('https://cdn.test/**',route=>{assert.equal(route.request().headers().authorization,undefined);return route.fulfill({contentType:'video/mp4',headers:{'Access-Control-Allow-Origin':'*'},body:media});});
@@ -20,6 +20,7 @@ await context.route('https://addon.test/**',route=>{
 });
 await context.route('https://api.real-debrid.com/**',async route=>{
  const request=route.request(),path=new URL(request.url()).pathname;calls.push({provider:'rd',path,auth:request.headers().authorization});
+ if(rdRefusal&&path.endsWith('/unrestrict/link'))return route.fulfill({status:451,contentType:'application/json',body:JSON.stringify({error:'infringing_file personal-key-rd2',error_code:35})});
  if(holdOld&&path.endsWith('/unrestrict/link')&&request.headers().authorization==='Bearer personal-key-rd')await new Promise(resolve=>{releaseOld=resolve;});
  let body=path.endsWith('/user')?{username:'fixture'}:path.endsWith('addMagnet')?{id:'torrent'}:path.includes('/info/')?{status:'downloaded',files:[{id:1,path:'movie.mkv',selected:1}],links:['https://host.test/link']}:{download:'https://cdn.test/movie.mkv'};
  return route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
@@ -65,6 +66,32 @@ try{
    assert.equal(result.ok,true);
   }finally{holdOld=false;releaseOld();}
   assert.equal((await old).ok,false);
+ });
+ await check('RD 451 reaches the player as an explicit refusal without retrying the blocked torrent',async()=>{
+  await page.getByRole('checkbox',{name:'Attiva Addon di prova'}).check();
+  await worker.evaluate(()=>chrome.storage.session.set({tmdbCredential:'eyJtest.payload.signature'}));
+  rdRefusal=true;
+  try{
+   await player.goto(`chrome-extension://${id}/cinema.html?movie=5156`);
+   await player.getByRole('button',{name:'Riproduci Torrent di prova da Addon di prova'}).click();
+   await player.waitForFunction(()=>document.querySelector('#messageText').textContent.includes('copyright'));
+   assert.equal((await player.locator('#messageText').textContent()).includes('personal-key'),false);
+   assert.equal(await player.locator('#messageAction').textContent(),'Torna alle sorgenti');
+   assert.equal(await player.locator('#video').getAttribute('src'),null);
+   const before=calls.filter(call=>call.provider==='rd').length;
+   await player.locator('#playerView').waitFor({state:'visible'});
+   await player.locator('#messageAction').click();
+   await player.locator('#pickerView').waitFor({state:'visible'});
+   assert.equal(calls.filter(call=>call.provider==='rd').length,before);
+   await player.goto(`chrome-extension://${id}/watch.html?movie=5156`);
+   await player.getByRole('button',{name:'Riproduci Torrent di prova da Addon di prova'}).click();
+   await player.waitForFunction(()=>document.querySelector('#playback-status').textContent.includes('copyright'));
+   assert.equal(await player.locator('#retry-play').textContent(),'Scegli un altro flusso');
+   assert.equal(await player.locator('#video').getAttribute('src'),null);
+   const beforeWatch=calls.filter(call=>call.provider==='rd').length;
+   await player.locator('#retry-play').click();
+   assert.equal(calls.filter(call=>call.provider==='rd').length,beforeWatch);
+  }finally{rdRefusal=false;}
  });
  await check('switching to TorBox uses the new global key and cached-only torrent resolution',async()=>{
   await page.locator('#debrid-provider').selectOption('torbox');await page.locator('#debrid-key').fill('personal-key-torbox');await page.locator('#debrid-form button[type=submit]').click();

@@ -75,7 +75,7 @@ async function playStream(stream){
     if(stream.kind==='torrent'){
       const result=await chrome.runtime.sendMessage({type:'debrid-resolve',stream:{infoHash:stream.infoHash,fileIdx:stream.fileIdx}});
       if(current!==playGeneration)return;
-      if(!result?.ok)throw new Error(result?.error??'Torrent non disponibile.');
+      if(!result?.ok)throw Object.assign(new Error(result?.error??'Torrent non disponibile.'),{recovery:result?.recovery==='choose'?'choose':undefined});
       stream={...stream,url:result.url,filename:result.filename,kind:'video'};
     }
     // Request directly in the click handler, before asynchronous cleanup can

@@ -6,7 +6,7 @@ import {permissionLabel} from "./media-access.js";
 
 const $=id=>document.getElementById(id);
 const el=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
-const send=async message=>{const result=await chrome.runtime.sendMessage(message);if(!result?.ok)throw new Error(result?.error??"CineMatch non disponibile.");return result;};
+const send=async message=>{const result=await chrome.runtime.sendMessage(message);if(!result?.ok)throw Object.assign(new Error(result?.error??"CineMatch non disponibile."),{recovery:result?.recovery==='choose'?'choose':undefined});return result;};
 const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)");
 const formatTime=seconds=>{seconds=Math.max(0,Number.isFinite(seconds)?Math.floor(seconds):0);const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;return h?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${m}:${String(s).padStart(2,"0")}`;};
 const formatRuntime=minutes=>{const value=Number(minutes);if(!Number.isFinite(value)||value<1)return "";const h=Math.floor(value/60),m=value%60;return h?`${h}h ${m}m`:`${m}m`;};
@@ -63,7 +63,9 @@ function showPlayerError(error){
   const message=$("playerMessage"),text=$("messageText"),action=$("messageAction");
   message.hidden=false;
   text.textContent=error?.message??"Non riesco a riprodurre questa sorgente.";
-  if(error?.retryTorrent){
+  if(error?.recovery==='choose'){
+    action.hidden=false;action.textContent="Torna alle sorgenti";action.onclick=showPicker;
+  }else if(error?.retryTorrent){
     action.hidden=false;action.textContent="Riprova torrent";action.onclick=()=>{hidePlayerMessage();error.retryTorrent();};
   }else if(error?.mediaOrigin){
     const mediaOrigin=error.mediaOrigin;
@@ -477,7 +479,7 @@ async function startStream(stream,{resumeAt=0}={}){
     if(request!==playRequest)return;
     if(resumeAt>5)await player.seek(resumeAt);
     else if(previous!==null){const duration=player.duration;if(duration>5)await player.seek(previous*duration);}
-  }catch(error){if(request===playRequest)showPlayerError(stream.kind==='torrent'?Object.assign(new Error(error.message),{retryTorrent:()=>startStream(stream,{resumeAt})}):error);}
+  }catch(error){if(request===playRequest)showPlayerError(stream.kind==='torrent'&&error.recovery!=='choose'?Object.assign(new Error(error.message),{retryTorrent:()=>startStream(stream,{resumeAt})}):error);}
 }
 
 /* ---------- Media, episodes and poster ---------- */

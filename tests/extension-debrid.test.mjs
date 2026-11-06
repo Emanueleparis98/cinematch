@@ -44,3 +44,29 @@ test('API failures never echo credentials or private server response bodies',asy
   const client=createDebridClient({provider:'rd',key,fetcher:async()=>new Response(key,{status:401})});
   await assert.rejects(()=>client.verify(),error=>!error.message.includes(key)&&/non valida/.test(error.message));
 });
+test('RD legal refusals preserve documented causes and do not offer a torrent retry',async()=>{
+  for(const [status,body,expected]of [
+    [451,JSON.stringify({error:'infringing_file '+key,error_code:35}),/copyright.*35/],
+    [403,JSON.stringify({error:'private '+key,error_code:35}),/copyright.*35/],
+    [451,'<html>Private '+key+'</html>',/restrizione legale.*451/],
+    [451,JSON.stringify({error:key,error_code:'35'}),/restrizione legale.*451/],
+    [451,'x'.repeat(65537),/restrizione legale.*451/]
+  ]){
+    let calls=0;
+    const client=createDebridClient({provider:'rd',key,fetcher:async()=>{calls++;return new Response(body,{status});}});
+    await assert.rejects(()=>client.resolve({infoHash:hash}),error=>error.status===status&&error.recovery==='choose'&&expected.test(error.message)&&!error.message.includes(key));
+    assert.equal(calls,1,'No request follows an explicit refusal');
+  }
+});
+test('RD numeric codes distinguish IP, quota and file failures from invalid credentials',async()=>{
+  for(const [code,expected]of [[22,/IP non autorizzato/],[23,/limite di traffico/],[36,/limite di traffico/],[24,/file non disponibile/],[28,/file non disponibile/],[37,/API disabilitata/],[8,/chiave non valida/]]){
+    const client=createDebridClient({provider:'rd',key,fetcher:async()=>Response.json({error:key,error_code:code},{status:403})});
+    await assert.rejects(()=>client.verify(),error=>expected.test(error.message)&&!error.message.includes(key));
+  }
+});
+test('RD rate limits and temporary server failures retain retry recovery',async()=>{
+  for(const [status,code,expected]of [[429,undefined,/limite di richieste/],[403,34,/limite di richieste/],[503,undefined,/503/]]){
+    const client=createDebridClient({provider:'rd',key,fetcher:async()=>Response.json({error:key,error_code:code},{status})});
+    await assert.rejects(()=>client.resolve({infoHash:hash}),error=>error.recovery===undefined&&expected.test(error.message)&&!error.message.includes(key));
+  }
+});

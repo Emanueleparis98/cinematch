@@ -38,6 +38,6 @@ export function installDebridService(){
         return {ok:true,...result,provider:value.provider};
       }
       throw new Error('Operazione non autorizzata.');
-    })().then(respond).catch(error=>respond({ok:false,error:error.message}));return true;
+    })().then(respond).catch(error=>respond({ok:false,error:error.message,recovery:error.recovery==='choose'?'choose':undefined}));return true;
   });
 }
