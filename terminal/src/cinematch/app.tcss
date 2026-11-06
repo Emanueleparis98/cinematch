@@ -1,0 +1,91 @@
+Screen { background: #0c1118; color: #dbe2ea; }
+$accent: #f3be71;
+$muted: #8996a8;
+* { scrollbar-color: #445062; scrollbar-background: #101822; }
+#masthead { height: 4; padding: 1 2; background: #111a25; border-bottom: solid #2b3544; }
+#brand { width: 19; text-style: bold; }
+#tagline { color: $muted; width: 1fr; }
+#edition { width: 20; color: $accent; text-align: right; }
+#workspace { height: 1fr; }
+#sidebar { width: 23; background: #101822; border-right: solid #263343; padding: 1; }
+.eyebrow { color: $accent; text-style: bold; margin: 1 0; height: 1; }
+.nav { width: 100%; min-width: 0; height: 2; border: none; background: #101822; content-align: left middle; text-wrap: nowrap; text-overflow: ellipsis; padding: 0 1; }
+.nav:hover { background: #1b2735; }
+.nav.active { background: #28313a; color: $accent; text-style: bold; border-left: thick $accent; }
+.sidebar-note { color: $muted; margin: 2 1; height: auto; }
+#content { width: 1fr; padding: 0 2 1 2; }
+#search-bar { height: 3; }
+#search { width: 1fr; margin-right: 1; }
+#search-button { min-width: 10; }
+#filters { height: 3; margin-top: 1; }
+#filters Select { width: 25%; margin-right: 1; }
+#local-filter { width: 1fr; }
+Input, Select, TextArea { background: #121c28; border: tall #334155; color: #e1e6ed; }
+Input:focus, Select:focus, TextArea:focus { border: tall $accent; }
+Button { background: #243140; color: #dce4ec; border: none; margin-right: 1; min-width: 12; height: 3; }
+Button:hover { background: #34475b; }
+Button.-primary { background: $accent; color: #1b1710; text-style: bold; }
+Button.-primary:hover { background: #ffcf8c; }
+#status { color: $muted; margin: 1 0; height: 1; }
+DataTable { background: #101822; height: 1fr; min-height: 4; }
+DataTable > .datatable--header { background: #1a2735; color: #9cadbf; text-style: bold; }
+DataTable > .datatable--cursor { background: #3d352b; color: #ffe0ad; }
+DataTable > .datatable--even-row { background: #101822; }
+DataTable > .datatable--odd-row { background: #141f2b; }
+#list-actions { height: 3; margin-top: 1; }
+#playback { width: 1fr; padding: 1; color: $accent; }
+#detail { height: 12; margin-top: 1; border-top: solid #2b3544; padding-top: 1; }
+#media-title { text-style: bold; color: $accent; height: 1; }
+#media-meta { color: $muted; height: 2; }
+#overview-scroll { height: 1fr; }
+#media-overview { height: auto; }
+#episode-row { height: 3; }
+#episode-row Select { width: 1fr; margin-right: 1; }
+.actions { height: 3; margin-top: 1; }
+.actions Button { min-width: 10; width: auto; }
+Footer { background: #111a25; color: $muted; }
+ModalScreen { align: center middle; background: #05080dbd; }
+.dialog { width: 90%; max-width: 130; height: 90%; padding: 1 2; background: #101822; border: round #897044; }
+.dialog-title { color: $accent; text-style: bold; height: 2; }
+.muted { color: $muted; height: auto; margin: 1 0; }
+#settings-dialog { max-width: 80; }
+#settings-dialog Label { margin-top: 1; }
+#settings-status, #addon-status, #streams-status, #prompt-status, #import-status { height: auto; min-height: 2; margin-top: 1; color: $muted; }
+#addon-table { margin-top: 1; }
+#stream-description { height: 5; margin-top: 1; }
+#current-detail-scroll { height: 11; margin-top: 1; }
+#current-detail { height: auto; }
+#current-selection { height: 2; color: $accent; margin-top: 1; }
+#prompt-dialog TabbedContent { height: 1fr; }
+#prompt-dialog TabPane { padding: 0; }
+#prompt-question { height: 6; }
+#prompt-output { height: 1fr; min-height: 5; }
+.form-row { height: 3; }
+.form-row Input, .form-row Select { width: 1fr; }
+#prompt-dialog Input, #prompt-dialog Select { margin-bottom: 1; }
+#prompt-dialog Label { margin-bottom: 1; }
+#import-value { height: 1fr; }
+Screen.compact #sidebar { width: 20; }
+Screen.compact #content { padding: 0 1; }
+Screen.compact #tagline { display: none; }
+Screen.compact #edition { width: 1fr; }
+Screen.compact #detail { height: 11; }
+Screen.compact #inspire { display: none; }
+Screen.short #masthead { height: 3; padding: 0 1; }
+Screen.short #content > .eyebrow { display: none; }
+Screen.short #content { padding: 0 1; }
+Screen.short #filters { margin: 0; }
+Screen.short #status { margin: 0; height: 1; }
+Screen.short #list-actions { display: none; }
+Screen.short #detail { height: 9; margin: 0; }
+Screen.short #overview-scroll, Screen.short #media-meta { display: none; }
+Screen.short #results { min-height: 3; }
+ModalScreen.small .dialog { padding: 0 1; height: 95%; }
+ModalScreen.small .dialog-title { height: 1; }
+ModalScreen.small .actions { margin-top: 0; }
+ModalScreen.small #current-detail-scroll { height: 4; margin: 0; }
+ModalScreen.small #current-selection { height: 1; margin: 0; }
+ModalScreen.small #addons-dialog .muted { display: none; }
+ModalScreen.small #addon-status { height: 2; margin: 0; }
+ModalScreen.small #stream-description { height: 2; margin: 0; }
+ModalScreen.small #streams-status { max-height: 3; margin: 0; }

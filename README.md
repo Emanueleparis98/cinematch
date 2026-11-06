@@ -1,3 +1,33 @@
+# CineMatch — ora anche nel terminale
+
+La nuova **CineMatch Terminal 0.1.0** porta ricerca di film, serie, anime e TV,
+addon JSON, Real-Debrid/TorBox, preferiti, cronologia, 74 correnti cinematografiche
+e generazione locale di prompt in un’app TUI per Linux e Windows.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Emanueleparis98/cinematch/main/terminal/install.sh | sh
+cinematch
+```
+
+Su Windows, con Scoop già installato:
+
+```powershell
+scoop bucket add cinematch https://github.com/Emanueleparis98/cinematch
+scoop install cinematch/cinematch
+cinematch
+```
+
+![CineMatch Terminal](terminal/docs/terminal.png)
+
+[Installazione completa, Arch/pacman, Windows PowerShell, uso e privacy](terminal/README.md)
+· [Release terminale 0.1.0](https://github.com/Emanueleparis98/cinematch/releases/tag/terminal-v0.1.0)
+
+Per i video aggiungi i tuoi addon e installa mpv o VLC. Per i prompt non serve
+alcuna API AI. L’app terminale ha un proprio canale di aggiornamento; seguono
+le istruzioni dell’estensione browser, che rimane disponibile.
+
+---
+
 # CineMatch — estensione browser 3.20.2
 
 La **3.20.0** aggiunge la scheda **Flussi** al popup: addon manifest JSON e

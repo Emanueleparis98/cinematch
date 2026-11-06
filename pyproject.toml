@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cinematch"
+version = "0.1.0"
+description = "Cinema, serie, anime, TV e correnti cinematografiche nel terminale"
+requires-python = ">=3.11"
+readme = "terminal/README.md"
+license = "MIT"
+license-files = ["terminal/LICENSE"]
+dependencies = ["textual>=8.2,<9", "httpx>=0.28,<1", "beautifulsoup4>=4.13,<5", "platformdirs>=4.5,<5", "pyperclip>=1.9,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10", "pytest-asyncio>=1.3,<2", "respx>=0.22,<1"]
+
+[project.scripts]
+cinematch = "cinematch.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Emanueleparis98/cinematch"
+
+[tool.hatch.build.targets.wheel]
+packages = ["terminal/src/cinematch"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/terminal", "/pyproject.toml", "/plugins/cinema-currents/assets/movements.json"]
+exclude = ["terminal/dist", "terminal/.venv", "**/__pycache__"]
+
+[tool.pytest.ini_options]
+testpaths = ["terminal/tests"]
+pythonpath = ["terminal/src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -1,2 +1,6 @@
 # Keep pinned third-party resources byte-identical on every platform.
 extensions/cinematch/vendor/libmedia/** -text
+terminal/** text eol=lf
+terminal/docs/*.png -text
+plugins/cinema-currents/assets/movements.json text eol=lf
+pyproject.toml text eol=lf
