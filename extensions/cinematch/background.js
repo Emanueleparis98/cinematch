@@ -3,6 +3,7 @@ import {insertIntoComposer} from "./composer.js";
 import {credential,createTmdbClient} from "./tmdb.js";
 import {defaultEpisode,publicMedia} from "./cb01-resolver.js";
 import {Cb01Error,inspectArticle,resolveEpisode,resolveMovie} from "./cb01-service.js";
+import {installDebridService} from "./debrid-service.js";
 import {cleanupWithdrawnRelease} from "./upgrade-cleanup.js";
 import {validUpdate,readUpdateBody,versionIsNewer} from "./update-core.js";
 
@@ -11,6 +12,7 @@ const storageReady=Promise.all([
   chrome.storage.session.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"})
 ]);
 storageReady.then(()=>cleanupWithdrawnRelease()).catch(()=>{});
+installDebridService();
 async function getCredential(){
   await storageReady;
   const session=await chrome.storage.session.get("tmdbCredential");

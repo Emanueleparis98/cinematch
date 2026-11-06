@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="settings-popup.css">
   <script type="module" src="settings-popup.js"></script>
   <script type="module" src="updater.js"></script>
+  <script type="module" src="stream-settings.js"></script>
 </head>
 <body>
   <header class="cc-head">
@@ -18,6 +19,7 @@
 
   <div class="cc-tabs" role="tablist" aria-label="Impostazioni">
     <button id="tab-connection" role="tab" aria-controls="connection-view" aria-selected="true" type="button">Connessione</button>
+    <button id="tab-streams" role="tab" aria-controls="streams-view" aria-selected="false" type="button">Flussi</button>
     <button id="tab-functions" role="tab" aria-controls="functions-view" aria-selected="false" type="button">Funzioni</button>
     <button id="tab-updates" role="tab" aria-controls="updates-view" aria-selected="false" type="button">Aggiorna</button>
   </div>
@@ -32,6 +34,26 @@
       <p id="settings-status" class="cc-status" role="status" aria-live="polite"></p>
     </form>
     <p class="ss-muted">La credenziale resta nel browser. Le immagini TMDB e i metadati del player la usano localmente; non viene inviata alle chat.</p>
+  </main>
+
+  <main id="streams-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-streams" hidden>
+    <h2 class="ss-section-title">Addon per i flussi</h2>
+    <form id="stream-addon-form" class="ss-form">
+      <label for="stream-addon-url">Indirizzo manifest JSON dell’addon</label>
+      <input id="stream-addon-url" type="url" placeholder="https://…/manifest.json" autocomplete="off" required>
+      <button type="submit" class="cc-primary">Aggiungi addon</button>
+    </form>
+    <p id="stream-addon-status" class="cc-status" role="status" aria-live="polite"></p>
+    <div id="stream-addon-list"></div>
+    <h2 class="ss-section-title">Servizio per i torrent</h2>
+    <form id="debrid-form" class="ss-form">
+      <label for="debrid-provider">Servizio<select id="debrid-provider"><option value="rd">Real-Debrid</option><option value="torbox">TorBox</option></select></label>
+      <label for="debrid-key">Chiave API personale<input id="debrid-key" type="password" autocomplete="off" spellcheck="false" required></label>
+      <div class="ss-actions"><button type="submit" class="cc-primary">Verifica e salva</button><button id="debrid-remove" type="button">Scollega</button></div>
+    </form>
+    <p id="debrid-status" class="cc-status" role="status" aria-live="polite"></p>
+    <p class="ss-muted">Una sola chiave per tutti gli addon che restituiscono hash torrent. La chiave resta nel browser ed è inviata soltanto al servizio scelto. Gli addon con configurazione obbligatoria sul proprio server possono richiederla separatamente.</p>
+    <p class="ss-muted">Premendo Riproduci, il torrent può essere aggiunto al tuo account Real-Debrid. TorBox usa solo torrent già in cache. Disponibilità, attese e limiti dipendono dal piano del servizio.</p>
   </main>
 
   <main id="functions-view" class="cc-view ss-view" role="tabpanel" aria-labelledby="tab-functions" hidden>

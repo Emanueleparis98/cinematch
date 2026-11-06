@@ -1,3 +1,4 @@
+import {enableDebridStreams} from './debrid.js';
 import {httpUrl,manifestUrl,permissionOrigin,parseManifest,resourceUrl,parseStreams,fetchJson,MAX_JSON} from "./streams.js";
 import {declaredCodecs,compatibility,likelyIntegrated} from "./playback.js";
 import {createPlayer} from "./player-engine.js";
@@ -62,7 +63,9 @@ function showPlayerError(error){
   const message=$("playerMessage"),text=$("messageText"),action=$("messageAction");
   message.hidden=false;
   text.textContent=error?.message??"Non riesco a riprodurre questa sorgente.";
-  if(error?.mediaOrigin){
+  if(error?.retryTorrent){
+    action.hidden=false;action.textContent="Riprova torrent";action.onclick=()=>{hidePlayerMessage();error.retryTorrent();};
+  }else if(error?.mediaOrigin){
     const mediaOrigin=error.mediaOrigin;
     action.hidden=false;action.textContent=`Consenti ${permissionLabel(mediaOrigin)}`;
     action.onclick=async()=>{
@@ -429,11 +432,14 @@ async function loadAddons(){
 }
 async function loadStreams(){
   if(state.direct){state.loading=false;renderSources();return;}
+  await loadAddons();
   if(!state.movie){state.loading=false;return;}
   const series=state.kind==="tv";
   if(series&&(state.season===null||state.episode===null)){state.loading=false;return;}
   const current=++state.generation;state.loading=true;state.groups=[];state.selected=null;state.recommended=null;state.recommendedId=null;state.presented=new Map();
   renderChips();renderSources();
+  const debrid=await chrome.runtime.sendMessage({type:'debrid-status'}).catch(()=>null);
+  if(current!==state.generation)return;
   const queue=state.addons.filter(addon=>addon.enabled);
   if(!queue.length){state.loading=false;renderSources();return;}
   async function worker(){
@@ -444,7 +450,7 @@ async function loadStreams(){
         const url=resourceUrl(addon,state.movie,series?{season:state.season,episode:state.episode}:null);
         if(!url)group.error=series?"Identificativo della serie o dell’episodio non supportato da questo addon.":"Identificativo del film non supportato da questo addon.";
         else if(!await chrome.permissions.contains({origins:[permissionOrigin(url)]})){group.error="Il collegamento al sito deve essere autorizzato di nuovo.";group.permission=url;}
-        else{const parsed=parseStreams(await fetchJson(url));group.streams=parsed.map((stream,index)=>({...stream,id:`${addon.key}:${index}`,groupKey:addon.key,groupName:addon.name}));if(!group.streams.length)group.error=series?`Nessun flusso disponibile per ${episodeLabel()}.`:"Nessun flusso disponibile per questo film.";}
+        else{const parsed=enableDebridStreams(parseStreams(await fetchJson(url)),debrid?.enabled);group.streams=parsed.map((stream,index)=>({...stream,id:`${addon.key}:${index}`,groupKey:addon.key,groupName:addon.name}));if(!group.streams.length)group.error=series?`Nessun flusso disponibile per ${episodeLabel()}.`:"Nessun flusso disponibile per questo film.";}
       }catch(error){group.error=error.message??"Addon non disponibile.";}
       if(current!==state.generation)return;
       state.groups.push(group);state.groups.sort((a,b)=>a.name.localeCompare(b.name,"it"));renderChips();renderSources();
@@ -460,11 +466,18 @@ async function startStream(stream,{resumeAt=0}={}){
   const previous=state.view==="player"&&player.duration>5?Math.max(0,Math.min(1,player.currentTime/player.duration)):null;
   showPlayer(stream);
   try{
+    if(stream.kind==='torrent'){
+      await player.destroy();
+      if(request!==playRequest)return;
+      const result=await send({type:'debrid-resolve',stream:{infoHash:stream.infoHash,fileIdx:stream.fileIdx},season:state.kind==='tv'?state.season:null,episode:state.kind==='tv'?state.episode:null});
+      if(request!==playRequest)return;
+      stream={...stream,url:result.url,filename:result.filename,kind:'video',name:stream.name+' · '+(result.provider==='rd'?'Real-Debrid':'TorBox')};
+    }
     await player.load(stream);
     if(request!==playRequest)return;
     if(resumeAt>5)await player.seek(resumeAt);
     else if(previous!==null){const duration=player.duration;if(duration>5)await player.seek(previous*duration);}
-  }catch(error){if(request===playRequest)showPlayerError(error);}
+  }catch(error){if(request===playRequest)showPlayerError(stream.kind==='torrent'?Object.assign(new Error(error.message),{retryTorrent:()=>startStream(stream,{resumeAt})}):error);}
 }
 
 /* ---------- Media, episodes and poster ---------- */
@@ -706,7 +719,7 @@ $("jsonFile").onchange=async()=>{
   try{
     if(file.size>MAX_JSON)throw new Error("File troppo grande: massimo 2 MB.");
     let data;try{data=JSON.parse(await file.text());}catch{throw new Error("Il file non contiene JSON valido.");}
-    const streams=parseStreams(data);if(!streams.length)throw new Error("La lista non contiene flussi riconoscibili.");
+    const streams=enableDebridStreams(parseStreams(data),(await chrome.runtime.sendMessage({type:"debrid-status"}))?.enabled);if(!streams.length)throw new Error("La lista non contiene flussi riconoscibili.");
     const key=`import-${Date.now()}`;const group={key,name:file.name,streams:streams.map((stream,index)=>({...stream,id:`${key}:${index}`,groupKey:key,groupName:file.name})),error:null,permission:null};
     state.groups.push(group);state.loading=false;state.filter="all";renderChips();renderSources();toast(`${streams.length} ${streams.length===1?"flusso importato":"flussi importati"} per questa sessione.`);
   }catch(error){toast(error.message);}finally{$("jsonFile").value="";}

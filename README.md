@@ -1,8 +1,8 @@
-# CineMatch — estensione browser 3.19.2
+# CineMatch — estensione browser 3.20.0
 
-La **3.19.2** migliora gli aggiornamenti dalla cartella ricordata, la verifica
-dei pacchetti e la gestione dei cambi di sorgente nel player. Le funzioni sono
-quelle della 3.18.0, senza la modalità Live TV / Sport ritirata.
+La **3.20.0** aggiunge la scheda **Flussi** al popup: addon manifest JSON e
+una chiave globale Real-Debrid oppure TorBox per i torrent restituiti dagli
+addon compatibili. La modalità Live TV / Sport ritirata non è inclusa.
 
 **La versione corrente è un'estensione per Chrome e Edge**, con 74 voci sulle
 correnti del cinema e un generatore locale di prompt per ChatGPT, DeepSeek,
@@ -13,7 +13,7 @@ credenziale personale TMDB, configurabile nelle opzioni dell'estensione.
 
 ## Installare l'estensione
 
-Estrai `CineMatch-Chrome-3.19.2.zip`, apri `chrome://extensions`, attiva
+Estrai `CineMatch-Chrome-3.20.0.zip`, apri `chrome://extensions`, attiva
 **Modalità sviluppatore**, premi **Carica estensione non pacchettizzata** e scegli
 la cartella che contiene `manifest.json`. Fissa CineMatch alla barra dal menu
 Estensioni: l’icona apre il **popup compatto delle impostazioni**; da lì colleghi
@@ -62,6 +62,33 @@ le richieste `series` e conserva un punto di ripresa separato per ogni episodio.
 Gli addon collegati con versioni precedenti potrebbero aver conservato solo il
 tipo film: se una serie non compare, ricollega il manifest dell’addon.
 
+### Addon e chiave globale per i torrent
+
+Nel popup → **Flussi** aggiungi l’URL del manifest JSON degli addon. La lista
+è condivisa con il player: puoi attivare, disattivare e rimuovere gli addon.
+Se il player è già aperto, premi Aggiorna sorgenti per rileggere la configurazione.
+
+Nella stessa scheda scegli **Real-Debrid** o **TorBox**, inserisci la chiave API
+e premi **Verifica e salva**. È attivo un servizio alla volta: cambiare servizio
+sostituisce la chiave precedente. La chiave resta in chrome.storage.local,
+accessibile ai contesti fidati dell’estensione; non viene restituita alle chat
+né inserita nei manifest degli addon. Non è una cifratura contro chi può
+accedere al profilo del browser.
+
+Gli addon devono restituire un hash BitTorrent v1 valido (40 caratteri hex,
+anche da magnet), con eventuale indice del file. CineMatch risolve il torrent
+al click su Riproduci. Real-Debrid può aggiungerlo all’account e avviarne la
+preparazione; se non è pronto, mostra Riprova torrent. TorBox aggiunge solo
+contenuti già in cache. Account, piano, disponibilità e limiti del servizio
+rimangono necessari. Per le serie si usa l’indice fornito dall’addon oppure
+l’identificazione dell’episodio nel nome del file, evitando abbinamenti ambigui.
+
+Gli addon che impongono una configurazione obbligatoria sul proprio server
+possono ancora richiederla: una chiave globale non sostituisce ogni schema
+proprietario. Le API usate sono quelle ufficiali di
+[Real-Debrid](https://api.real-debrid.com/) e
+[TorBox](https://api-docs.torbox.app/).
+
 ### Modalità CB01
 
 Dalla 3.9.0 puoi attivare **Modalità CB01** dal popup → **Funzioni** per aprire
@@ -102,8 +129,8 @@ la cartella già salvata senza riaprire la scelta della cartella. Il pulsante
 **Aggiorna ora** apre una finestra persistente e continua automaticamente quando
 l’accesso è già autorizzato. Prima di modificare i file, CineMatch verifica che
 la cartella scelta sia quella effettivamente caricata dal browser.
-La **3.19.2** include già l’updater: per una nuova installazione usa lo ZIP
-3.19.2, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
+La **3.20.0** include già l’updater: per una nuova installazione usa lo ZIP
+3.20.0, mentre chi arriva da una versione precedente alla 3.6.0 deve fare ancora
 un aggiornamento manuale.
 
 L’icona dell’estensione mostra un badge quando è disponibile una nuova versione;

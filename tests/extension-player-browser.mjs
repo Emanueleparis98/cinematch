@@ -322,7 +322,7 @@ try{
     assert.equal(await player.locator('#film-title').innerText(),'Ladri di biciclette');
   });
   await check('stream output is inert text, with torrent and header-only sources explicitly unavailable',async()=>{
-    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),7);assert.ok((await player.locator('#stream-list').innerText()).includes('servizio che restituisca un flusso HTTP'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
+    assert.equal(await player.locator('#stream-list img').count(),0);assert.equal(await player.locator('#stream-list button').count(),7);assert.ok((await player.locator('#stream-list').innerText()).includes('Collega Real-Debrid o TorBox'));assert.ok((await player.locator('#stream-list').innerText()).includes('proxy configurato'));
   });
   await check('MP4 actually decodes and plays with controls, pause and seek',async()=>{
     await player.getByRole('button',{name:'Riproduci MP4 di prova da Cinema di prova'}).click();await player.waitForFunction(()=>document.querySelector('video').currentTime>.5,{},{timeout:15000});
