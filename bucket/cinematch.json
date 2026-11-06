@@ -5,7 +5,7 @@
   "license": "MIT",
   "depends": "main/uv",
   "url": "https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.1/CineMatch-0.3.1-scoop.zip",
-  "hash": "bc6568d680d3f836bc50b4b21b4f8fd81dc0de3806b06ae83414f5fff3b1e0cc",
+  "hash": "3d56757b19d4db6e5986732300d90a967104177d038c8d74ea1262e2507b2f80",
   "installer": {
     "script": [
       "& uv venv --python 3.13 \"$dir\\venv\"",
