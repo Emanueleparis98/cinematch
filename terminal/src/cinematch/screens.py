@@ -25,6 +25,7 @@ from textual.widgets import (
 )
 
 from .addons import parse_streams
+from .cb01 import Cb01Error
 from .models import CineError, Stream, web_url
 from .prompts import KINDS, MODES, PROVIDERS, generate, period, search_currents
 from .stream_filters import LANGUAGES, QUALITIES, matches_stream, source_info
@@ -177,6 +178,7 @@ class StreamsScreen(DialogScreen):
         super().__init__()
         self.media, self.video_id, self.imported = media, video_id, imported
         self.items = []
+        self.failures = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="streams-dialog", classes="dialog"):
@@ -215,6 +217,7 @@ class StreamsScreen(DialogScreen):
     @on(Select.Changed, "#stream-quality")
     def fill(self):
         query = self.query_one("#stream-filter", Input).value
+        self.workers.cancel_group(self, "play")
         language = str(self.query_one("#stream-language", Select).value)
         quality = str(self.query_one("#stream-quality", Select).value)
         self.app.set_stream_filters(language, quality)
@@ -242,7 +245,8 @@ class StreamsScreen(DialogScreen):
     @on(DataTable.RowHighlighted)
     def highlight(self):
         stream = self.selected()
-        self.query_one("#stream-description", Static).update(stream.description if stream else "")
+        failure = self.failures.get(stream.url) if stream else None
+        self.query_one("#stream-description", Static).update(str(failure) if failure else stream.description if stream else "")
 
     @on(DataTable.RowSelected)
     @on(Button.Pressed, "#play")
@@ -256,18 +260,33 @@ class StreamsScreen(DialogScreen):
         button.disabled = True
         status.update("Preparo la sorgente e avvio il player…")
         try:
-            await self.app.service.play(stream, self.media, self.video_id)
-            status.update("Player avviato. Audio, sottotitoli e schermo intero si controllano dalla finestra video.")
+            candidates = [stream]
+            if self.media.source == "CB01" and self.imported is None:
+                candidates += [s for s in self.visible_items if s is not stream and s.url not in self.failures]
+            for index, candidate in enumerate(candidates):
+                try:
+                    if index:
+                        status.update(f"La fonte precedente non è disponibile. Provo {candidate.name}…")
+                    await self.app.service.play(candidate, self.media, self.video_id)
+                    status.update("Player avviato"+(" da "+candidate.name if index else "")+". I controlli sono nella finestra video.")
+                    break
+                except Cb01Error as error:
+                    self.failures[candidate.url] = error
+            else:
+                failures = [self.failures[s.url] for s in self.visible_items if s.url in self.failures]
+                status.update("Nessun flusso diretto: file assenti o verifica richiesta. Seleziona una fonte e premi Apri fonte." if len(failures) > 1 else str(self.failures[stream.url]))
+                self.highlight()
         except (CineError, OSError) as e:
             status.update(str(e) if isinstance(e, CineError) else "Impossibile avviare il player.")
         finally:
-            button.disabled = False
+            button.disabled = not bool(self.visible_items)
 
     @on(Button.Pressed, "#browser")
     def browser(self):
         stream = self.selected()
         if stream and stream.kind in {"page", "external"}:
-            webbrowser.open(stream.url)
+            error = self.failures.get(stream.url)
+            webbrowser.open(error.manual_url if error and error.manual_url else stream.url)
         elif self.media.url:
             webbrowser.open(self.media.url)
 

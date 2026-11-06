@@ -11,6 +11,15 @@ from .models import CineError, Media, Stream, plain, web_url
 
 BASE = "https://cb01one.org/"
 PLAYERS = {"stayonline.pro", "uprot.net", "m1xdrop.net", "mxdrop.click", "mixdrop.co", "mixdrop.ag", "mxdrop.to", "mixdrop.to"}
+# StayOnline's normal first-click API rejects non-browser client identifiers.
+# No CAPTCHA responses are generated: a challenge is handed to the browser.
+BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+
+class Cb01Error(CineError):
+    def __init__(self, message, *, code="unavailable", manual_url=""):
+        super().__init__(message)
+        self.code, self.manual_url = code, manual_url
 
 
 def player_url(value):
@@ -43,16 +52,28 @@ def unpack(source):
 def sources(fragment):
     soup = BeautifulSoup(fragment, "html.parser")
     found, seen = [], set()
+    tabs = {str(a.get("data-counter")): a.get_text(" ", strip=True)
+            for a in soup.select("#fancy-tabs .link-catch-all[data-counter]")}
     for tag in soup.select("[data-src], a[href], iframe[src]"):
         url = player_url(html.unescape(str(tag.get("data-src") or tag.get("href") or tag.get("src") or "")))
-        if not url or url in seen:
+        if not url:
+            continue
+        if url in seen:
             continue
         seen.add(url)
-        label = plain(tag.get_text(" ", strip=True), 100)
+        label = plain(tabs.get(str(tag.get("data-counter"))) or tag.get_text(" ", strip=True), 100)
         name = "Maxstream" if "uprot.net" in url or "maxstream" in label.lower() else "Mixdrop"
-        quality = "HD" if re.search(r"/(e|mse)/", url) else "SD"
+        quality = "HD" if "HD" in label.upper() or re.search(r"/(e|mse)/", url) else "SD"
         found.append(Stream(name+" "+quality, label, "CB01", url, "page"))
-    return sorted(found, key=lambda s: ("HD" not in s.name, "Mixdrop" not in s.name))
+    unique, seen = [], set()
+    for stream in sorted(found, key=lambda s: ("HD" not in s.name, "Mixdrop" not in s.name)):
+        parsed = urlsplit(stream.url)
+        # /e/ and /l/ wrap the same StayOnline ID, not independent backups.
+        key = (parsed.hostname, parsed.path.strip("/").split("/")[-1]) if parsed.hostname == "stayonline.pro" else stream.url
+        if key not in seen:
+            seen.add(key)
+            unique.append(stream)
+    return unique
 
 
 def parse_article(text, url):
@@ -97,6 +118,46 @@ class Cb01:
         self.net = net
         self.articles = {}
 
+    async def player_text(self, url, *, referer=""):
+        try:
+            return await self.net.text(url, headers={"User-Agent": BROWSER_UA, **({"Referer": referer} if referer else {})}, redirects=True, limit=1024*1024)
+        except CineError as error:
+            if getattr(error, "status", 0) in {404, 410}:
+                raise Cb01Error("Il video non è più disponibile su questa fonte.", manual_url=url) from None
+            raise Cb01Error("La fonte non risponde. Prova un’altra fonte o premi Apri fonte.", code="network", manual_url=url) from None
+
+    async def stayonline(self, page):
+        match = re.fullmatch(r"/(?:e|l)/([A-Za-z0-9]+)/?", urlsplit(page).path)
+        if not match:
+            raise Cb01Error("Collegamento StayOnline non valido.", code="invalid", manual_url=page)
+        # Establish the same public page/session as the normal Continue button.
+        await self.player_text(page)
+        try:
+            data = await self.net.json("https://stayonline.pro/ajax/linkEmbedView.php", method="POST",
+                                       data={"id": match[1], "ref": "", "reCaptchaResponse": ""},
+                                       headers={"User-Agent": BROWSER_UA, "Referer": page,
+                                                "Origin": "https://stayonline.pro", "X-Requested-With": "XMLHttpRequest"})
+        except CineError as error:
+            if getattr(error, "status", 0) == 429:
+                raise Cb01Error("StayOnline richiede una verifica manuale. Premi Apri fonte.", code="captcha", manual_url=page) from None
+            raise Cb01Error("StayOnline non risponde. Prova un’altra fonte o aprila nel browser.", code="network", manual_url=page) from None
+        if not isinstance(data, dict):
+            raise Cb01Error("StayOnline ha restituito una risposta non valida.", manual_url=page)
+        if data.get("status") == "error":
+            if str(data.get("code", "")) == "429" or re.search(r"captcha|verifica", str(data.get("message", "")), re.IGNORECASE):
+                raise Cb01Error("StayOnline richiede una verifica manuale. Premi Apri fonte.", code="captcha", manual_url=page)
+            raise Cb01Error("StayOnline segnala un errore del servizio. Prova un’altra fonte.", manual_url=page)
+        nested = data.get("data")
+        raw = nested.get("value") if isinstance(nested, dict) else None
+        try:
+            target = web_url(raw or data.get("value"))
+        except CineError:
+            raise Cb01Error("StayOnline non ha restituito un collegamento al player.", manual_url=page) from None
+        supported = player_url(target)
+        if not supported or urlsplit(supported).hostname == "stayonline.pro":
+            raise Cb01Error("Il player collegato non è supportato. Premi Apri fonte.", code="unsupported", manual_url=target)
+        return supported
+
     async def search(self, query, section="all", skip=0):
         if not query or section in {"anime", "tv"} or skip:
             return []
@@ -131,24 +192,23 @@ class Cb01:
     async def resolve(self, stream):
         url = player_url(stream.url)
         if not url:
-            raise CineError("Player CB01 non supportato.")
+            raise Cb01Error("Player CB01 non supportato.", code="unsupported")
         if urlsplit(url).hostname == "stayonline.pro":
-            match = re.search(r"/(?:e|l)/([A-Za-z0-9]+)/?", urlsplit(url).path)
-            if not match:
-                raise CineError("Collegamento StayOnline non valido.")
-            data = await self.net.json("https://stayonline.pro/ajax/linkEmbedView.php", method="POST", data={"id": match[1]})
-            url = player_url((data.get("data") or {}).get("value") or data.get("value") or "")
-            if not url or urlsplit(url).hostname == "stayonline.pro":
-                raise CineError("StayOnline non ha restituito un player supportato. Può essere necessaria una verifica nel browser.")
-        text = await self.net.text(url, redirects=True, limit=1024*1024)
-        if re.search(r"captcha|cf-challenge|just a moment", text, re.IGNORECASE):
-            raise CineError("La fonte richiede una verifica nel browser. Scegli un’altra sorgente o apri il sito.")
+            url = await self.stayonline(url)
+        text = await self.player_text(url, referer=stream.url)
+        soup = BeautifulSoup(text, "html.parser")
+        visible = soup.get_text(" ", strip=True)
+        if re.search(r"we can['’]t find the video|video (?:has been |was )?(?:removed|deleted)|file (?:not found|was deleted)", visible, re.IGNORECASE):
+            raise Cb01Error("Mixdrop: video rimosso o non disponibile. Scegli un’altra fonte.", manual_url=url)
+        # A loaded reCAPTCHA library alone does not mean the video is challenged.
+        if soup.select_one("#upcaptcha-form, .upcaptcha-form, #challenge-form, .g-recaptcha") or re.search(r"UPCaptcha Protection|Seleziona tutte le immagini|just a moment", visible, re.IGNORECASE):
+            raise Cb01Error("Il player richiede una verifica manuale. Premi Apri fonte.", code="captcha", manual_url=url)
         text = unpack(text)
         match = re.search(r'''(?:MDCore\.(?:wurl|furl)|["']?(?:file|source)["']?)\s*[:=]\s*["']([^"']+)["']''', text, re.IGNORECASE)
         if not match:
-            raise CineError("Il player non ha esposto un flusso diretto. Apri la fonte nel browser.")
+            raise Cb01Error("Il player non ha esposto un flusso diretto. Premi Apri fonte.", manual_url=url)
         direct = web_url(urljoin(url, html.unescape(match[1].replace("\\/", "/"))))
         host = urlsplit(direct).hostname or ""
         if not (host == "mxcontent.net" or host.endswith(".mxcontent.net") or host == "uprot.net"):
-            raise CineError("Il player ha restituito un host video non supportato.")
-        return Stream(stream.name, stream.description, "CB01", direct, "hls" if ".m3u8" in direct else "video", headers={"Referer": url})
+            raise Cb01Error("Il player ha restituito un host video non supportato.", code="unsupported", manual_url=url)
+        return Stream(stream.name, stream.description, "CB01", direct, "hls" if ".m3u8" in direct else "video", headers={"Referer": url, "User-Agent": BROWSER_UA})

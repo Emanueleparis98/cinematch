@@ -23,8 +23,8 @@ Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 ### Arch · pacchetto nativo
 
 ```sh
-curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.2.0/cinematch-0.2.0-1-any.pkg.tar.zst
-sudo pacman -U ./cinematch-0.2.0-1-any.pkg.tar.zst
+curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.2.1/cinematch-0.2.1-1-any.pkg.tar.zst
+sudo pacman -U ./cinematch-0.2.1-1-any.pkg.tar.zst
 cinematch
 ```
 
@@ -90,6 +90,14 @@ Scegliendo **CB01** come fonte puoi cercare film e serie nel sito già supportat
 dall’estensione. Il lettore usa i collegamenti Mixdrop/StayOnline/Maxstream esposti
 dalla pagina; le pagine che richiedono CAPTCHA, login o un formato diverso offrono
 il passaggio al browser. Il codice scaricato dai siti non viene eseguito.
+
+Dalla 0.2.1 il collegamento StayOnline usa la richiesta compatibile con il suo
+pulsante di continuazione. I nomi Mixdrop/Maxstream seguono le etichette della scheda
+CB01 e i duplicati `/e/` e `/l/` vengono raggruppati. Se una fonte non è disponibile,
+il player prova le altre fonti visibili per lo stesso titolo/episodio, rispettando
+i filtri attivi. Un video rimosso viene distinto da una verifica richiesta;
+**Apri fonte** apre il player effettivo segnalato, anche dopo il passaggio da StayOnline.
+Le verifiche restano manuali e i file eliminati dal provider non vengono ripristinati.
 
 Il video parte in una finestra mpv/VLC/ffplay. Audio, sottotitoli, seek e schermo
 intero sono gestiti dal player. HTTP, HLS, DASH e i codec dipendono dal player e

@@ -255,3 +255,61 @@ async def test_kitsu_episode_id_is_not_misread_as_season_number(tmp_path):
         assert captured == {"season": 1, "episode": 8}
     finally:
         await service.close()
+
+
+async def test_cb01_tries_another_source_inside_active_filters(tmp_path):
+    from cinematch.cb01 import Cb01Error
+    from cinematch.models import Stream
+    service = cinema(tmp_path)
+    media = Media("cb01-demo", "movie", "Film CB01", source="CB01")
+    streams = [Stream("1080p ITA Mixdrop", addon="CB01", url="https://m1xdrop.net/e/OLD", kind="page"),
+               Stream("720p ENG Mixdrop", addon="CB01", url="https://m1xdrop.net/e/EXCLUDED", kind="page"),
+               Stream("1080p ITA Maxstream", addon="CB01", url="https://uprot.net/msei/BACKUP", kind="page")]
+    calls = []
+    async def choices(*_):
+        return streams
+    async def play(stream, *args):
+        calls.append(stream.url)
+        if len(calls) == 1:
+            raise Cb01Error("Video rimosso", manual_url=stream.url)
+    service.streams, service.play = choices, play
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.set_stream_filters("ITA", "1080p")
+            app.push_screen(StreamsScreen(media))
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            app.screen.play()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert calls == [streams[0].url, streams[2].url]
+    finally:
+        await service.close()
+
+
+async def test_cb01_open_source_uses_actual_challenge_page(tmp_path, monkeypatch):
+    from cinematch.cb01 import Cb01Error
+    from cinematch.models import Stream
+    service = cinema(tmp_path)
+    stream = Stream("Maxstream HD", addon="CB01", url="https://stayonline.pro/e/DEMO/", kind="page")
+    async def choices(*_):
+        return [stream]
+    async def play(*_):
+        raise Cb01Error("Verifica richiesta", code="captcha", manual_url="https://uprot.net/msei/ACTUAL")
+    service.streams, service.play = choices, play
+    opened = []
+    monkeypatch.setattr("cinematch.screens.webbrowser.open", opened.append)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.push_screen(StreamsScreen(Media("demo", "movie", "CB01", source="CB01")))
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            app.screen.play()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            app.screen.browser()
+            assert opened == ["https://uprot.net/msei/ACTUAL"]
+    finally:
+        await service.close()
