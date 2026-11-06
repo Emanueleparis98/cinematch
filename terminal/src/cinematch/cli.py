@@ -22,7 +22,7 @@ def parser():
     search = commands.add_parser("search", help="Cerca nei cataloghi")
     search.add_argument("query", nargs="?", default="")
     search.add_argument("--type", choices=["all", "movie", "series", "anime", "tv"], default="all")
-    search.add_argument("--source", choices=["all", "addons", "tmdb", "cb01"], default="all")
+    search.add_argument("--source", choices=["all", "addons", "tmdb"], default="all")
     search.add_argument("--json", action="store_true")
     currents = commands.add_parser("currents", help="Le 74 correnti, disponibili offline")
     currents.add_argument("query", nargs="?", default="")

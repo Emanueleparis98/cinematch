@@ -1,5 +1,0 @@
-Manrope variable font, obtained from the official Google Fonts repository:
-https://github.com/google/fonts/tree/main/ofl/manrope
-https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf
-License: SIL Open Font License 1.1; included in OFL-Manrope.txt.
-The extension hosts the font locally and does not contact a font service.

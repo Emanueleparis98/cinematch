@@ -86,18 +86,9 @@ La sezione **TV** usa i cataloghi `tv`/`channel` degli addon personali: non cont
 una lista di canali preinstallata. **Apri URL / JSON** accetta un URL HTTP/HTTPS,
 un elenco `streams` JSON o un file JSON locale. L’importazione dei flussi è temporanea.
 
-Scegliendo **CB01** come fonte puoi cercare film e serie nel sito già supportato
-dall’estensione. Il lettore usa i collegamenti Mixdrop/StayOnline/Maxstream esposti
-dalla pagina; le pagine che richiedono CAPTCHA, login o un formato diverso offrono
-il passaggio al browser. Il codice scaricato dai siti non viene eseguito.
-
-Dalla 0.2.1 il collegamento StayOnline usa la richiesta compatibile con il suo
-pulsante di continuazione. I nomi Mixdrop/Maxstream seguono le etichette della scheda
-CB01 e i duplicati `/e/` e `/l/` vengono raggruppati. Se una fonte non è disponibile,
-il player prova le altre fonti visibili per lo stesso titolo/episodio, rispettando
-i filtri attivi. Un video rimosso viene distinto da una verifica richiesta;
-**Apri fonte** apre il player effettivo segnalato, anche dopo il passaggio da StayOnline.
-Le verifiche restano manuali e i file eliminati dal provider non vengono ripristinati.
+I flussi arrivano esclusivamente dagli addon collegati. I torrent vengono risolti
+con il servizio debrid scelto; un titolo presente nei cataloghi non garantisce
+una fonte riproducibile.
 
 Il video parte in una finestra mpv/VLC/ffplay. Audio, sottotitoli, seek e schermo
 intero sono gestiti dal player. HTTP, HLS, DASH e i codec dipendono dal player e
@@ -151,8 +142,8 @@ cinematch addons list
 
 `configure` e `addons add` chiedono le credenziali e i manifest personali in modo nascosto,
 così non finiscono nella cronologia della shell. `doctor` mostra percorsi e stato della
-configurazione senza stampare chiavi o manifest personali. Le impostazioni dell’estensione
-Chrome non vengono importate automaticamente: inseriscile una volta in CineMatch Terminal.
+configurazione senza stampare chiavi o manifest personali. Credenziali e manifest
+restano nella configurazione locale di CineMatch Terminal.
 
 ## Dati locali e disponibilità
 
@@ -186,9 +177,5 @@ tema TUI. Il workflow **CineMatch Terminal** controlla Linux e Windows con Pytho
 La verifica post-pubblicazione controlla anche il download anonimo e Scoop.
 
 I tag `terminal-v*` e `terminal/latest.json` identificano le release del terminale.
-Le release dell’estensione mantengono `v3.*` e il proprio `latest.json`; una release
-terminale non viene impostata come “Latest” del repository. I pacchetti terminale
-non includono i decoder WASM dell’estensione.
 
-Questa cartella contiene la nuova applicazione Python. L’estensione browser e
-il relativo canale di aggiornamento restano indipendenti.
+Questa cartella contiene l’applicazione Python principale.

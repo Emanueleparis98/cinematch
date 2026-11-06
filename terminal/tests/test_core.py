@@ -11,7 +11,6 @@ from cinematch.addons import (
     parse_streams,
     supports,
 )
-from cinematch.cb01 import Cb01, parse_article, unpack
 from cinematch.debrid import Debrid, choose_file
 from cinematch.models import CineError, Media, Stream, parse_media, web_url
 from cinematch.net import Network
@@ -22,7 +21,7 @@ from cinematch.store import Store
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_catalog_is_the_extension_canonical_catalog():
+def test_catalog_is_the_canonical_catalog():
     assert len(catalog()) == 74
     assert catalog() == json.loads((ROOT/"plugins/cinema-currents/assets/movements.json").read_text(encoding="utf-8"))
     assert search_currents("néoréalisme") or search_currents("Rossellini")
@@ -141,6 +140,21 @@ async def test_redirect_to_http_is_refused():
         await net.close()
 
 
+async def test_redirect_keeps_only_public_client_headers():
+    async def api(request):
+        if request.url.host == "before.example.org":
+            return httpx.Response(302, headers={"Location": "https://after.example.org/player"})
+        assert request.headers["user-agent"] == "CineMatch-compatibility-client"
+        assert not any(key in request.headers for key in ["authorization", "cookie", "referer", "origin"])
+        return httpx.Response(200, text="Player")
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    try:
+        assert await net.request("https://before.example.org/player", redirects=True,
+            headers={"User-Agent": "CineMatch-compatibility-client", "Authorization": "Bearer private", "Cookie": "private=value", "Referer": "https://private.example/", "Origin": "https://private.example"}) == b"Player"
+    finally:
+        await net.close()
+
+
 async def test_rd_35_stops_and_does_not_misdiagnose_key(tmp_path):
     requests = []
     async def refused(request):
@@ -206,30 +220,6 @@ async def test_torbox_multipart_cached_file_and_api_key_stays_on_service(tmp_pat
         result = await Debrid(net, store).resolve(Stream("Torrent", kind="torrent", info_hash="a"*40))
         assert result.url == "https://cdn.example.org/ready.mkv"
         assert all(r.url.host == "api.torbox.app" for r in calls)
-    finally:
-        await net.close()
-
-
-def test_cb01_sources_and_standard_packer_without_js_execution():
-    packed = (ROOT/"tests/fixtures/cb01-mixdrop-packed.txt").read_text(encoding="utf-8")
-    assert "MDCore.wurl" in unpack(packed)
-    text = '''<html><title>Film [HD] (2025) Streaming - CB01</title><div data-src="https://stayonline.pro/e/HD1/"></div><a href="https://ads.example">Advertisement</a></html>'''
-    media, choices = parse_article(text, "https://cb01one.org/film/")
-    assert media.title == "Film" and media.year == "2025"
-    assert len(choices[""]) == 1 and choices[""][0].name == "Mixdrop HD"
-
-
-async def test_cb01_search_reads_current_card_titles_not_sidebar_or_ad_links():
-    text = '''<html><h1>2 Film Trovati</h1>
-    <h3 class="card-title"><a href="https://cb01one.org/film-hd-2025/">Film [HD] (2025)</a></h3>
-    <h3 class="rpwe-title"><a href="https://cb01one.org/other/">Sidebar film</a></h3>
-    <h3 class="card-title"><a href="https://ads.example.org/">Annuncio</a></h3></html>'''
-    async def api(request):
-        return httpx.Response(200, text=text)
-    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
-    try:
-        items = await Cb01(net).search("Film", "movie")
-        assert len(items) == 1 and items[0].title == "Film" and items[0].year == "2025"
     finally:
         await net.close()
 

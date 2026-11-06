@@ -4,7 +4,6 @@ import asyncio
 import re
 
 from .addons import Addons
-from .cb01 import Cb01
 from .debrid import Debrid
 from .models import CineError
 from .player import Player
@@ -17,7 +16,6 @@ class Cinema:
         self.addons = Addons(net, store)
         self.tmdb = Tmdb(net, store)
         self.debrid = Debrid(net, store)
-        self.cb01 = Cb01(net)
         self.player = Player(store)
         self.errors = []
         self.current = None
@@ -32,8 +30,6 @@ class Cinema:
             tasks.append(self.addons.search(query, section, skip))
         if source in {"all", "tmdb"} and self.store.config["tmdb_key"]:
             tasks.append(self.tmdb.search(query, section, skip))
-        if source == "cb01":
-            tasks.append(self.cb01.search(query, section, skip))
         results = await asyncio.gather(*tasks, return_exceptions=True)
         items, seen = [], set()
         for group in results:
@@ -48,8 +44,6 @@ class Cinema:
         return items
 
     async def details(self, media):
-        if media.source == "CB01":
-            return await self.cb01.details(media)
         if media.tmdb:
             return await self.tmdb.details(media)
         return await self.addons.details(media)
@@ -62,8 +56,6 @@ class Cinema:
     async def streams(self, media, video_id=""):
         if media.type in {"series", "anime"} and media.videos and not video_id:
             raise CineError("Seleziona prima un episodio.")
-        if media.source == "CB01":
-            return await self.cb01.streams(media, video_id)
         return await self.addons.streams(media, video_id)
 
     async def play(self, stream, media, video_id=""):
@@ -78,8 +70,6 @@ class Cinema:
             elif video_id.startswith("kitsu:"):
                 season = ep.get("season") or 1
             stream = await self.debrid.resolve(stream, season=season, episode=episode)
-        elif stream.kind == "page":
-            stream = await self.cb01.resolve(stream)
         if stream.kind == "external":
             raise CineError("Questo collegamento si apre nel browser: premi Apri fonte.")
         await self.save_progress()

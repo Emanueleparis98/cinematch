@@ -25,7 +25,6 @@ from textual.widgets import (
 )
 
 from .addons import parse_streams
-from .cb01 import Cb01Error
 from .models import CineError, Stream, web_url
 from .prompts import KINDS, MODES, PROVIDERS, generate, period, search_currents
 from .stream_filters import LANGUAGES, QUALITIES, matches_stream, source_info
@@ -178,7 +177,6 @@ class StreamsScreen(DialogScreen):
         super().__init__()
         self.media, self.video_id, self.imported = media, video_id, imported
         self.items = []
-        self.failures = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="streams-dialog", classes="dialog"):
@@ -226,7 +224,7 @@ class StreamsScreen(DialogScreen):
         table.clear()
         for i, s in enumerate(self.visible_items):
             info = source_info(s)
-            table.add_row(info.quality if info.quality != "unknown" else "—", info.language_label, Text(s.addon), Text(s.name), {"torrent": "Debrid", "external": "Browser", "page": "Player web"}.get(s.kind, s.kind.upper()), key=str(i))
+            table.add_row(info.quality if info.quality != "unknown" else "—", info.language_label, Text(s.addon), Text(s.name), {"torrent": "Debrid", "external": "Browser"}.get(s.kind, s.kind.upper()), key=str(i))
         self.query_one("#stream-count", Static).update(f"{len(self.visible_items)} / {len(self.items)} FLUSSI"+(" · Nessun flusso corrisponde: cambia lingua o definizione, oppure premi Azzera." if self.items and not self.visible_items else ""))
         self.query_one("#play", Button).disabled = not self.visible_items
         self.query_one("#stream-description", Static).update("")
@@ -245,8 +243,7 @@ class StreamsScreen(DialogScreen):
     @on(DataTable.RowHighlighted)
     def highlight(self):
         stream = self.selected()
-        failure = self.failures.get(stream.url) if stream else None
-        self.query_one("#stream-description", Static).update(str(failure) if failure else stream.description if stream else "")
+        self.query_one("#stream-description", Static).update(stream.description if stream else "")
 
     @on(DataTable.RowSelected)
     @on(Button.Pressed, "#play")
@@ -260,22 +257,8 @@ class StreamsScreen(DialogScreen):
         button.disabled = True
         status.update("Preparo la sorgente e avvio il player…")
         try:
-            candidates = [stream]
-            if self.media.source == "CB01" and self.imported is None:
-                candidates += [s for s in self.visible_items if s is not stream and s.url not in self.failures]
-            for index, candidate in enumerate(candidates):
-                try:
-                    if index:
-                        status.update(f"La fonte precedente non è disponibile. Provo {candidate.name}…")
-                    await self.app.service.play(candidate, self.media, self.video_id)
-                    status.update("Player avviato"+(" da "+candidate.name if index else "")+". I controlli sono nella finestra video.")
-                    break
-                except Cb01Error as error:
-                    self.failures[candidate.url] = error
-            else:
-                failures = [self.failures[s.url] for s in self.visible_items if s.url in self.failures]
-                status.update("Nessun flusso diretto: file assenti o verifica richiesta. Seleziona una fonte e premi Apri fonte." if len(failures) > 1 else str(self.failures[stream.url]))
-                self.highlight()
+            await self.app.service.play(stream, self.media, self.video_id)
+            status.update("Player avviato. I controlli sono nella finestra video.")
         except (CineError, OSError) as e:
             status.update(str(e) if isinstance(e, CineError) else "Impossibile avviare il player.")
         finally:
@@ -284,9 +267,8 @@ class StreamsScreen(DialogScreen):
     @on(Button.Pressed, "#browser")
     def browser(self):
         stream = self.selected()
-        if stream and stream.kind in {"page", "external"}:
-            error = self.failures.get(stream.url)
-            webbrowser.open(error.manual_url if error and error.manual_url else stream.url)
+        if stream and stream.kind == "external":
+            webbrowser.open(stream.url)
         elif self.media.url:
             webbrowser.open(self.media.url)
 

@@ -1,18 +1,10 @@
-/target
+target/
 /dist
 *.pdb
 .env
 
-# Impeccable (installazione locale OpenCode)
+# OpenCode locale
 .opencode/
-
-# Browser extension development artifacts
-node_modules/
-.extension-browser/
-.extension-test-profile*/
-test-results/
-.impeccable/review/*
-!.impeccable/review/finish-verdict.md
 
 # Terminal application
 .venv/

@@ -3,8 +3,8 @@ $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Versione del plugin non valida: usa x.y.z' }
 $taskWorkspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskPlugin = Join-Path $taskWorkspace 'plugins\cinema-currents'
-$taskBinary = Join-Path $taskWorkspace 'target\release\cinema-currents.exe'
-if (-not (Test-Path -LiteralPath $taskBinary)) { throw 'Compila prima: cargo build --release --workspace' }
+$taskBinary = Join-Path $taskPlugin 'target\release\cinema-currents.exe'
+if (-not (Test-Path -LiteralPath $taskBinary)) { throw 'Compila prima: cargo build --release --manifest-path plugins\cinema-currents\Cargo.toml' }
 $taskTempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $taskStage = [IO.Path]::GetFullPath((Join-Path $taskTempRoot ('CineMatch-Currents-' + [guid]::NewGuid())))
 if (-not $taskStage.StartsWith($taskTempRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid staging path' }

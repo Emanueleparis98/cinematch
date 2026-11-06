@@ -71,7 +71,7 @@ class Player:
         return args+["-ss", str(max(0, resume)), "-i", url]
 
     async def play(self, stream, *, resume=0, title="CineMatch"):
-        if stream.kind in {"external", "torrent", "page"}:
+        if stream.kind in {"external", "torrent"}:
             raise CineError("Questa sorgente deve essere risolta prima di avviare il player.")
         await self.stop()
         self.position, self.duration = float(resume), 0.0

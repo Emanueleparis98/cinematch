@@ -1,8 +1,8 @@
 # Cinema Currents 1.0
 
 Plugin locale e indipendente per consultare le correnti cinematografiche e generare
-prompt utilizzabili in qualsiasi chat. CineMatch usa questa stessa libreria.
-Il plugin non chiama servizi AI, non invia messaggi, non legge account e non salva
+prompt utilizzabili in qualsiasi chat. CineMatch Terminal usa il catalogo incluso
+in questa cartella. Il plugin non chiama servizi AI, non invia messaggi, non legge account e non salva
 richieste o risposte. La raccolta di riferimento è incorporata nel pacchetto.
 
 ## Uso autonomo

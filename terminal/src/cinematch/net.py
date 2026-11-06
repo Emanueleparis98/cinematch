@@ -16,7 +16,7 @@ class Network:
     async def close(self):
         await self.client.aclose()
 
-    async def request(self, url, *, method="GET", limit=4*1024*1024, redirects=False, **kwargs):
+    async def _fetch(self, url, *, method="GET", limit=4*1024*1024, redirects=False, **kwargs):
         url = web_url(url)
         depth = kwargs.pop("_redirect_depth", 0)
         try:
@@ -27,11 +27,15 @@ class Network:
                     target = web_url(urljoin(str(response.url), response.headers.get("location", "")))
                     if url.startswith("https:") and not target.startswith("https:"):
                         raise CineError("Il server ha reindirizzato verso un collegamento non sicuro.")
-                    # Never forward caller authentication across a redirect.
-                    kwargs.pop("headers", None)
+                    # Keep the public client identity consistent for signed video URLs;
+                    # never forward authentication, cookies or referrers across hosts.
+                    headers = kwargs.pop("headers", None) or {}
+                    public_headers = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept"}}
+                    if public_headers:
+                        kwargs["headers"] = public_headers
                     kwargs.pop("params", None)
                     await response.aclose()
-                    return await self.request(target, method=method, limit=limit, redirects=True, _redirect_depth=depth+1, **kwargs)
+                    return await self._fetch(target, method=method, limit=limit, redirects=True, _redirect_depth=depth+1, **kwargs)
                 chunks = bytearray()
                 async for chunk in response.aiter_bytes():
                     chunks.extend(chunk)
@@ -47,10 +51,14 @@ class Network:
                     error.status = response.status_code
                     error.code = code
                     raise error
-                return bytes(chunks)
+                return bytes(chunks), str(response.url)
         except httpx.HTTPError:
             # httpx exception strings include complete URLs, sometimes containing tokens.
             raise CineError("Server non raggiungibile o troppo lento. Controlla la connessione.") from None
+
+    async def request(self, url, **kwargs):
+        body, _ = await self._fetch(url, **kwargs)
+        return body
 
     async def json(self, url, **kwargs):
         raw = await self.request(url, **kwargs)

@@ -1,4 +1,4 @@
-"""Local prompt composer, using the same canonical cinema catalog as the extension."""
+"""Local prompt composer, using the canonical cinema catalog of the project."""
 from __future__ import annotations
 
 import json

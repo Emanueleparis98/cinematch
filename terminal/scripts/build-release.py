@@ -16,7 +16,7 @@ DIST = ROOT / "terminal" / "dist" / "release"
 def main():
     canonical = (ROOT/"plugins/cinema-currents/assets/movements.json").read_bytes()
     if canonical != (ROOT/"terminal/src/cinematch/movements.json").read_bytes():
-        raise SystemExit("Il catalogo terminale non coincide con le correnti canoniche dell’estensione.")
+        raise SystemExit("Il catalogo terminale non coincide con le correnti canoniche del progetto.")
     if DIST.exists():
         shutil.rmtree(DIST)
     DIST.mkdir(parents=True)
