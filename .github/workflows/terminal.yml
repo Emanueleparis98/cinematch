@@ -1,0 +1,83 @@
+name: CineMatch Terminal
+
+on:
+  push:
+    branches: [main, feat/terminal]
+    paths: ['terminal/**', 'bucket/**', 'pyproject.toml', '.github/workflows/terminal.yml', 'plugins/cinema-currents/assets/movements.json']
+  pull_request:
+    paths: ['terminal/**', 'bucket/**', 'pyproject.toml', '.github/workflows/terminal.yml', 'plugins/cinema-currents/assets/movements.json']
+  workflow_dispatch:
+    inputs:
+      public_install:
+        description: Verify published installers and Scoop
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: ${{ !inputs.public_install }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install ".[dev]" build uv
+      - run: python -m pytest -q
+      - run: python terminal/scripts/build-release.py
+      - name: Verify real installer and installed TUI
+        run: python terminal/scripts/check-install.py
+
+  arch:
+    if: ${{ !inputs.public_install }}
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: pacman -Syu --noconfirm python python-pip python-build python-installer python-hatchling python-textual python-httpx python-beautifulsoup4 python-platformdirs python-pyperclip
+      - run: python terminal/scripts/build-release.py
+      - name: Build and install the pacman package
+        run: |
+          useradd -m builder
+          mkdir -p /tmp/cinematch-arch
+          cinematch_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          cp terminal/build/arch/PKGBUILD "terminal/dist/release/cinematch-$cinematch_version.tar.gz" /tmp/cinematch-arch/
+          chown -R builder:builder /tmp/cinematch-arch
+          cd /tmp/cinematch-arch
+          runuser -u builder -- makepkg --noconfirm
+          pacman -U --noconfirm cinematch-[0-9]*-1-any.pkg.tar.zst
+          cinematch --version
+          python "$GITHUB_WORKSPACE/terminal/scripts/check-installed-ui.py"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          cp cinematch-[0-9]*-1-any.pkg.tar.zst "$GITHUB_WORKSPACE/artifacts/"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cinematch-arch-package
+          path: artifacts/*.pkg.tar.zst
+
+  public:
+    if: ${{ inputs.public_install }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - run: python -m pip install uv
+      - name: Verify anonymous public installer
+        run: python terminal/scripts/check-install.py --public
+      - name: Verify actual Scoop installation
+        if: runner.os == 'Windows'
+        run: ./terminal/scripts/check-scoop.ps1
