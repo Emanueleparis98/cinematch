@@ -68,6 +68,8 @@ class Stream:
     file_idx: int | None = None
     headers: dict[str, str] = field(default_factory=dict, repr=False)
     subtitles: list[str] = field(default_factory=list, repr=False)
+    filename: str = ""
+    subtitle_languages: list[str] = field(default_factory=list)
 
 
 def parse_media(data, *, source="", addon_url=""):

@@ -90,14 +90,16 @@ def parse_streams(data, addon=""):
         raw_headers = proxy.get("request") if isinstance(proxy.get("request"), dict) else {}
         headers = {k: v for k, v in raw_headers.items() if isinstance(k, str) and isinstance(v, str)
                    and k.lower() in {"referer", "user-agent", "origin", "cookie", "authorization"} and not re.search(r"[\r\n\x00]", k+v)}
-        subtitles = []
+        subtitles, subtitle_languages = [], []
         for sub in (item.get("subtitles") if isinstance(item.get("subtitles"), list) else [])[:30]:
             try:
                 subtitles.append(web_url(sub.get("url")))
+                subtitle_languages.append(plain(sub.get("lang"), 30))
             except (CineError, AttributeError):
                 pass
         streams.append(Stream(plain(item.get("name"), 100) or "Video", plain(item.get("description") or item.get("title"), 1000),
-                              addon, url, kind, info_hash.lower(), idx, headers, subtitles))
+                              addon, url, kind, info_hash.lower(), idx, headers, subtitles,
+                              filename=plain(hints.get("filename"), 500), subtitle_languages=subtitle_languages))
     return streams
 
 
@@ -114,6 +116,7 @@ class Addons:
         addon = parse_manifest(await self.net.json(url, redirects=True), url)
         # idPrefixes can be specified globally as well as on individual resources.
         if default:
+            self.defaults = [a for a in self.defaults if a["url"] != addon["url"]]
             self.defaults.append(addon)
         else:
             items = self.store.config["addons"]

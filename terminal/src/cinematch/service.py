@@ -25,6 +25,8 @@ class Cinema:
 
     async def search(self, query="", section="all", source="all", skip=0):
         self.errors = []
+        if not query.strip():
+            return []
         tasks = []
         if source in {"all", "addons"}:
             tasks.append(self.addons.search(query, section, skip))

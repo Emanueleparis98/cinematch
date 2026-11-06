@@ -27,6 +27,7 @@ from textual.widgets import (
 from .addons import parse_streams
 from .models import CineError, Stream, web_url
 from .prompts import KINDS, MODES, PROVIDERS, generate, period, search_currents
+from .stream_filters import LANGUAGES, QUALITIES, matches_stream, source_info
 
 
 def copy_text(app, value):
@@ -118,7 +119,7 @@ class AddonsScreen(DialogScreen):
                 yield Button("Attiva / disattiva", id="toggle-addon")
                 yield Button("Rimuovi", id="remove-addon")
                 yield Button("Chiudi", id="close")
-            yield Static("Cinemeta è il catalogo integrato. Per vedere i flussi collega i tuoi addon. Non viene installato alcun addon video automaticamente.", classes="muted")
+            yield Static("Per vedere i flussi collega i tuoi addon. Nessun addon video viene installato automaticamente.", classes="muted")
 
     def on_mount(self):
         self.query_one(DataTable).add_columns("Addon", "Stato", "Tipi", "Cataloghi")
@@ -181,7 +182,12 @@ class StreamsScreen(DialogScreen):
         with Vertical(id="streams-dialog", classes="dialog"):
             yield Static(Text(self.media.title), classes="dialog-title")
             yield Static("Cerco i flussi negli addon attivi…", id="streams-status", markup=False)
-            yield Input(placeholder="Filtra qualità, lingua o addon…", id="stream-filter")
+            with Horizontal(id="stream-options"):
+                yield Select(LANGUAGES, value=self.app.stream_language, allow_blank=False, id="stream-language")
+                yield Select(QUALITIES, value=self.app.stream_quality, allow_blank=False, id="stream-quality")
+                yield Button("Azzera", id="reset-picker-filters")
+            yield Input(placeholder="Cerca nei flussi · nome, addon o dettagli…", id="stream-filter")
+            yield Static("", id="stream-count", markup=False)
             yield DataTable(id="stream-table", cursor_type="row", zebra_stripes=True)
             yield Static("", id="stream-description", markup=False)
             with Horizontal(classes="actions"):
@@ -190,7 +196,7 @@ class StreamsScreen(DialogScreen):
                 yield Button("Chiudi", id="close")
 
     def on_mount(self):
-        self.query_one(DataTable).add_columns("Addon", "Qualità / nome", "Tipo")
+        self.query_one(DataTable).add_columns("Definizione", "Lingua", "Fonte", "Nome", "Tipo")
         self.load()
 
     @work(exclusive=True, group="streams")
@@ -200,18 +206,34 @@ class StreamsScreen(DialogScreen):
             self.items = self.imported if self.imported is not None else await self.app.service.streams(self.media, self.video_id)
             self.fill()
             errors = self.app.service.addons.errors
-            status.update(f"{len(self.items)} flussi disponibili."+(" · "+" · ".join(errors[:2]) if errors else "") if self.items else "Nessun flusso. Collega un addon video compatibile da Addon; per serie e anime verifica l’episodio e gli ID supportati.")
+            status.update("Lingua e definizione sono quelle dichiarate dalle fonti."+(" · "+" · ".join(errors[:2]) if errors else "") if self.items else "Nessun flusso. Collega un addon video compatibile da Addon; per serie e anime verifica l’episodio e gli ID supportati.")
         except CineError as e:
             status.update(str(e))
 
     @on(Input.Changed, "#stream-filter")
+    @on(Select.Changed, "#stream-language")
+    @on(Select.Changed, "#stream-quality")
     def fill(self):
-        query = self.query_one("#stream-filter", Input).value.casefold()
-        self.visible_items = [s for s in self.items if query in (s.name+" "+s.description+" "+s.addon).casefold()]
+        query = self.query_one("#stream-filter", Input).value
+        language = str(self.query_one("#stream-language", Select).value)
+        quality = str(self.query_one("#stream-quality", Select).value)
+        self.app.set_stream_filters(language, quality)
+        self.visible_items = [s for s in self.items if matches_stream(s, language=language, quality=quality, query=query)]
         table = self.query_one(DataTable)
         table.clear()
         for i, s in enumerate(self.visible_items):
-            table.add_row(Text(s.addon), Text(s.name), {"torrent": "Debrid", "external": "Browser", "page": "Player web"}.get(s.kind, s.kind.upper()), key=str(i))
+            info = source_info(s)
+            table.add_row(info.quality if info.quality != "unknown" else "—", info.language_label, Text(s.addon), Text(s.name), {"torrent": "Debrid", "external": "Browser", "page": "Player web"}.get(s.kind, s.kind.upper()), key=str(i))
+        self.query_one("#stream-count", Static).update(f"{len(self.visible_items)} / {len(self.items)} FLUSSI"+(" · Nessun flusso corrisponde: cambia lingua o definizione, oppure premi Azzera." if self.items and not self.visible_items else ""))
+        self.query_one("#play", Button).disabled = not self.visible_items
+        self.query_one("#stream-description", Static).update("")
+
+    @on(Button.Pressed, "#reset-picker-filters")
+    def reset_filters(self):
+        self.query_one("#stream-language", Select).value = "all"
+        self.query_one("#stream-quality", Select).value = "all"
+        self.query_one("#stream-filter", Input).value = ""
+        self.fill()
 
     def selected(self):
         row = self.query_one(DataTable).cursor_row

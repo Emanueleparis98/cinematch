@@ -69,6 +69,81 @@ async def test_complete_series_flow_selects_season_episode_and_stream(tmp_path):
         await service.close()
 
 
+async def test_startup_and_empty_search_never_load_popular_catalogs(tmp_path):
+    calls = []
+    async def forbidden(request):
+        calls.append(request)
+        return httpx.Response(500)
+    service = cinema(tmp_path, forbidden)
+    app = CinemaApp(service)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            await pilot.pause()
+            app.query_one("#section", Select).value = "anime"
+            app.search()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert not calls and not app.items
+            assert app.query_one("#streams", Button).disabled
+            assert not await service.search("")
+    finally:
+        await service.close()
+
+
+async def test_explore_filters_apply_to_episode_picker_and_persist(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.query_one("#language", Select).value = "ITA"
+            app.query_one("#quality", Select).value = "1080p"
+            app.query_one("#section", Select).value = "series"
+            app.query_one("#search", Input).value = "prova"
+            app.search()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            app.streams()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, StreamsScreen)
+            assert len(screen.visible_items) == 1 and screen.visible_items[0].name == "1080p ITA"
+            screen.query_one("#stream-quality", Select).value = "4K"
+            await pilot.pause()
+            assert not screen.visible_items and screen.query_one("#play", Button).disabled
+            screen.reset_filters()
+            await pilot.pause()
+            assert len(screen.visible_items) == 2
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app.query_one("#quality", Select).value == "all"
+            assert app.query_one("#language", Select).value == "all"
+            saved = Store(tmp_path).config
+            assert saved["stream_language"] == "all" and saved["stream_quality"] == "all"
+    finally:
+        await service.close()
+
+
+async def test_empty_search_cannot_play_previous_selection(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.query_one("#search", Input).value = "prova"
+            app.search()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.current
+            app.query_one("#search", Input).value = ""
+            app.search()
+            await pilot.pause()
+            assert app.current is None and app.query_one("#streams", Button).disabled
+    finally:
+        await service.close()
+
+
 async def test_current_selection_prompt_generation_edit_and_escape_preserves_draft(tmp_path):
     service = cinema(tmp_path)
     app = CinemaApp(service, autoload=False)

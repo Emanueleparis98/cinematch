@@ -23,8 +23,8 @@ Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 ### Arch · pacchetto nativo
 
 ```sh
-curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.1.0/cinematch-0.1.0-1-any.pkg.tar.zst
-sudo pacman -U ./cinematch-0.1.0-1-any.pkg.tar.zst
+curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.2.0/cinematch-0.2.0-1-any.pkg.tar.zst
+sudo pacman -U ./cinematch-0.2.0-1-any.pkg.tar.zst
 cinematch
 ```
 
@@ -55,8 +55,10 @@ Il player trova anche VLC nella cartella standard di Windows.
 
 ## Come si usa
 
-1. Cerca un titolo e scegli Film, Serie, Anime o TV. Senza ricerca, Scopri mostra
-   i cataloghi popolari. Usa “Filtra i risultati” per restringere l’elenco già caricato.
+1. In **Esplora**, scegli Contenuto (Film, Serie TV, Anime o Canali TV) e Fonte.
+   Scrivi il titolo nella barra e premi **Cerca**: i risultati appaiono subito sotto.
+   La schermata iniziale è vuota e non carica cataloghi popolari.
+   Preferiti e Cronologia si scelgono da Contenuto.
 2. La scheda mostra trama, anno, generi, valutazione, regia e cast quando presenti.
    Collega TMDB per ricerca e metadati in italiano; Cinemeta e Anime Kitsu non richiedono chiavi.
 3. Da **Addon** aggiungi il link `manifest.json` del tuo addon, anche `stremio://`.
@@ -65,9 +67,20 @@ Il player trova anche VLC nella cartella standard di Windows.
    restituiti da qualsiasi addon compatibile usano questa chiave globale; il manifest
    dell’addon non viene riscritto e le sue altre impostazioni restano necessarie.
 5. Scegli stagione ed episodio quando il titolo è una serie o un anime, poi **Flussi**.
-   Filtra per lingua, qualità o addon e premi **Riproduci**.
+   I filtri **Lingua dei flussi** e **Definizione**, nel pannello Esplora, vengono
+   applicati al titolo o episodio scelto. Puoi modificarli anche nel pannello Flussi,
+   cercare per nome/addon e premere **Riproduci**. Le scelte vengono ricordate.
+   Se non ci sono corrispondenze, **Azzera** mostra di nuovo tutti i flussi.
 6. Preferiti e cronologia restano locali. La cronologia seleziona l’ultimo episodio avviato.
    Con mpv su Linux viene conservata anche la posizione, separata per ogni episodio.
+
+Il tema e la disposizione seguono TermSport: pannello Esplora a sinistra, barra di
+ricerca in alto, risultati e scheda del titolo sotto, colori verde e blu scuro.
+Lingua e definizione si riferiscono ai flussi dichiarati dalle fonti, non alla lingua
+originale del film. “SUB-ITA” indica sottotitoli italiani e non viene confuso con
+audio italiano; “MULTI” senza lingue esplicite non garantisce una traccia italiana.
+Le sorgenti senza informazioni rimangono visibili scegliendo “Tutte” o “Non indicata”.
+Un’etichetta generica “HD” non viene trasformata in 720p o 1080p.
 
 La sezione **TV** usa i cataloghi `tv`/`channel` degli addon personali: non contiene
 una lista di canali preinstallata. **Apri URL / JSON** accetta un URL HTTP/HTTPS,
