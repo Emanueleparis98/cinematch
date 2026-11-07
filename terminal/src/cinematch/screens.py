@@ -25,7 +25,7 @@ from textual.widgets import (
 )
 
 from .addons import parse_streams
-from .models import CineError, Stream, web_url
+from .models import CineError, Stream, plain, web_url
 from .prompts import KINDS, MODES, PROVIDERS, generate, period, search_currents
 from .stream_filters import LANGUAGES, QUALITIES, matches_stream, source_info
 
@@ -179,10 +179,17 @@ class StreamsScreen(DialogScreen):
         super().__init__()
         self.media, self.video_id, self.imported = media, video_id, imported
         self.items = []
+        self.visible_items = []
+        self.episodes = []
+        self.stream_generation = 0
+        self.has_episode_picker = media.type in {"series", "anime"} and imported is None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="streams-dialog", classes="dialog"):
             yield Static(Text(self.media.title), classes="dialog-title")
+            with Horizontal(id="stream-episode-row"):
+                yield Select([("Stagione 1", 1)], value=1, allow_blank=False, id="stream-season")
+                yield Select([("Caricamento episodi…", "")], value="", allow_blank=False, id="stream-episode")
             yield Static("Cerco i flussi negli addon attivi…", id="streams-status", markup=False)
             with Horizontal(id="stream-options"):
                 yield Select(LANGUAGES, value=self.app.stream_language, allow_blank=False, id="stream-language")
@@ -193,31 +200,101 @@ class StreamsScreen(DialogScreen):
             yield DataTable(id="stream-table", cursor_type="row", zebra_stripes=True)
             yield Static("", id="stream-description", markup=False)
             with Horizontal(classes="actions"):
-                yield Button("Riproduci", variant="primary", id="play")
-                yield Button("Apri fonte", id="browser")
+                yield Button("Riproduci", variant="primary", id="play", disabled=True)
+                yield Button("Apri fonte", id="browser", disabled=True)
                 yield Button("Chiudi", id="close")
 
     def on_mount(self):
         self.query_one(DataTable).add_columns("Definizione", "Lingua", "Fonte", "Nome", "Tipo")
-        self.load()
+        self.query_one("#stream-episode-row").display = self.has_episode_picker
+        if self.has_episode_picker:
+            seasons = self.media.available_seasons
+            season = self.media.season_for_video(self.video_id)
+            season = season if season in seasons else seasons[0]
+            select = self.query_one("#stream-season", Select)
+            with self.prevent(Select.Changed):
+                select.set_options([("Speciali" if s == 0 else f"Stagione {s}", s) for s in seasons])
+                select.value = season
+            self.call_after_refresh(self.choose_season, season)
+        else:
+            self.call_after_refresh(self.reload_streams)
 
     def on_unmount(self):
         self.workers.cancel_group(self, "streams")
         self.workers.cancel_group(self, "play")
+        self.workers.cancel_group(self, "stream-episodes")
+
+    def clear_streams(self, message):
+        self.stream_generation += 1
+        self.workers.cancel_group(self, "streams")
+        self.items = []
+        self.fill()
+        self.query_one("#streams-status", Static).update(message)
+
+    @on(Select.Changed, "#stream-season")
+    def change_season(self, event):
+        if self.has_episode_picker and isinstance(event.value, int):
+            self.choose_season(event.value)
+
+    def choose_season(self, season):
+        preferred = self.video_id
+        self.video_id = ""
+        self.episodes = []
+        select = self.query_one("#stream-episode", Select)
+        with self.prevent(Select.Changed):
+            select.set_options([("Caricamento episodi…", "")])
+            select.value = ""
+        select.disabled = True
+        self.clear_streams("Carico gli episodi della stagione…")
+        self.load_episodes(season, preferred)
+
+    @work(exclusive=True, group="stream-episodes")
+    async def load_episodes(self, season, preferred):
+        try:
+            episodes = await self.app.service.episodes(self.media, season)
+            if not self.is_mounted or self.query_one("#stream-season", Select).value != season:
+                return
+            self.episodes = episodes
+            select = self.query_one("#stream-episode", Select)
+            with self.prevent(Select.Changed):
+                select.set_options([(f"Episodio {v.get('episode', i+1):02} · {plain(v.get('title') or v.get('name') or 'Episodio', 150)}", v["id"]) for i, v in enumerate(episodes)] or [("Nessun episodio disponibile", "")])
+                self.video_id = preferred if any(v["id"] == preferred for v in episodes) else episodes[0]["id"] if episodes else ""
+                select.value = self.video_id
+            select.disabled = not episodes
+            if self.video_id:
+                self.reload_streams()
+            else:
+                self.query_one("#streams-status", Static).update("Nessun episodio disponibile per questa stagione. Scegli un’altra stagione o fonte.")
+        except (CineError, ValueError, TypeError):
+            if self.is_mounted and self.query_one("#stream-season", Select).value == season:
+                with self.prevent(Select.Changed):
+                    self.query_one("#stream-episode", Select).set_options([("Episodi non disponibili", "")])
+                self.query_one("#streams-status", Static).update("Non riesco a leggere gli episodi. Scegli un’altra stagione o riprova aprendo Flussi.")
+
+    @on(Select.Changed, "#stream-episode")
+    def change_episode(self, event):
+        if self.has_episode_picker and event.value != self.video_id and any(v["id"] == event.value for v in self.episodes):
+            self.video_id = event.value
+            self.reload_streams()
+
+    def reload_streams(self):
+        self.clear_streams("Cerco i flussi negli addon attivi…")
+        self.load()
 
     @work(exclusive=True, group="streams")
     async def load(self):
         status = self.query_one("#streams-status", Static)
+        video_id, generation = self.video_id, self.stream_generation
         try:
-            items = self.imported if self.imported is not None else await self.app.service.streams(self.media, self.video_id)
-            if not self.is_mounted:
+            items = self.imported if self.imported is not None else await self.app.service.streams(self.media, video_id)
+            if not self.is_mounted or generation != self.stream_generation:
                 return
             self.items = items
             self.fill()
             errors = self.app.service.addons.errors
             status.update("Lingua e definizione sono quelle dichiarate dalle fonti."+(" · "+" · ".join(errors[:2]) if errors else "") if self.items else "Nessun flusso. Collega un addon video compatibile da Addon; per serie e anime verifica l’episodio e gli ID supportati.")
         except CineError as e:
-            if self.is_mounted:
+            if self.is_mounted and generation == self.stream_generation:
                 status.update(str(e))
 
     @on(Input.Changed, "#stream-filter")
@@ -237,6 +314,7 @@ class StreamsScreen(DialogScreen):
             table.add_row(info.quality if info.quality != "unknown" else "—", info.language_label, Text(s.addon), Text(s.name), {"torrent": "Debrid", "external": "Browser"}.get(s.kind, s.kind.upper()), key=str(i))
         self.query_one("#stream-count", Static).update(f"{len(self.visible_items)} / {len(self.items)} FLUSSI"+(" · Nessun flusso corrisponde: cambia lingua o definizione, oppure premi Azzera." if self.items and not self.visible_items else ""))
         self.query_one("#play", Button).disabled = not self.visible_items
+        self.query_one("#browser", Button).disabled = not self.visible_items
         self.query_one("#stream-description", Static).update("")
 
     @on(Button.Pressed, "#reset-picker-filters")

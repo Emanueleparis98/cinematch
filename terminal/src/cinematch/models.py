@@ -56,6 +56,22 @@ class Media:
     def key(self):
         return f"{self.type}:{self.id}"
 
+    @property
+    def available_seasons(self):
+        return self.seasons or sorted({episode_season(v) for v in self.videos}) or [1]
+
+    def season_for_video(self, video_id):
+        video = next((v for v in self.videos if v["id"] == video_id), None)
+        if video is not None:
+            return episode_season(video)
+        match = re.fullmatch(r"(?:tt\d+|tmdb:\d+):(\d+):(\d+)", video_id)
+        return int(match[1]) if match else None
+
+
+def episode_season(video):
+    season = video.get("season")
+    return int(season) if season is not None else 1
+
 
 @dataclass
 class Stream:

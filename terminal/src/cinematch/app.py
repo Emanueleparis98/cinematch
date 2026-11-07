@@ -274,13 +274,10 @@ class CinemaApp(App):
             series = detail.type in {"series", "anime"}
             self.query_one("#episode-row").display = series
             if series:
-                seasons = detail.seasons or sorted({int(v.get("season") or 1) for v in detail.videos}) or [1]
+                seasons = detail.available_seasons
                 select = self.query_one("#season", Select)
                 select.set_options([(f"Stagione {s}" if s else "Speciali", s) for s in seasons])
-                resume = next((v.get("season") or 1 for v in detail.videos if v["id"] == detail.resume_video_id), None)
-                if resume is None and detail.resume_video_id:
-                    parts = detail.resume_video_id.rsplit(":", 2)
-                    resume = int(parts[-2]) if len(parts) == 3 and parts[-2].isdigit() else None
+                resume = detail.season_for_video(detail.resume_video_id)
                 chosen = resume if resume in seasons else seasons[0]
                 select.value = chosen
                 self.load_episodes(detail, chosen)
@@ -294,10 +291,7 @@ class CinemaApp(App):
     @on(Select.Changed, "#season")
     def change_season(self, event):
         if self.current and isinstance(event.value, int):
-            if self.current.tmdb:
-                self.load_episodes(self.current, event.value)
-            else:
-                self.set_episode_options(self.current, [v for v in self.current.videos if int(v.get("season") or 1) == event.value])
+            self.load_episodes(self.current, event.value)
 
     def set_episode_options(self, media, episodes):
         if not self.is_mounted or self.current is not media:

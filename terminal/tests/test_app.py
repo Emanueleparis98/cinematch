@@ -1,10 +1,11 @@
+import asyncio
 import json
 
 import httpx
 import pytest
 from cinematch.addons import parse_manifest
 from cinematch.app import CinemaApp
-from cinematch.models import Media
+from cinematch.models import CineError, Media, Stream
 from cinematch.net import Network
 from cinematch.screens import (
     AddonsScreen,
@@ -183,11 +184,15 @@ async def test_every_screen_opens_and_closes_at_supported_sizes(tmp_path, size):
     try:
         async with app.run_test(size=size) as pilot:
             await pilot.pause()
-            for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen(), StreamsScreen(Media("demo", "movie", "Un film"), imported=[])]:
+            series = Media("tt12345", "series", "Una serie", videos=[{"id": "tt12345:1:1", "season": 1, "episode": 1}])
+            for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen(), StreamsScreen(Media("demo", "movie", "Un film"), imported=[]), StreamsScreen(series)]:
                 app.push_screen(screen)
                 await pilot.pause()
                 close = screen.query_one("#close", Button)
                 assert close.region.bottom <= size[1], (type(screen).__name__, close.region, size)
+                if isinstance(screen, StreamsScreen) and screen.has_episode_picker:
+                    assert screen.query_one("#stream-episode", Select).region.bottom <= size[1]
+                    assert screen.query_one(DataTable).size.height >= 1
                 await pilot.press("escape")
                 await pilot.pause()
             assert not isinstance(app.screen, (SettingsScreen, AddonsScreen, CurrentsScreen, PromptScreen, ImportScreen, StreamsScreen))
@@ -233,7 +238,138 @@ async def test_import_json_creates_stream_picker(tmp_path):
             await pilot.pause()
             await app.workers.wait_for_complete()
             assert isinstance(app.screen, StreamsScreen) and len(app.screen.items) == 1
+            assert not app.screen.query_one("#stream-episode-row").display
     finally:
+        await service.close()
+
+
+@pytest.mark.parametrize("kind", ["series", "anime"])
+async def test_stream_picker_changes_episode_request_and_playback(tmp_path, kind):
+    requested, played = [], []
+
+    async def api(request):
+        requested.append(request.url.path)
+        return httpx.Response(200, json={"streams": [{"name": "1080p ITA", "url": "https://cdn.example.org/video.mp4"}]})
+
+    service = cinema(tmp_path, api)
+    # Anime catalogues commonly expose the Stremio series resource.
+    service.store.config["addons"][0]["types"].append("anime")
+
+    async def play(stream, media, video_id):
+        played.append(video_id)
+
+    service.play = play
+    app = CinemaApp(service, autoload=False)
+    media = Media("tt12345", kind, "Serie", videos=[
+        {"id": "tt12345:0:1", "season": 0, "episode": 1},
+        {"id": "tt12345:1:1", "season": 1, "episode": 1},
+        {"id": "tt12345:1:2", "season": 1, "episode": 2},
+        {"id": "tt12345:2:1", "season": 2, "episode": 1}])
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            screen = StreamsScreen(media, "tt12345:1:2")
+            app.push_screen(screen)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.query_one("#stream-season", Select).value == 1
+            assert screen.query_one("#stream-episode", Select).value == "tt12345:1:2"
+            screen.query_one("#stream-language", Select).value = "ITA"
+            screen.query_one("#stream-filter", Input).value = "1080"
+            screen.query_one("#stream-episode", Select).value = "tt12345:1:1"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert requested[-1].endswith("/tt12345:1:1.json")
+            screen.query_one("#stream-season", Select).value = 2
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.video_id == "tt12345:2:1"
+            screen.query_one("#stream-season", Select).value = 0
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert requested[-1].endswith("/tt12345:0:1.json")
+            assert screen.query_one("#stream-language", Select).value == "ITA"
+            assert screen.query_one("#stream-filter", Input).value == "1080"
+            assert len(screen.visible_items) == 1
+            screen.play()
+            await app.workers.wait_for_complete()
+            assert played == ["tt12345:0:1"]
+    finally:
+        await service.close()
+
+
+async def test_tmdb_picker_loads_seasons_and_handles_missing_episodes(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    media = Media("tmdb:42", "series", "Serie TMDB", tmdb=42, imdb="tt12345", seasons=[0, 1, 2, 3])
+    requested = []
+
+    async def tmdb_request(path, **params):
+        requested.append(path)
+        if path.endswith("/2"):
+            return {"episodes": []}
+        if path.endswith("/3"):
+            raise CineError("Fonte non disponibile")
+        return {"episodes": [{"episode_number": 1, "name": "Primo"}, {"episode_number": 2, "name": "Secondo"}]}
+
+    service.tmdb.request = tmdb_request
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            screen = StreamsScreen(media, "tt12345:1:2")
+            app.push_screen(screen)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert requested == ["/tv/42/season/1"]
+            assert screen.video_id == "tt12345:1:2"
+            for season in (2, 3):
+                screen.query_one("#stream-season", Select).value = season
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                assert not screen.video_id and not screen.items
+                assert screen.query_one("#play", Button).disabled
+                assert screen.query_one("#stream-episode", Select).disabled
+            screen.query_one("#stream-season", Select).value = 0
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.video_id == "tt12345:0:1" and screen.items
+    finally:
+        await service.close()
+
+
+async def test_changing_episode_clears_old_streams_and_ignores_late_response(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def streams(media, video_id):
+        if video_id.endswith(":2"):
+            started.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                # Simulate a source that finishes despite cancellation.
+                await release.wait()
+        return [Stream(video_id, url="https://cdn.example.org/video.mp4")]
+
+    service.streams = streams
+    media = Media("tt12345", "series", "Serie", videos=[
+        {"id": f"tt12345:1:{ep}", "season": 1, "episode": ep} for ep in (1, 2, 3)])
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            screen = StreamsScreen(media, "tt12345:1:1")
+            app.push_screen(screen)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen.query_one("#stream-episode", Select).value = "tt12345:1:2"
+            await pilot.pause()
+            assert started.is_set()
+            assert not screen.items and screen.query_one("#play", Button).disabled
+            screen.query_one("#stream-episode", Select).value = "tt12345:1:3"
+            await pilot.pause()
+            release.set()
+            await app.workers.wait_for_complete()
+            assert [s.name for s in screen.items] == ["tt12345:1:3"]
+    finally:
+        release.set()
         await service.close()
 
 
