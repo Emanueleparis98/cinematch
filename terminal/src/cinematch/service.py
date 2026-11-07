@@ -6,7 +6,7 @@ import re
 from .addons import Addons
 from .cache import AsyncTTLCache
 from .debrid import Debrid
-from .models import CineError
+from .models import CineError, episode_season
 from .player import Player
 from .tmdb import Tmdb
 
@@ -59,7 +59,7 @@ class Cinema:
         if media.tmdb:
             key = (media.key, media.tmdb, season)
             return await self._episodes_cache.get(key, lambda: self._load_episodes(media, season))
-        return [v for v in media.videos if int(v.get("season") or 1) == season]
+        return [v for v in media.videos if episode_season(v) == season]
 
     async def _load_episodes(self, media, season):
         return await self.tmdb.episodes(media, season)

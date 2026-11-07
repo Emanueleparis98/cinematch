@@ -95,6 +95,8 @@ progetto non dichiara `apt install cinematch`, `pacman -S cinematch` o
    restituiti da qualsiasi addon compatibile usano questa chiave globale; il manifest
    dell’addon non viene riscritto e le sue altre impostazioni restano necessarie.
 5. Scegli stagione ed episodio quando il titolo è una serie o un anime, poi **Flussi**.
+   Puoi cambiare stagione ed episodio anche direttamente nel pannello **Flussi**:
+   le sorgenti si aggiornano automaticamente per l’episodio scelto, mantenendo i filtri.
    I filtri **Lingua dei flussi** e **Definizione**, nel pannello Esplora, vengono
    applicati al titolo o episodio scelto. Puoi modificarli anche nel pannello Flussi,
    cercare per nome/addon e premere **Riproduci**. Le scelte vengono ricordate.
