@@ -182,6 +182,7 @@ class StreamsScreen(DialogScreen):
         self.visible_items = []
         self.episodes = []
         self.stream_generation = 0
+        self.chosen_season = None
         self.has_episode_picker = media.type in {"series", "anime"} and imported is None
 
     def compose(self) -> ComposeResult:
@@ -215,9 +216,9 @@ class StreamsScreen(DialogScreen):
             with self.prevent(Select.Changed):
                 select.set_options([("Speciali" if s == 0 else f"Stagione {s}", s) for s in seasons])
                 select.value = season
-            self.call_after_refresh(self.choose_season, season)
+            self.call_later(self.choose_season, season)
         else:
-            self.call_after_refresh(self.reload_streams)
+            self.call_later(self.reload_streams)
 
     def on_unmount(self):
         self.workers.cancel_group(self, "streams")
@@ -225,6 +226,8 @@ class StreamsScreen(DialogScreen):
         self.workers.cancel_group(self, "stream-episodes")
 
     def clear_streams(self, message):
+        if not self.display:
+            return
         self.stream_generation += 1
         self.workers.cancel_group(self, "streams")
         self.items = []
@@ -237,6 +240,9 @@ class StreamsScreen(DialogScreen):
             self.choose_season(event.value)
 
     def choose_season(self, season):
+        if not self.display or season != self.query_one("#stream-season", Select).value or season == self.chosen_season:
+            return
+        self.chosen_season = season
         preferred = self.video_id
         self.video_id = ""
         self.episodes = []
@@ -252,7 +258,7 @@ class StreamsScreen(DialogScreen):
     async def load_episodes(self, season, preferred):
         try:
             episodes = await self.app.service.episodes(self.media, season)
-            if not self.is_mounted or self.query_one("#stream-season", Select).value != season:
+            if (not self.is_mounted or not self.display) or self.query_one("#stream-season", Select).value != season:
                 return
             self.episodes = episodes
             select = self.query_one("#stream-episode", Select)
@@ -266,7 +272,7 @@ class StreamsScreen(DialogScreen):
             else:
                 self.query_one("#streams-status", Static).update("Nessun episodio disponibile per questa stagione. Scegli un’altra stagione o fonte.")
         except (CineError, ValueError, TypeError):
-            if self.is_mounted and self.query_one("#stream-season", Select).value == season:
+            if self.is_mounted and self.display and self.query_one("#stream-season", Select).value == season:
                 with self.prevent(Select.Changed):
                     self.query_one("#stream-episode", Select).set_options([("Episodi non disponibili", "")])
                 self.query_one("#streams-status", Static).update("Non riesco a leggere gli episodi. Scegli un’altra stagione o riprova aprendo Flussi.")
@@ -278,29 +284,35 @@ class StreamsScreen(DialogScreen):
             self.reload_streams()
 
     def reload_streams(self):
+        if not self.display:
+            return
         self.clear_streams("Cerco i flussi negli addon attivi…")
         self.load()
 
     @work(exclusive=True, group="streams")
     async def load(self):
+        if not self.display:
+            return
         status = self.query_one("#streams-status", Static)
         video_id, generation = self.video_id, self.stream_generation
         try:
             items = self.imported if self.imported is not None else await self.app.service.streams(self.media, video_id)
-            if not self.is_mounted or generation != self.stream_generation:
+            if (not self.is_mounted or not self.display) or generation != self.stream_generation:
                 return
             self.items = items
             self.fill()
             errors = self.app.service.addons.errors
             status.update("Lingua e definizione sono quelle dichiarate dalle fonti."+(" · "+" · ".join(errors[:2]) if errors else "") if self.items else "Nessun flusso. Collega un addon video compatibile da Addon; per serie e anime verifica l’episodio e gli ID supportati.")
         except CineError as e:
-            if self.is_mounted and generation == self.stream_generation:
+            if self.is_mounted and self.display and generation == self.stream_generation:
                 status.update(str(e))
 
     @on(Input.Changed, "#stream-filter")
     @on(Select.Changed, "#stream-language")
     @on(Select.Changed, "#stream-quality")
     def fill(self):
+        if not self.display:
+            return
         query = self.query_one("#stream-filter", Input).value
         self.workers.cancel_group(self, "play")
         language = str(self.query_one("#stream-language", Select).value)
@@ -325,11 +337,15 @@ class StreamsScreen(DialogScreen):
         self.fill()
 
     def selected(self):
+        if not self.display:
+            return None
         row = self.query_one(DataTable).cursor_row
         return self.visible_items[row] if 0 <= row < len(getattr(self, "visible_items", [])) else None
 
     @on(DataTable.RowHighlighted)
     def highlight(self):
+        if not self.display:
+            return
         stream = self.selected()
         self.query_one("#stream-description", Static).update(stream.description if stream else "")
 
@@ -345,16 +361,16 @@ class StreamsScreen(DialogScreen):
         button.disabled = True
         status.update("Preparo la sorgente e avvio il player…")
         try:
-            if not self.is_mounted:
+            if (not self.is_mounted or not self.display):
                 return
             await self.app.service.play(stream, self.media, self.video_id)
-            if self.is_mounted:
+            if self.is_mounted and self.display:
                 status.update("Player avviato. I controlli sono nella finestra video.")
         except (CineError, OSError) as e:
-            if self.is_mounted:
+            if self.is_mounted and self.display:
                 status.update(str(e) if isinstance(e, CineError) else "Impossibile avviare il player.")
         finally:
-            if self.is_mounted:
+            if self.is_mounted and self.display:
                 button.disabled = not bool(self.visible_items)
 
     @on(Button.Pressed, "#browser")
