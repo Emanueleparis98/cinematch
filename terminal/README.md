@@ -53,7 +53,7 @@ cinematch
 Aggiornamento: `scoop update; scoop update cinematch`.
 È un bucket del progetto; non è una pubblicazione nel catalogo WinGet.
 Installa [mpv](https://mpv.io/installation/) o [VLC](https://www.videolan.org/vlc/).
-Il player trova anche VLC nella cartella standard di Windows.
+Il player trova anche VLC nella cartella standard di Windows e in `/Applications` su macOS.
 
 ## Alternativa universale con uv / pipx
 

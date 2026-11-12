@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 
 import httpx
 
+from . import __version__
 from .models import CineError, web_url
 
 
@@ -16,7 +17,7 @@ class _Transient(Exception):
 class Network:
     def __init__(self, client=None):
         self.client = client or httpx.AsyncClient(timeout=httpx.Timeout(15, connect=6), follow_redirects=False,
-                                                headers={"User-Agent": "CineMatch-Terminal/0.1 (+https://github.com/Emanueleparis98/cinematch)"})
+                                                headers={"User-Agent": f"CineMatch-Terminal/{__version__} (+https://github.com/Emanueleparis98/cinematch)"})
 
     async def close(self):
         await self.client.aclose()

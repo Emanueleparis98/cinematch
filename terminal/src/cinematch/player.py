@@ -12,6 +12,15 @@ from pathlib import Path
 from .models import CineError, web_url
 
 
+def vlc_app_paths():
+    if sys.platform == "win32":
+        return [Path(os.environ.get(key, "C:/Program Files"))/"VideoLAN/VLC/vlc.exe"
+                for key in ["ProgramFiles", "ProgramFiles(x86)"]]
+    if sys.platform == "darwin":
+        return [Path("/Applications/VLC.app/Contents/MacOS/VLC")]
+    return []
+
+
 class Player:
     def __init__(self, store):
         self.store = store
@@ -30,9 +39,8 @@ class Player:
             path = shutil.which(name)
             if path:
                 return path
-        if sys.platform == "win32" and choice in {"auto", "vlc"}:
-            for key in ["ProgramFiles", "ProgramFiles(x86)"]:
-                path = Path(os.environ.get(key, "C:/Program Files"))/"VideoLAN/VLC/vlc.exe"
+        if choice in {"auto", "vlc"}:
+            for path in vlc_app_paths():
                 if path.is_file():
                     return str(path)
         return None
@@ -101,6 +109,8 @@ class Player:
                     if not line:
                         break
                     data = json.loads(line)
+                    if not isinstance(data, dict):
+                        continue
                     value = data.get("data")
                     if type(value) in {int, float}:
                         if data.get("request_id") == 1:
@@ -125,7 +135,10 @@ class Player:
             try:
                 await asyncio.wait_for(self.process.wait(), 3)
             except TimeoutError:
-                self.process.kill()
+                try:
+                    self.process.kill()
+                except ProcessLookupError:
+                    pass
                 await self.process.wait()
         self.process = None
         if self.temporary:

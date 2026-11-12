@@ -142,14 +142,18 @@ class AddonsScreen(DialogScreen):
         status.update("Leggo il manifest…")
         try:
             addon = await self.app.service.addons.add(self.query_one("#addon-url", Input).value)
+            if not self.is_mounted:
+                return
             self.app.service.clear_cache()
             self.query_one("#addon-url", Input).value = ""
             self.fill()
             status.update(addon["name"]+" aggiunto. La chiave debrid globale sarà usata per i torrent restituiti dall’addon.")
         except (CineError, OSError, ValueError, TypeError):
-            status.update("Impossibile aggiungere l’addon. Verifica manifest, configurazione e collegamento al sito.")
+            if self.is_mounted:
+                status.update("Impossibile aggiungere l’addon. Verifica manifest, configurazione e collegamento al sito.")
         finally:
-            button.disabled = False
+            if self.is_mounted:
+                button.disabled = False
 
     @on(Button.Pressed, "#toggle-addon")
     @on(Button.Pressed, "#remove-addon")
@@ -226,7 +230,7 @@ class StreamsScreen(DialogScreen):
         self.workers.cancel_group(self, "stream-episodes")
 
     def clear_streams(self, message):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return
         self.stream_generation += 1
         self.workers.cancel_group(self, "streams")
@@ -240,7 +244,7 @@ class StreamsScreen(DialogScreen):
             self.choose_season(event.value)
 
     def choose_season(self, season):
-        if not self.display or season != self.query_one("#stream-season", Select).value or season == self.chosen_season:
+        if not self.is_mounted or not self.display or season != self.query_one("#stream-season", Select).value or season == self.chosen_season:
             return
         self.chosen_season = season
         preferred = self.video_id
@@ -284,14 +288,14 @@ class StreamsScreen(DialogScreen):
             self.reload_streams()
 
     def reload_streams(self):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return
         self.clear_streams("Cerco i flussi negli addon attivi…")
         self.load()
 
     @work(exclusive=True, group="streams")
     async def load(self):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return
         status = self.query_one("#streams-status", Static)
         video_id, generation = self.video_id, self.stream_generation
@@ -306,12 +310,15 @@ class StreamsScreen(DialogScreen):
         except CineError as e:
             if self.is_mounted and self.display and generation == self.stream_generation:
                 status.update(str(e))
+        except (ValueError, TypeError, KeyError, AttributeError):
+            if self.is_mounted and self.display and generation == self.stream_generation:
+                status.update("Una fonte ha restituito dati non validi. Prova un altro flusso o addon.")
 
     @on(Input.Changed, "#stream-filter")
     @on(Select.Changed, "#stream-language")
     @on(Select.Changed, "#stream-quality")
     def fill(self):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return
         query = self.query_one("#stream-filter", Input).value
         self.workers.cancel_group(self, "play")
@@ -337,14 +344,14 @@ class StreamsScreen(DialogScreen):
         self.fill()
 
     def selected(self):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return None
         row = self.query_one(DataTable).cursor_row
         return self.visible_items[row] if 0 <= row < len(getattr(self, "visible_items", [])) else None
 
     @on(DataTable.RowHighlighted)
     def highlight(self):
-        if not self.display:
+        if not self.is_mounted or not self.display:
             return
         stream = self.selected()
         self.query_one("#stream-description", Static).update(stream.description if stream else "")

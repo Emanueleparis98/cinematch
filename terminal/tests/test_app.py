@@ -153,6 +153,89 @@ async def test_empty_search_cannot_play_previous_selection(tmp_path):
         await service.close()
 
 
+async def test_app_ignores_ui_updates_after_teardown(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            await pilot.pause()
+        assert not app.is_running
+        app.items = [Media("tt1", "movie", "Film")]
+        app.fill()
+        app.clear_detail()
+    finally:
+        await service.close()
+
+
+async def test_stop_clears_current_playback_and_status_is_not_restored(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            service.current = Media("tt1", "movie", "Film")
+            service.video_id = ""
+            app.stop()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert service.current is None and service.video_id == ""
+            assert "Video interrotto" in str(app.query_one("#playback", Static).render())
+            app.track_playback()
+            await app.workers.wait_for_complete()
+            assert "Video interrotto" in str(app.query_one("#playback", Static).render())
+    finally:
+        await service.close()
+
+
+async def test_late_episode_load_does_not_replace_new_season(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def episodes(media, season):
+        if season == 1:
+            started.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                # Simulate a source that finishes despite cancellation.
+                await release.wait()
+            return [{"id": "tt12345:1:1", "season": 1, "episode": 1, "title": "Primo"}]
+        return [{"id": "tt12345:2:1", "season": 2, "episode": 1, "title": "Secondo"}]
+
+    service.episodes = episodes
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.query_one("#section", Select).value = "series"
+            app.query_one("#search", Input).value = "prova"
+            app.search()
+            await wait_until(pilot, started.is_set)
+            app.query_one("#season", Select).value = 2
+            await wait_until(pilot, lambda: app.query_one("#episode", Select).value == "tt12345:2:1")
+            release.set()
+            await app.workers.wait_for_complete()
+            assert app.query_one("#episode", Select).value == "tt12345:2:1"
+    finally:
+        release.set()
+        await service.close()
+
+
+async def test_import_empty_stream_list_opens_picker_with_feedback(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.action_import()
+            await pilot.pause()
+            app.screen.query_one(TextArea).load_text('{"streams": []}')
+            app.screen.submit()
+            await wait_until(pilot, lambda: isinstance(app.screen, StreamsScreen))
+            screen = app.screen
+            await wait_until(pilot, lambda: "Nessun flusso" in str(screen.query_one("#streams-status", Static).render()))
+            assert not screen.items and screen.query_one("#play", Button).disabled
+    finally:
+        await service.close()
+
+
 async def test_current_selection_prompt_generation_edit_and_escape_preserves_draft(tmp_path):
     service = cinema(tmp_path)
     app = CinemaApp(service, autoload=False)
@@ -326,7 +409,7 @@ async def test_tmdb_picker_loads_seasons_and_handles_missing_episodes(tmp_path):
             for season in (2, 3):
                 screen.query_one("#stream-season", Select).value = season
                 message = "Nessun episodio" if season == 2 else "Non riesco"
-                await wait_until(pilot, lambda: message in str(screen.query_one("#streams-status", Static).render()))
+                await wait_until(pilot, lambda message=message: message in str(screen.query_one("#streams-status", Static).render()))
                 assert not screen.video_id and not screen.items
                 assert screen.query_one("#play", Button).disabled
                 assert screen.query_one("#stream-episode", Select).disabled

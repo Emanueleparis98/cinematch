@@ -29,7 +29,8 @@ class Cinema:
         if not query.strip():
             return []
         tasks = []
-        if source in {"all", "addons"}:
+        search_addons = source in {"all", "addons"}
+        if search_addons:
             tasks.append(self.addons.search(query, section, skip))
         if source in {"all", "tmdb"} and self.store.config["tmdb_key"]:
             tasks.append(self.tmdb.search(query, section, skip))
@@ -43,7 +44,8 @@ class Cinema:
                 if m.key not in seen:
                     seen.add(m.key)
                     items.append(m)
-        self.errors += self.addons.errors
+        if search_addons:
+            self.errors += self.addons.errors
         return items
 
     async def details(self, media):
@@ -103,6 +105,10 @@ class Cinema:
         self.addons.clear_cache()
 
     async def close(self):
-        await self.save_progress()
-        await self.player.stop()
-        await self.net.close()
+        try:
+            await self.save_progress()
+        finally:
+            try:
+                await self.player.stop()
+            finally:
+                await self.net.close()

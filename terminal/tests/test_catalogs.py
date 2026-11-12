@@ -75,6 +75,27 @@ async def test_tmdb_italian_search_details_and_episode_ids(tmp_path, key):
         await net.close()
 
 
+async def test_tmdb_bearer_prefix_is_case_insensitive(tmp_path):
+    store = Store(tmp_path)
+    store.config["tmdb_key"] = "bEaReR   "+"a"*32
+    seen = []
+    async def api(request):
+        seen.append(request.url.params["api_key"])
+        return httpx.Response(200, json={"images": {}})
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    try:
+        await Tmdb(net, store).request("/configuration")
+        assert seen == ["a"*32]
+    finally:
+        await net.close()
+
+
+def test_tmdb_parse_does_not_invent_ratings_or_imdb_ids():
+    media = Tmdb.parse({"id": 10, "title": "Film", "vote_average": 0, "imdb_id": 123}, "movie")
+    assert media.rating == "" and media.imdb == ""
+    assert Tmdb.parse({"id": 11, "title": "   "}, "movie") is None
+
+
 async def test_debrid_key_is_not_injected_into_addon_requests(tmp_path):
     store = Store(tmp_path)
     store.config.update(debrid_provider="rd", debrid_key="globally-private")

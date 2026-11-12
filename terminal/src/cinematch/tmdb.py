@@ -12,7 +12,7 @@ class Tmdb:
         self.net, self.store = net, store
 
     async def request(self, path, **params):
-        key = self.store.config["tmdb_key"].strip().removeprefix("Bearer ")
+        key = re.sub(r"^bearer\s+", "", self.store.config["tmdb_key"].strip(), flags=re.IGNORECASE)
         if not key:
             raise CineError("Collega TMDB nelle impostazioni.")
         headers = {"Accept": "application/json"}
@@ -40,6 +40,9 @@ class Tmdb:
         if type(mid) is not int or mid <= 0:
             return None
         series = kind == "tv"
+        title = plain(item.get("name") if series else item.get("title"), 250)
+        if not title.strip():
+            return None
         external = item.get("external_ids") if isinstance(item.get("external_ids"), dict) else {}
         credits = item.get("credits") if isinstance(item.get("credits"), dict) else {}
         genres = item.get("genres") if isinstance(item.get("genres"), list) else []
@@ -47,12 +50,14 @@ class Tmdb:
         created_by = item.get("created_by") if isinstance(item.get("created_by"), list) else []
         cast = credits.get("cast") if isinstance(credits.get("cast"), list) else []
         crew = credits.get("crew") if isinstance(credits.get("crew"), list) else []
+        imdb = external.get("imdb_id") if series else item.get("imdb_id")
+        imdb = imdb if isinstance(imdb, str) and re.fullmatch(r"tt\d+", imdb) else ""
         vote = item.get("vote_average")
-        vote = round(vote, 1) if isinstance(vote, (int, float)) else 0
-        return Media(f"tmdb:{mid}", "series" if series else "movie", plain(item.get("name") if series else item.get("title"), 250),
+        vote = round(vote, 1) if type(vote) in {int, float} and vote > 0 else 0
+        return Media(f"tmdb:{mid}", "series" if series else "movie", title,
                      year=plain(item.get("first_air_date") if series else item.get("release_date"), 10)[:4],
-                     overview=plain(item.get("overview"), 4000), source="TMDB", tmdb=mid, rating=str(vote),
-                     imdb=external.get("imdb_id", "") if series else item.get("imdb_id", ""),
+                     overview=plain(item.get("overview"), 4000), source="TMDB", tmdb=mid, rating=str(vote) if vote else "",
+                     imdb=imdb,
                      genres=[g["name"] for g in genres if isinstance(g, dict) and isinstance(g.get("name"), str)],
                      cast=[p["name"] for p in cast[:12] if isinstance(p, dict) and isinstance(p.get("name"), str)],
                      directors=[p["name"] for p in crew if isinstance(p, dict) and p.get("job") == "Director" and isinstance(p.get("name"), str)] if not series else [p["name"] for p in created_by if isinstance(p, dict) and isinstance(p.get("name"), str)],

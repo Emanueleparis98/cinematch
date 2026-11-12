@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from cinematch import __version__
 from cinematch.addons import (
     Addons,
     endpoint,
@@ -14,10 +15,18 @@ from cinematch.addons import (
     supports,
 )
 from cinematch.debrid import Debrid, choose_file
-from cinematch.models import CineError, Media, Stream, parse_media, web_url
+from cinematch.models import (
+    CineError,
+    Media,
+    Stream,
+    episode_season,
+    parse_media,
+    web_url,
+)
 from cinematch.net import Network
 from cinematch.player import Player
 from cinematch.prompts import catalog, generate, search_currents
+from cinematch.service import Cinema
 from cinematch.store import Store
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +37,14 @@ def test_catalog_is_the_canonical_catalog():
     assert catalog() == json.loads((ROOT/"plugins/cinema-currents/assets/movements.json").read_text(encoding="utf-8"))
     assert search_currents("néoréalisme") or search_currents("Rossellini")
     assert search_currents("Méliès")[0]["id"] == "cinema_attrazioni"
+
+
+def test_release_metadata_matches_package_version():
+    import tomllib
+    project = tomllib.loads((ROOT/"pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    assert __version__ == project
+    assert json.loads((ROOT/"terminal/latest.json").read_text(encoding="utf-8"))["version"] == project
+    assert json.loads((ROOT/"bucket/cinematch.json").read_text(encoding="utf-8"))["version"] == project
 
 
 def test_prompts_free_does_not_inject_preserved_currents():
@@ -62,6 +79,27 @@ def test_manifest_config_and_personalized_paths():
     assert endpoint(addon, "stream", "series", "kitsu:1:2") == "https://example.org/personal/stream/series/kitsu%3A1%3A2.json?key=abc"
 
 
+def test_manifest_url_strips_trailing_slashes_without_duplicating_manifest():
+    assert manifest_url("https://example.org/manifest.json/") == "https://example.org/manifest.json"
+    assert manifest_url("https://example.org/manifest.json/?key=abc") == "https://example.org/manifest.json?key=abc"
+    assert manifest_url("https://example.org/") == "https://example.org/manifest.json"
+
+
+def test_supports_tolerates_malformed_resource_entries():
+    url = "https://example.org/manifest.json"
+    addon = parse_manifest({"id": "demo", "name": "Demo", "types": ["movie", "series"], "resources": [
+        {"name": "stream", "types": None},
+        {"name": "meta", "types": "series", "idPrefixes": "tt"},
+        {"name": "catalog", "idPrefixes": None},
+        {"name": "meta", "types": []},
+    ]}, url)
+    assert supports(addon, "stream", "movie", "tt1")
+    assert supports(addon, "meta", "series", "tt1")
+    assert not supports(addon, "meta", "movie", "tt1")
+    assert not supports(addon, "meta", "series", "kitsu:1:2")
+    assert supports(addon, "catalog", "series")
+
+
 def test_streams_preserve_file_selection_headers_and_subtitles():
     items = parse_streams({"streams": [
         {"infoHash": "A"*40, "fileIdx": 2, "name": "1080p ITA"},
@@ -80,6 +118,53 @@ def test_nullable_cinemeta_fields_keep_all_episodes():
     assert len(m.videos) == 1 and m.directors == []
 
 
+def test_media_rejects_missing_titles_and_normalizes_episode_numbers():
+    assert parse_media({"id": "tt1", "name": 123, "type": "movie"}) is None
+    assert parse_media({"id": "tt1", "name": "   ", "type": "movie"}) is None
+    m = parse_media({"id": "tt1", "type": "series", "name": "Serie", "videos": [
+        {"id": "a", "season": "S1", "episode": "E2"},
+        {"id": "b", "season": "2", "episode": 3},
+    ]})
+    assert m.videos[0].get("season") is None and m.videos[0].get("episode") is None
+    assert m.videos[1]["season"] == 2 and m.videos[1]["episode"] == 3
+    assert m.available_seasons == [1, 2]
+    assert episode_season({"season": "non valida"}) == 1
+
+
+async def test_tmdb_only_search_does_not_report_stale_addon_errors(tmp_path):
+    store = Store(tmp_path)
+    store.config["tmdb_key"] = "a"*32
+    async def empty(request):
+        return httpx.Response(200, json={"results": []})
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(empty)))
+    service = Cinema(net, store)
+    service.addons.errors = ["errore vecchio di un'altra ricerca"]
+    try:
+        assert await service.search("prova", source="tmdb") == []
+        assert service.errors == []
+    finally:
+        await service.close()
+
+
+async def test_service_close_always_stops_player_and_network(tmp_path):
+    store = Store(tmp_path)
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={}))))
+    service = Cinema(net, store)
+    called = []
+    async def fail():
+        raise OSError("archivio non scrivibile")
+    async def stop():
+        called.append("player")
+    async def close():
+        called.append("network")
+    service.save_progress = fail
+    service.player.stop = stop
+    service.net.close = close
+    with pytest.raises(OSError):
+        await service.close()
+    assert called == ["player", "network"]
+
+
 def test_episode_never_selects_different_episode_or_sample():
     files = [{"id": 1, "path": "S01E01.mkv", "bytes": 100}, {"id": 2, "path": "S01E02.mkv", "bytes": 1000}, {"id": 3, "path": "sample.mkv", "bytes": 5000}]
     assert choose_file(files, season=1, episode=1)["id"] == 1
@@ -88,6 +173,8 @@ def test_episode_never_selects_different_episode_or_sample():
         choose_file(files, file_idx=2)
     with pytest.raises(CineError, match="certezza"):
         choose_file(files, season=2, episode=1)
+    with pytest.raises(CineError, match="video"):
+        choose_file([{"id": 1, "path": {"invalid": True}}])
 
 
 def test_storage_atomic_private_and_favorites(tmp_path):
@@ -201,6 +288,37 @@ async def test_rd_selects_correct_file_and_isolates_accounts(tmp_path):
         await net.close()
 
 
+async def test_rd_selects_a_new_episode_from_an_already_downloaded_pack(tmp_path):
+    store = Store(tmp_path)
+    store.config.update(debrid_provider="rd", debrid_key="account")
+    state = {"selected": False}
+    select_calls = []
+    async def api(request):
+        path = request.url.path
+        if path.endswith("addMagnet"):
+            return httpx.Response(200, json={"id": "TASK1"})
+        if path.endswith("selectFiles/TASK1"):
+            select_calls.append(request.content)
+            state["selected"] = True
+            return httpx.Response(204)
+        if "/info/" in path:
+            selected = state["selected"]
+            return httpx.Response(200, json={
+                "status": "downloaded",
+                "files": [{"id": 1, "path": "S01E01.mkv", "selected": 1},
+                          {"id": 2, "path": "S01E02.mkv", "selected": 1 if selected else 0}],
+                "links": ["https://rd.example/one", "https://rd.example/two"] if selected else ["https://rd.example/one"],
+            })
+        return httpx.Response(200, json={"download": "https://cdn.example.org/two.mkv"})
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
+    try:
+        result = await Debrid(net, store).resolve(Stream("Torrent", kind="torrent", info_hash="a"*40, file_idx=1))
+        assert result.url == "https://cdn.example.org/two.mkv"
+        assert select_calls == [b"files=2"]
+    finally:
+        await net.close()
+
+
 async def test_torbox_multipart_cached_file_and_api_key_stays_on_service(tmp_path):
     store = Store(tmp_path)
     store.config.update(debrid_provider="torbox", debrid_key="torbox-secret")
@@ -232,6 +350,23 @@ def test_player_uses_argv_and_never_shell(monkeypatch, tmp_path):
     command = player.command(Stream("Movie", url="https://cdn.example.org/film.mkv?x=$(touch-pwned)"), resume=90)
     assert command[-2] == "--" and "--start=90" in command
     assert command[-1].endswith("$(touch-pwned)")
+
+
+def test_player_finds_vlc_app_outside_path(monkeypatch, tmp_path):
+    import cinematch.player as module
+    executable = tmp_path/"VLC"
+    executable.write_text("", encoding="utf-8")
+    monkeypatch.setattr(module.shutil, "which", lambda name: None)
+    monkeypatch.setattr(module, "vlc_app_paths", lambda: [executable])
+    assert Player(Store(tmp_path)).available() == str(executable)
+
+
+async def test_default_user_agent_uses_package_version():
+    net = Network()
+    try:
+        assert net.client.headers["user-agent"] == f"CineMatch-Terminal/{__version__} (+https://github.com/Emanueleparis98/cinematch)"
+    finally:
+        await net.close()
 
 
 async def test_network_retries_one_transient_get_but_not_post():
