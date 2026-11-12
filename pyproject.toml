@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cinematch"
-version = "0.3.2"
+version = "0.3.3"
 description = "Cinema, serie, anime, TV e correnti cinematografiche nel terminale"
 requires-python = ">=3.11"
 readme = "terminal/README.md"

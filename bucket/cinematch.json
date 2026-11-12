@@ -1,16 +1,16 @@
 {
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Film, series, anime, TV and cinema prompts in your terminal",
   "homepage": "https://github.com/Emanueleparis98/cinematch",
   "license": "MIT",
   "depends": "main/uv",
-  "url": "https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.2/CineMatch-0.3.2-scoop.zip",
-  "hash": "617b1f8aec263f0279c265ab20e37b77f762d0700b646057c868ca0efbb8233b",
+  "url": "https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.3/CineMatch-0.3.3-scoop.zip",
+  "hash": "47dbd4f380f6b397a6b8e01df19d138b41bd16c71bcc45ace80119a88fe27f52",
   "installer": {
     "script": [
       "& uv venv --python 3.13 \"$dir\\venv\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot create CineMatch environment' }",
-      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\cinematch-0.3.2-py3-none-any.whl\"",
+      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\cinematch-0.3.3-py3-none-any.whl\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot install CineMatch' }"
     ]
   },
