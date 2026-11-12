@@ -18,13 +18,14 @@ STREAMS_TTL = 60.0
 def manifest_url(value):
     url = web_url(re.sub(r"^stremio://", "https://", value.strip(), flags=re.IGNORECASE))
     parts = urlsplit(url)
-    if re.search(r"/(?:app/)?configure/?$", parts.path):
+    path = parts.path.rstrip("/")
+    if re.search(r"/(?:app/)?configure$", path):
         raise CineError("Questo è il configuratore: copia il link che termina con manifest.json.")
-    if not parts.path.endswith("/manifest.json"):
-        if parts.path.endswith(".json"):
+    if not path.endswith("/manifest.json"):
+        if path.endswith(".json"):
             raise CineError("Per l’addon serve manifest.json; per una lista usa Importa JSON.")
-        parts = parts._replace(path=parts.path.rstrip("/")+"/manifest.json")
-    return urlunsplit(parts)
+        path = path.rstrip("/")+"/manifest.json"
+    return urlunsplit(parts._replace(path=path))
 
 
 def parse_manifest(data, url):
@@ -45,9 +46,22 @@ def parse_manifest(data, url):
 def supports(addon, resource, kind, mid=""):
     for item in addon.get("resources", []):
         entry = {"name": item, "types": addon.get("types", [])} if isinstance(item, str) else item
-        if not isinstance(entry, dict) or entry.get("name") != resource or kind not in entry.get("types", addon.get("types", [])):
+        if not isinstance(entry, dict) or entry.get("name") != resource:
             continue
-        prefixes = entry.get("idPrefixes", addon.get("idPrefixes", [])) or []
+        types = entry.get("types")
+        if types is None:
+            types = addon.get("types", [])
+        elif isinstance(types, str):
+            types = [types]
+        if not isinstance(types, (list, tuple, set)) or kind not in types:
+            continue
+        prefixes = entry.get("idPrefixes")
+        if prefixes is None:
+            prefixes = addon.get("idPrefixes", [])
+        if isinstance(prefixes, str):
+            prefixes = [prefixes]
+        elif not isinstance(prefixes, (list, tuple, set)):
+            prefixes = []
         if not mid or not prefixes or any(mid.startswith(p) for p in prefixes if isinstance(p, str)):
             return True
     return False
@@ -121,7 +135,12 @@ class Addons:
 
     @property
     def all(self):
-        return [a for a in [*self.defaults, *self.store.config["addons"]] if a.get("enabled", True)]
+        stored = self.store.config.get("addons")
+        if not isinstance(stored, list):
+            stored = []
+        return [a for a in [*self.defaults, *stored]
+                if isinstance(a, dict) and a.get("enabled", True)
+                and all(isinstance(a.get(key), str) for key in ("url", "id", "name"))]
 
     @property
     def signature(self):
@@ -202,7 +221,10 @@ class Addons:
                 continue
             if section != "anime" and addon in self.defaults and anime:
                 continue
-            for cat in addon.get("catalogs", [])[:30]:
+            catalogs = addon.get("catalogs")
+            if not isinstance(catalogs, list):
+                continue
+            for cat in catalogs[:30]:
                 if not isinstance(cat, dict):
                     continue
                 kind = cat.get("type")
@@ -230,7 +252,7 @@ class Addons:
                 continue
             try:
                 group = task.result()
-            except Exception:
+            except Exception:  # noqa: BLE001 - una fonte non deve fermare le altre
                 self.errors.append("Una fonte non ha risposto.")
                 continue
             for media in group:
@@ -297,7 +319,7 @@ class Addons:
                 continue
             try:
                 group = task.result()
-            except Exception:
+            except Exception:  # noqa: BLE001 - una fonte non deve fermare le altre
                 self.errors.append("Una fonte non ha risposto.")
                 continue
             for stream in group:

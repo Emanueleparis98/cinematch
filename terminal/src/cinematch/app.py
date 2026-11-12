@@ -168,6 +168,8 @@ class CinemaApp(App):
 
     @work(exclusive=True, group="search")
     async def load_results(self, append=False):
+        if not self.is_running:
+            return
         query = self.query_one("#search", Input).value.strip()
         section = str(self.query_one("#section", Select).value)
         source = str(self.query_one("#source", Select).value)
@@ -191,7 +193,7 @@ class CinemaApp(App):
                     await self.service.addons.initialize()
                     self.initialized = True
                 items = await self.service.search(query, section, source, self.skip)
-            if not self.is_mounted:
+            if not self.is_running:
                 return
             if append:
                 existing = {m.key for m in self.items}
@@ -208,18 +210,19 @@ class CinemaApp(App):
                 status.update("Collega TMDB nelle impostazioni oppure scegli Fonti integrate.")
             else:
                 status.update(f"{len(self.items)} titoli"+(" · "+errors if errors else " · seleziona un titolo per dettagli ed episodi"))
-        except (CineError, OSError) as e:
-            if self.is_mounted:
+        except (CineError, OSError, ValueError, TypeError) as e:
+            if self.is_running:
                 status.update(str(e) if isinstance(e, CineError) else "Non riesco a leggere i dati locali.")
         finally:
-            if self.is_mounted:
+            if self.is_running:
                 table.loading = False
 
     def clear_detail(self):
-        if not self.is_mounted:
+        if not self.is_running:
             return
         self.current = None
         self.detail_generation += 1
+        self.episodes_generation += 1
         self.workers.cancel_group(self, "detail")
         self.workers.cancel_group(self, "episodes")
         self.query_one("#episode-row").display = False
@@ -230,7 +233,7 @@ class CinemaApp(App):
             self.query_one("#"+bid, Button).disabled = True
 
     def fill(self):
-        if not self.is_mounted:
+        if not self.is_running:
             return
         self.visible_items = self.items[:]
         table = self.query_one("#results", DataTable)
@@ -246,24 +249,25 @@ class CinemaApp(App):
         # Use the message payload rather than querying the DOM: a highlight can
         # already be queued while the app is being torn down in tests.
         row = event.cursor_row
-        if self.is_mounted and 0 <= row < len(getattr(self, "visible_items", [])):
+        if self.is_running and 0 <= row < len(getattr(self, "visible_items", [])):
             self.detail_generation += 1
             self.show_detail(self.visible_items[row], self.detail_generation)
 
     @work(exclusive=True, group="detail")
     async def show_detail(self, media, generation):
-        if not self.is_mounted:
+        if not self.is_running:
             return
         self.current = media
         for bid in ("favorite", "browser"):
             self.query_one("#"+bid, Button).disabled = False
         self.query_one("#media-title", Static).update(media.title)
+        self.query_one("#media-meta", Static).update("")
         self.query_one("#media-overview", Static).update(media.overview)
         self.query_one("#episode-row").display = False
         self.query_one("#streams", Button).disabled = True
         try:
             detail = await self.service.details(media)
-            if generation != self.detail_generation or not self.is_mounted:
+            if generation != self.detail_generation or not self.is_running:
                 return
             detail.resume_video_id = media.resume_video_id
             self.current = detail
@@ -276,41 +280,44 @@ class CinemaApp(App):
             if series:
                 seasons = detail.available_seasons
                 select = self.query_one("#season", Select)
-                select.set_options([(f"Stagione {s}" if s else "Speciali", s) for s in seasons])
-                resume = detail.season_for_video(detail.resume_video_id)
-                chosen = resume if resume in seasons else seasons[0]
-                select.value = chosen
-                self.load_episodes(detail, chosen)
+                with self.prevent(Select.Changed):
+                    select.set_options([(f"Stagione {s}" if s else "Speciali", s) for s in seasons])
+                    resume = detail.season_for_video(detail.resume_video_id)
+                    chosen = resume if resume in seasons else seasons[0]
+                    select.value = chosen
+                self.episodes_generation += 1
+                self.load_episodes(detail, chosen, self.episodes_generation)
         except (CineError, ValueError, TypeError) as e:
-            if generation == self.detail_generation and self.is_mounted:
+            if generation == self.detail_generation and self.is_running:
                 self.query_one("#media-meta", Static).update(str(e) if isinstance(e, CineError) else "Scheda parziale: alcuni metadati non sono disponibili.")
         finally:
-            if generation == self.detail_generation and self.is_mounted:
+            if generation == self.detail_generation and self.is_running:
                 self.query_one("#streams", Button).disabled = False
 
     @on(Select.Changed, "#season")
     def change_season(self, event):
         if self.current and isinstance(event.value, int):
-            self.load_episodes(self.current, event.value)
+            self.episodes_generation += 1
+            self.load_episodes(self.current, event.value, self.episodes_generation)
 
     def set_episode_options(self, media, episodes):
-        if not self.is_mounted or self.current is not media:
+        if not self.is_running or self.current is not media:
             return
         select = self.query_one("#episode", Select)
         select.set_options([(f"{v.get('episode', i+1):02} · {plain_title(v)}", v["id"]) for i, v in enumerate(episodes)] or [("Nessun episodio disponibile", "")])
         select.value = media.resume_video_id if any(v["id"] == media.resume_video_id for v in episodes) else episodes[0]["id"] if episodes else ""
 
     @work(exclusive=True, group="episodes")
-    async def load_episodes(self, media, season):
-        if not self.is_mounted:
+    async def load_episodes(self, media, season, generation):
+        if not self.is_running:
             return
         try:
             episodes = await self.service.episodes(media, season)
-            if self.current is not media or not self.is_mounted:
+            if generation != self.episodes_generation or self.current is not media or not self.is_running:
                 return
             self.set_episode_options(media, episodes)
         except (CineError, ValueError, TypeError):
-            if self.is_mounted:
+            if generation == self.episodes_generation and self.is_running:
                 self.query_one("#status", Static).update("Non riesco a leggere gli episodi. Riprova o scegli un’altra fonte.")
 
     @on(DataTable.RowSelected, "#results")
@@ -327,9 +334,14 @@ class CinemaApp(App):
 
     @on(Button.Pressed, "#favorite")
     def favorite(self):
-        if self.current:
+        if not self.current:
+            return
+        try:
             added = self.service.store.favorite(self.current)
-            self.notify("Aggiunto ai preferiti" if added else "Rimosso dai preferiti")
+        except OSError:
+            self.notify("Non posso salvare i preferiti.", severity="error")
+            return
+        self.notify("Aggiunto ai preferiti" if added else "Rimosso dai preferiti")
 
     @on(Button.Pressed, "#browser")
     def browser(self):
@@ -346,18 +358,30 @@ class CinemaApp(App):
 
     @work(exclusive=True, group="progress")
     async def track_playback(self):
-        if self.service.current:
+        if not self.is_running:
+            return
+        current = self.service.current
+        if not current:
+            return
+        try:
             await self.service.save_progress()
-            position = int(self.service.player.position)
-            active = self.service.player.process and self.service.player.process.returncode is None
-            self.query_one("#playback", Static).update(("● " if active else "○ ")+self.service.current.title+f" · {position//60}:{position%60:02}")
+        except OSError:
+            return
+        position = int(self.service.player.position)
+        active = self.service.player.process and self.service.player.process.returncode is None
+        self.query_one("#playback", Static).update(("● " if active else "○ ")+current.title+f" · {position//60}:{position%60:02}")
 
     @on(Button.Pressed, "#stop")
     @work(exclusive=True, group="stop")
     async def stop(self):
-        await self.service.save_progress()
-        await self.service.player.stop()
-        self.query_one("#playback", Static).update("Video interrotto")
+        try:
+            await self.service.save_progress()
+        finally:
+            await self.service.player.stop()
+            self.service.current = None
+            self.service.video_id = ""
+            if self.is_running:
+                self.query_one("#playback", Static).update("Video interrotto")
 
     def action_stop(self):
         self.stop()
@@ -379,7 +403,7 @@ class CinemaApp(App):
 
     def action_import(self):
         def opened(streams):
-            if streams:
+            if streams is not None:
                 self.push_screen(StreamsScreen(self.current or Media("import", "movie", "Flusso importato"), imported=streams))
         self.push_screen(ImportScreen(), opened)
 

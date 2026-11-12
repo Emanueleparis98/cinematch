@@ -44,6 +44,12 @@ def test_addon_filename_and_subtitle_metadata_are_used():
     assert not matches_stream(stream, language="ITA")
 
 
+def test_malformed_subtitle_language_metadata_is_ignored():
+    stream = Stream("Video", subtitle_languages=[1, None, "it-IT"])
+    assert matches_stream(stream, language="SUB-ITA")
+    assert not matches_stream(stream, language="ITA")
+
+
 def test_language_does_not_match_fragments_in_other_words():
     stream = Stream("Digital Legend Original")
     assert matches_stream(stream, language="unknown", quality="unknown")

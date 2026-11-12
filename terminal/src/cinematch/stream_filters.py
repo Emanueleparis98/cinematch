@@ -58,6 +58,8 @@ def source_info(stream):
             subtitles.add(code)
             text = re.sub(suffix, " ", text)
     for lang in stream.subtitle_languages:
+        if not isinstance(lang, str):
+            continue
         code = lang.upper().split("-")[0]
         if code in {"IT", "ITA", "ITALIAN", "ITALIANO"}:
             subtitles.add("ITA")

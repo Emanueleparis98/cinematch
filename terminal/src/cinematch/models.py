@@ -70,7 +70,12 @@ class Media:
 
 def episode_season(video):
     season = video.get("season")
-    return int(season) if season is not None else 1
+    if season is None:
+        return 1
+    try:
+        return max(0, int(season))
+    except (TypeError, ValueError):
+        return 1
 
 
 @dataclass
@@ -89,7 +94,9 @@ class Stream:
 
 
 def parse_media(data, *, source="", addon_url=""):
-    if not isinstance(data, dict) or not isinstance(data.get("id"), (str, int)) or not data.get("name"):
+    if not isinstance(data, dict) or not isinstance(data.get("id"), (str, int)) or isinstance(data.get("id"), bool):
+        return None
+    if not isinstance(data.get("name"), str) or not plain(data["name"], 250).strip():
         return None
     kind = data.get("type", "movie")
     if kind not in {"movie", "series", "tv", "channel", "anime"}:
@@ -97,10 +104,30 @@ def parse_media(data, *, source="", addon_url=""):
     mid = str(data["id"])
     def strings(value, limit):
         return [plain(s, 100) for s in value if isinstance(s, str)][:limit] if isinstance(value, list) else []
-    return Media(mid, kind, plain(data["name"], 250), year=plain(str(data.get("releaseInfo") or data.get("year") or ""), 30),
+    def scalar(value, limit):
+        if not value or isinstance(value, bool) or not isinstance(value, (str, int, float)):
+            return ""
+        return plain(str(value), limit)
+    videos = []
+    for video in (data.get("videos") if isinstance(data.get("videos"), list) else [])[:2000]:
+        if not isinstance(video, dict) or not isinstance(video.get("id"), str):
+            continue
+        item = dict(video)
+        for key in ("season", "episode"):
+            if item.get(key) is None:
+                item.pop(key, None)
+                continue
+            try:
+                number = int(item[key])
+            except (TypeError, ValueError):
+                item.pop(key, None)
+            else:
+                item[key] = max(0, number)
+        videos.append(item)
+    return Media(mid, kind, plain(data["name"], 250), year=scalar(data.get("releaseInfo") or data.get("year"), 30),
                  overview=plain(data.get("description"), 4000), source=source, addon_url=addon_url,
                  imdb=mid if re.fullmatch(r"tt\d+", mid) else "",
                  genres=strings(data.get("genres") or data.get("genre"), 20),
                  cast=strings(data.get("cast"), 12), directors=strings(data.get("director"), 6),
-                 videos=[v for v in (data.get("videos") or []) if isinstance(v, dict) and isinstance(v.get("id"), str)][:2000],
-                 rating=plain(str(data.get("imdbRating") or ""), 10))
+                 videos=videos,
+                 rating=scalar(data.get("imdbRating"), 10))

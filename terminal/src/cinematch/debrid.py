@@ -11,9 +11,12 @@ SERVICES = {"rd": ("Real-Debrid", "https://api.real-debrid.com/rest/1.0/"), "tor
 def choose_file(files, *, file_idx=None, season=None, episode=None):
     if not isinstance(files, list) or not all(isinstance(f, dict) for f in files):
         raise CineError("Il servizio ha restituito un elenco di file non valido.")
+    def name(f):
+        value = f.get("path") or f.get("name") or ""
+        return value if isinstance(value, str) else ""
     def video(f):
-        name = f.get("path") or f.get("name") or ""
-        return re.search(r"\.(mp4|mkv|avi|webm|m4v|mov|ts)$", name, re.IGNORECASE) and not re.search(r"\b(sample|trailer)\b", name, re.IGNORECASE)
+        path = name(f)
+        return re.search(r"\.(mp4|mkv|avi|webm|m4v|mov|ts)$", path, re.IGNORECASE) and not re.search(r"\b(sample|trailer)\b", path, re.IGNORECASE)
     videos = [f for f in files if video(f)]
     if file_idx is not None:
         if type(file_idx) is not int or not 0 <= file_idx < len(files) or files[file_idx] not in videos:
@@ -21,17 +24,17 @@ def choose_file(files, *, file_idx=None, season=None, episode=None):
         return files[file_idx]
     if season is not None and episode is not None:
         pattern = rf"(?:s0*{season}e0*{episode}(?!\d)|(?:^|\D)0*{season}x0*{episode}(?!\d))"
-        matches = [f for f in videos if re.search(pattern, f.get("path") or f.get("name") or "", re.IGNORECASE)]
+        matches = [f for f in videos if re.search(pattern, name(f), re.IGNORECASE)]
         if len(matches) == 1:
             return matches[0]
-        if len(videos) == 1 and not re.search(r"s\d+e\d+|\d+x\d+", videos[0].get("path") or videos[0].get("name") or "", re.IGNORECASE):
+        if len(videos) == 1 and not re.search(r"s\d+e\d+|\d+x\d+", name(videos[0]), re.IGNORECASE):
             return videos[0]
         raise CineError("Non posso identificare con certezza l’episodio. Scegli un risultato con file indicizzato.")
     if not videos:
         raise CineError("Il torrent non contiene video supportati.")
     def size(file):
         value = file.get("bytes") or file.get("size") or 0
-        return value if isinstance(value, (int, float)) else 0
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
     return max(videos, key=size)
 
 
@@ -109,10 +112,13 @@ class Debrid:
             if not info.get("files"):
                 raise CineError("Real-Debrid sta acquisendo i dati del torrent. Riprova tra poco.")
             file = choose_file(info["files"], file_idx=stream.file_idx, season=season, episode=episode)
-            if info.get("status") == "waiting_files_selection":
+            selected_ids = {f.get("id") for f in info["files"] if f.get("selected") == 1}
+            if info.get("status") == "waiting_files_selection" or file.get("id") not in selected_ids:
+                # A season pack may already be downloaded with only another
+                # episode selected; select the requested file and re-read it.
                 await self.api(provider, key, "torrents/selectFiles/"+tid, method="POST", data={"files": str(file["id"])})
                 info = await self.api(provider, key, "torrents/info/"+tid)
-            if info.get("status") != "downloaded":
+            if info.get("status") != "downloaded" or not info.get("files"):
                 raise CineError("Torrent aggiunto a Real-Debrid, ma non ancora pronto. Attendi il completamento sul servizio e riprova.")
             selected = [f for f in info["files"] if f.get("selected") == 1]
             index = next((i for i, f in enumerate(selected) if f["id"] == file["id"]), -1)
