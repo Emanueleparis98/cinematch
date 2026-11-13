@@ -211,6 +211,7 @@ class StreamsScreen(DialogScreen):
 
     def on_mount(self):
         self.query_one(DataTable).add_columns("Definizione", "Lingua", "Fonte", "Nome", "Tipo")
+        self.call_after_refresh(self.resize_stream_columns)
         self.query_one("#stream-episode-row").display = self.has_episode_picker
         if self.has_episode_picker:
             seasons = self.media.available_seasons
@@ -228,6 +229,32 @@ class StreamsScreen(DialogScreen):
         self.workers.cancel_group(self, "streams")
         self.workers.cancel_group(self, "play")
         self.workers.cancel_group(self, "stream-episodes")
+
+    def on_resize(self, event):
+        self.call_after_refresh(self.resize_stream_columns)
+
+    def resize_stream_columns(self):
+        if not self.is_mounted or not self.display:
+            return
+        table = self.query_one(DataTable)
+        if table.size.width <= 0 or len(table.columns) != 5:
+            return
+        # Reserve the cell padding and the vertical scrollbar so the five
+        # columns fit without a horizontal scrollbar; the stream name gets
+        # all the remaining width.
+        available = table.size.width - 2*table.cell_padding*5 - 2
+        widths = (11, 8, 22, max(20, available - 49), 8)
+        changed = False
+        for key, width in zip(table.columns, widths):
+            column = table.columns[key]
+            if column.width != width or column.auto_width:
+                column.width, column.auto_width = width, False
+                changed = True
+        if changed:
+            table._require_update_dimensions = True
+            table._clear_caches()
+            table.check_idle()
+            table.refresh(layout=True)
 
     def clear_streams(self, message):
         if not self.is_mounted or not self.display:
@@ -335,6 +362,7 @@ class StreamsScreen(DialogScreen):
         self.query_one("#play", Button).disabled = not self.visible_items
         self.query_one("#browser", Button).disabled = not self.visible_items
         self.query_one("#stream-description", Static).update("")
+        self.call_after_refresh(self.resize_stream_columns)
 
     @on(Button.Pressed, "#reset-picker-filters")
     def reset_filters(self):

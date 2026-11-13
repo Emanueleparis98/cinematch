@@ -257,6 +257,28 @@ async def test_import_empty_stream_list_opens_picker_with_feedback(tmp_path):
         await service.close()
 
 
+async def test_stream_picker_is_wider_and_fits_all_columns(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    streams = [
+        Stream("1080p ITA · Addon Demo · The.Matrix.1999.iTALiAN.1080p.BluRay.x264-GROUP", "Torrent 1080p", "Addon Demo", url="https://cdn.example.org/a.mkv"),
+        Stream("2160p MULTI · Altro Addon · The.Matrix.1999.2160p.UHD.BluRay.REMUX.HDR.HEVC", "Torrent 4K", "Altro Addon", url="https://cdn.example.org/b.mkv"),
+    ]
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.push_screen(StreamsScreen(Media("demo", "movie", "Un film"), imported=streams))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, StreamsScreen)
+            table = screen.query_one(DataTable)
+            await wait_until(pilot, lambda: table.row_count == 2)
+            await wait_until(pilot, lambda: table.virtual_size.width <= table.size.width)
+            assert table.size.width >= 108
+            assert [str(column.label) for column in table.columns.values()] == ["Definizione", "Lingua", "Fonte", "Nome", "Tipo"]
+    finally:
+        await service.close()
+
+
 async def test_current_selection_prompt_generation_edit_and_escape_preserves_draft(tmp_path):
     service = cinema(tmp_path)
     app = CinemaApp(service, autoload=False)

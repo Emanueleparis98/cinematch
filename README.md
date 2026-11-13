@@ -1,6 +1,6 @@
 # Termovies — nel terminale
 
-**Termovies Terminal 0.4.0** porta ricerca di film, serie, anime e TV, addon JSON,
+**Termovies Terminal 0.4.1** porta ricerca di film, serie, anime e TV, addon JSON,
 Real-Debrid/TorBox, preferiti, cronologia, 74 correnti cinematografiche e
 generazione locale di prompt in un’app TUI per Linux, macOS e Windows.
 
@@ -29,7 +29,7 @@ termovies
 ![Termovies Terminal](terminal/docs/terminal.png)
 
 [Installazione completa, Arch/pacman, macOS con uv/pipx, uso e privacy](terminal/README.md)
-· [Release terminale 0.4.0](https://github.com/Emanueleparis98/termovies/releases/tag/terminal-v0.4.0)
+· [Release terminale 0.4.1](https://github.com/Emanueleparis98/termovies/releases/tag/terminal-v0.4.1)
 
 Per i video aggiungi i tuoi addon e installa mpv o VLC. Per i prompt non serve
 alcuna API AI. Le release terminal-v* sono pubblicate come ultima release del
