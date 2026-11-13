@@ -33,9 +33,6 @@ termovies_wheel_name=$(basename -- "$termovies_wheel")
 termovies_wheel="$termovies_wheel_dir/$termovies_wheel_name"
 termovies_checksums="$termovies_wheel_dir/SHA256SUMS"
 if [ ! -f "$termovies_checksums" ]; then
-    termovies_checksums="$termovies_wheel_dir/SHA256SUMS-terminal.txt"
-fi
-if [ ! -f "$termovies_checksums" ]; then
     echo 'Manca SHA256SUMS accanto al pacchetto. Scaricalo dalla stessa release.' >&2; exit 2
 fi
 termovies_expected=$(awk -v name="$termovies_wheel_name" '$2 == name {print $1}' "$termovies_checksums")

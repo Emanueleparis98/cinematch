@@ -19,9 +19,6 @@ try {
     }
     $Wheel = (Resolve-Path -LiteralPath $Wheel).Path
     $TermoviesChecksums = Join-Path (Split-Path -Parent $Wheel) 'SHA256SUMS'
-    if (-not (Test-Path -LiteralPath $TermoviesChecksums)) {
-        $TermoviesChecksums = Join-Path (Split-Path -Parent $Wheel) 'SHA256SUMS-terminal.txt'
-    }
     if (-not (Test-Path -LiteralPath $TermoviesChecksums)) { throw 'Manca SHA256SUMS accanto al pacchetto.' }
     $TermoviesName = [IO.Path]::GetFileName($Wheel)
     $TermoviesExpected = @((Get-Content -LiteralPath $TermoviesChecksums) | ForEach-Object {

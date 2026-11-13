@@ -1,16 +1,16 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Film, series, anime, TV and cinema prompts in your terminal",
   "homepage": "https://github.com/Emanueleparis98/termovies",
   "license": "MIT",
   "depends": "main/uv",
-  "url": "https://github.com/Emanueleparis98/termovies/releases/download/terminal-v0.4.1/Termovies-0.4.1-scoop.zip",
-  "hash": "f1872334816a9e89f4f0242ca2e127324e5f06096da50d96d7fbd4380653a01c",
+  "url": "https://github.com/Emanueleparis98/termovies/releases/download/terminal-v0.4.2/Termovies-0.4.2-scoop.zip",
+  "hash": "1eb9155dab7772025021b88b2624b0f35776e17d2d3208b813163ca9e5cdd7a8",
   "installer": {
     "script": [
       "& uv venv --python 3.13 \"$dir\\venv\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot create Termovies environment' }",
-      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\termovies-0.4.1-py3-none-any.whl\"",
+      "& uv pip install --python \"$dir\\venv\\Scripts\\python.exe\" \"$dir\\termovies-0.4.2-py3-none-any.whl\"",
       "if ($LASTEXITCODE -ne 0) { throw 'Cannot install Termovies' }"
     ]
   },

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "termovies"
-version = "0.4.1"
+version = "0.4.2"
 description = "Cinema, serie, anime, TV e correnti cinematografiche nel terminale"
 requires-python = ">=3.11"
 readme = "terminal/README.md"
@@ -19,6 +19,7 @@ dev = ["pytest>=9,<10", "pytest-asyncio>=1.3,<2"]
 termovies = "termovies.cli:main"
 
 [project.urls]
+Homepage = "https://emanueleparis98.github.io/termovies/"
 Repository = "https://github.com/Emanueleparis98/termovies"
 
 [tool.hatch.build.targets.wheel]
