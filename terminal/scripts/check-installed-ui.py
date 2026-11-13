@@ -9,6 +9,7 @@ from termovies.prompts import catalog
 from termovies.screens import (
     AddonsScreen,
     CurrentsScreen,
+    HelpScreen,
     ImportScreen,
     PromptScreen,
     SettingsScreen,
@@ -25,7 +26,7 @@ async def main():
             async with app.run_test(size=(120, 40)) as pilot:
                 await pilot.pause()
                 assert len(catalog()) == 74
-                for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen()]:
+                for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen(), HelpScreen()]:
                     app.push_screen(screen)
                     await pilot.pause()
                     await pilot.press("escape")

@@ -15,6 +15,7 @@ from .models import CineError, Media, normalized
 from .screens import (
     AddonsScreen,
     CurrentsScreen,
+    HelpScreen,
     ImportScreen,
     PromptScreen,
     SettingsScreen,
@@ -30,6 +31,7 @@ class CinemaApp(App):
     SUB_TITLE = "Cerca il titolo. Scegli il flusso. Guarda."
     CSS_PATH = "app.tcss"
     BINDINGS: ClassVar[list] = [Binding("ctrl+q", "quit", "Esci"), Binding("slash", "search_focus", "Cerca"),
+                Binding("f1", "help", "Aiuto"), Binding("ctrl+r", "refresh", "Ricarica"),
                 Binding("ctrl+a", "addons", "Addon"), Binding("ctrl+p", "prompt", "Prompt"),
                 Binding("ctrl+k", "currents", "Correnti"), Binding("ctrl+o", "import", "Apri flusso"),
                 Binding("ctrl+s", "settings", "Impostazioni"), Binding("ctrl+x", "stop", "Stop")]
@@ -47,6 +49,9 @@ class CinemaApp(App):
         self.detail_generation = 0
         self.ready = False
         self.initialized = not autoload
+        self.empty_title = "Inizia da un titolo"
+        self.empty_hint = "Cerca in Kitsu e TMDB, oppure apri i tuoi addon per i cataloghi personali."
+        self.show_examples = True
         config = service.store.config
         self.stream_language = config.get("stream_language", "all")
         self.stream_quality = config.get("stream_quality", "all")
@@ -57,9 +62,13 @@ class CinemaApp(App):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="masthead"):
-            yield Static("[bold]TERMO[/bold][#a8ee78 bold]VIES[/]", id="brand")
+            yield Static("[bold]▰ TERMO[/bold][#a8ee78 bold]VIES[/]", id="brand")
             yield Static("IL TUO CINEMA, DAL TERMINALE", id="tagline")
-            yield Static(f"TERMINAL / {__version__}", id="edition")
+            with Horizontal(id="status-strip"):
+                yield Static("", id="status-tmdb", classes="status-chip")
+                yield Static("", id="status-debrid", classes="status-chip")
+                yield Static("", id="status-addons", classes="status-chip")
+            yield Static(f"v{__version__}", id="edition")
         with Horizontal(id="workspace"):
             with VerticalScroll(id="sidebar"):
                 yield Label("ESPLORA", classes="eyebrow")
@@ -71,29 +80,42 @@ class CinemaApp(App):
                 yield Select(LANGUAGES, value=self.stream_language, allow_blank=False, id="language")
                 yield Label("Definizione", classes="field-label")
                 yield Select([("Tutte" if value == "all" else label, value) for label, value in QUALITIES], value=self.stream_quality, allow_blank=False, id="quality")
-                yield Static("Filtri applicati ai flussi del titolo o episodio scelto.", classes="sidebar-note")
-                yield Button("Azzera filtri flussi", id="reset-stream-filters")
-                yield Button("Addon e flussi", id="addons")
-                yield Button("Correnti", id="currents")
-                yield Button("Componi prompt", id="prompt")
-                yield Button("Impostazioni", id="settings")
-                yield Button("Apri URL / JSON", id="import")
-                yield Static("mpv / VLC / ffplay", id="player-info")
+                yield Static("I filtri valgono per il prossimo titolo o episodio.", classes="sidebar-note")
+                yield Button("Azzera filtri", id="reset-stream-filters", classes="subtle")
+                yield Static("", classes="sidebar-divider")
+                yield Label("STRUMENTI", classes="eyebrow")
+                yield Button("◈  Addon e flussi", id="addons")
+                yield Button("◎  Correnti", id="currents")
+                yield Button("✎  Componi prompt", id="prompt")
+                yield Button("⚙  Impostazioni", id="settings")
+                yield Button("↗  Apri URL / JSON", id="import")
+                yield Button("?  Guida rapida", id="help")
+                yield Static("", id="player-info")
             with Vertical(id="content"):
                 yield Label("CERCA FILM, SERIE TV E ANIME", id="section-title", classes="eyebrow")
                 with Horizontal(id="search-bar"):
-                    yield Input(placeholder="Film, serie, anime o canale…", id="search")
+                    yield Input(placeholder="Cerca un film, una serie o un anime…", id="search")
                     yield Button("Cerca", variant="primary", id="search-button")
+                    yield Button("Pulisci", id="clear-search", classes="subtle")
                 with Horizontal(id="summary"):
                     yield Static("0 RISULTATI", id="result-count")
                     yield Static("", id="playback", markup=False)
                     yield Button("Altri risultati", id="more", disabled=True)
-                yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
+                with Vertical(id="results-area"):
+                    yield DataTable(id="results", cursor_type="row", zebra_stripes=True)
+                    with Vertical(id="results-empty"):
+                        yield Static("▰  TERMOVIES", id="empty-mark")
+                        yield Static("", id="empty-title")
+                        yield Static("", id="empty-hint")
+                        with Horizontal(id="empty-actions"):
+                            yield Button("The Matrix", id="example-movie", classes="example")
+                            yield Button("Cowboy Bebop", id="example-anime", classes="example")
+                            yield Button("Severance", id="example-series", classes="example")
                 with Vertical(id="detail"):
-                    yield Static("Nessun titolo selezionato", id="media-title", markup=False)
-                    yield Static("Scrivi un titolo e premi Cerca. I risultati compariranno qui sopra.", id="media-meta", markup=False)
+                    yield Static("Nessun titolo selezionato", id="media-title")
+                    yield Static("", id="media-meta")
                     with VerticalScroll(id="overview-scroll"):
-                        yield Static("", id="media-overview", markup=False)
+                        yield Static("", id="media-overview")
                     with Horizontal(id="episode-row"):
                         yield Select([("Stagione 1", 1)], value=1, allow_blank=False, id="season")
                         yield Select([("Seleziona un episodio", "")], value="", allow_blank=False, id="episode")
@@ -103,28 +125,130 @@ class CinemaApp(App):
                         yield Button("Apri scheda", id="browser", disabled=True)
                         yield Button("Stop video", id="stop")
                         yield Button("Ispira un prompt", id="inspire")
-                yield Static("Pronto. Scrivi un titolo e premi Cerca.", id="status", markup=False)
-        yield Footer()
+                yield Static("Pronto · scrivi un titolo e premi Cerca.", id="status", markup=False)
+        yield Footer(show_command_palette=False)
 
     def on_mount(self):
         self.theme = "textual-dark"
         table = self.query_one("#results", DataTable)
-        for label, width in [("Titolo", 44), ("Anno", 11), ("Formato", 10), ("Fonte", 17)]:
+        for label, width in [("Titolo", 52), ("Anno", 7), ("Formato", 9), ("Voto", 7), ("Fonte", 16)]:
             table.add_column(label, width=width)
         self.query_one("#episode-row").display = False
         self.query_one("#search").focus()
+        self.refresh_status()
+        self.show_welcome()
+        self.call_after_refresh(self.resize_result_columns)
         self.set_interval(5, self.track_playback)
         self.ready = True
 
     def on_resize(self, event):
         self.screen_stack[0].set_class(event.size.width < 110, "compact")
         self.screen_stack[0].set_class(event.size.height < 40, "short")
+        if self.is_running:
+            self.query_one("#more", Button).label = "Altri" if event.size.width < 110 else "Altri risultati"
+            self.query_one(Footer).compact = event.size.width < 110
+        self.call_after_refresh(self.resize_result_columns)
+        self.call_after_refresh(self.update_detail_visibility)
+        self.call_after_refresh(self.render_empty)
+
+    def refresh_status(self):
+        config = self.service.store.config
+        tmdb = bool(config.get("tmdb_key"))
+        provider = config.get("debrid_provider") or ""
+        debrid = {"rd": "RD", "torbox": "TORBOX"}.get(provider, "DEBRID")
+        addons = len([a for a in config.get("addons", []) if isinstance(a, dict) and a.get("enabled", True)])
+        player = str(self.service.player.available() or "").replace("\\", "/").rsplit("/", 1)[-1]
+        for widget_id, label, active in [
+            ("status-tmdb", "TMDB", tmdb),
+            ("status-debrid", debrid, bool(provider)),
+            ("status-addons", f"{addons} ADDON", addons > 0),
+        ]:
+            chip = self.query_one("#"+widget_id, Static)
+            chip.update(f"[#a8ee78]●[/] {label}" if active else f"[#536474]●[/] {label}")
+            chip.set_class(active, "on")
+        self.query_one("#edition", Static).update(f"v{__version__}")
+        self.query_one("#player-info", Static).update("PLAYER · "+(player.upper() if player else "NON TROVATO"))
+
+    def resize_result_columns(self):
+        if not self.is_running:
+            return
+        table = self.query_one("#results", DataTable)
+        if table.size.width <= 0 or len(table.columns) != 5:
+            return
+        available = table.size.width - 2*table.cell_padding*5 - 2
+        widths = (max(28, available - 39), 7, 9, 7, 16)
+        changed = False
+        for key, width in zip(table.columns, widths):
+            column = table.columns[key]
+            if column.width != width or column.auto_width:
+                column.width, column.auto_width = width, False
+                changed = True
+        if changed:
+            table._require_update_dimensions = True
+            table._clear_caches()
+            table.check_idle()
+            table.refresh(layout=True)
+
+    def set_empty(self, title, hint, examples=False):
+        self.empty_title, self.empty_hint, self.show_examples = title, hint, examples
+        self.render_empty()
+
+    def show_welcome(self):
+        self.set_empty("Inizia da un titolo",
+                       "Cerca in Kitsu e TMDB, oppure scegli Addon collegati per i tuoi cataloghi.",
+                       examples=True)
+
+    def render_empty(self):
+        if not self.is_running:
+            return
+        empty = self.query_one("#results-empty", Vertical)
+        visible = bool(getattr(self, "visible_items", []))
+        self.query_one("#results", DataTable).display = visible
+        empty.display = not visible
+        if not visible:
+            self.query_one("#empty-title", Static).update(self.empty_title)
+            self.query_one("#empty-hint", Static).update(self.empty_hint)
+            short = self.screen_stack[0].has_class("short")
+            self.query_one("#empty-actions").display = self.show_examples and not short
+
+    def update_detail_visibility(self):
+        if not self.is_running:
+            return
+        short = self.screen_stack[0].has_class("short")
+        self.query_one("#detail").display = bool(self.current) or not short
 
     @on(Button.Pressed)
     def buttons(self, event):
         bid = event.button.id or ""
-        if bid in {"addons", "settings", "prompt", "currents", "import"}:
+        if bid in {"addons", "settings", "prompt", "currents", "import", "help"}:
             getattr(self, "action_"+bid)()
+
+    @on(Button.Pressed, "#clear-search")
+    def clear_search(self):
+        self.query_one("#search", Input).value = ""
+        self.items = []
+        self.skip = 0
+        self.clear_detail()
+        self.show_welcome()
+        self.fill()
+        self.query_one("#more", Button).disabled = True
+        self.query_one("#status", Static).update("Pronto · scrivi un titolo e premi Cerca.")
+        self.query_one("#search", Input).focus()
+
+    @on(Button.Pressed, ".example")
+    def example_search(self, event):
+        section, query = {
+            "example-movie": ("movie", "The Matrix"),
+            "example-anime": ("anime", "Cowboy Bebop"),
+            "example-series": ("series", "Severance"),
+        }.get(event.button.id or "", ("all", ""))
+        if not query:
+            return
+        with self.prevent(Select.Changed):
+            self.query_one("#section", Select).value = section
+            self.query_one("#source", Select).value = "all"
+        self.query_one("#search", Input).value = query
+        self.search()
 
     @on(Select.Changed, "#section")
     @on(Select.Changed, "#source")
@@ -176,12 +300,14 @@ class CinemaApp(App):
         status = self.query_one("#status", Static)
         if not query and section not in {"favorites", "history"}:
             self.items = []
-            self.fill()
             self.clear_detail()
+            self.show_welcome()
+            self.fill()
             self.query_one("#more", Button).disabled = True
-            status.update("Pronto. Scrivi un titolo e premi Cerca.")
+            status.update("Pronto · scrivi un titolo e premi Cerca.")
             return
         status.update("Cerco i titoli nelle fonti selezionate…")
+        self.set_empty("Cerco tra le fonti…", "Interrogo Kitsu, TMDB e gli addon selezionati.")
         table = self.query_one("#results", DataTable)
         table.loading = True
         try:
@@ -205,14 +331,27 @@ class CinemaApp(App):
             self.query_one("#more", Button).disabled = section in {"favorites", "history"} or not items
             errors = " · ".join(self.service.errors[:2])
             if not self.items and section == "tv":
-                status.update("Nessun canale trovato. Collega un addon TV da Addon e flussi.")
+                self.set_empty("Nessun canale trovato", "Collega un addon TV da Addon e flussi per vedere i canali.")
+                status.update("Nessun canale trovato · collega un addon TV da Addon e flussi.")
             elif not self.items and source == "tmdb" and not self.service.store.config["tmdb_key"]:
+                self.set_empty("TMDB non è collegato", "Apri Impostazioni e inserisci una chiave API v3 o un Read Access Token.")
                 status.update("Collega TMDB nelle impostazioni per cercare film e serie; Kitsu copre gli anime.")
+            elif not self.items and section == "favorites":
+                self.set_empty("Nessun preferito", "Apri una scheda e premi ☆ Preferito per ritrovarla qui.")
+                status.update("Nessun preferito salvato.")
+            elif not self.items and section == "history":
+                self.set_empty("Cronologia vuota", "I titoli che apri o guardi compariranno qui.")
+                status.update("Nessuna attività nella cronologia.")
+            elif not self.items:
+                self.set_empty("Nessun risultato", "Prova un altro titolo, cambia sezione o scegli Addon collegati.")
+                status.update("Nessun risultato"+((" · "+errors) if errors else " · prova un altro titolo o cambia fonte."))
             else:
                 status.update(f"{len(self.items)} titoli"+(" · "+errors if errors else " · seleziona un titolo per dettagli ed episodi"))
         except (CineError, OSError, ValueError, TypeError) as e:
             if self.is_running:
-                status.update(str(e) if isinstance(e, CineError) else "Non riesco a leggere i dati locali.")
+                message = str(e) if isinstance(e, CineError) else "Non riesco a leggere i dati locali."
+                self.set_empty("Ricerca non disponibile", message)
+                status.update(message)
         finally:
             if self.is_running:
                 table.loading = False
@@ -226,9 +365,12 @@ class CinemaApp(App):
         self.workers.cancel_group(self, "detail")
         self.workers.cancel_group(self, "episodes")
         self.query_one("#episode-row").display = False
-        self.query_one("#media-title", Static).update("Nessun titolo selezionato")
-        self.query_one("#media-meta", Static).update("Scrivi un titolo e premi Cerca, oppure modifica i filtri.")
+        self.query_one("#media-title", Static).update(Text("Nessun titolo selezionato", style="bold #7f90a2"))
+        self.query_one("#media-meta", Static).update("Scegli un risultato per leggere trama, cast e azioni.")
         self.query_one("#media-overview", Static).update("")
+        self.query_one("#favorite", Button).label = "☆ Preferito"
+        self.query_one("#detail").set_class(False, "selected")
+        self.update_detail_visibility()
         for bid in ("streams", "favorite", "browser"):
             self.query_one("#"+bid, Button).disabled = True
 
@@ -239,10 +381,13 @@ class CinemaApp(App):
         table = self.query_one("#results", DataTable)
         table.clear()
         for i, m in enumerate(self.visible_items):
-            table.add_row(Text(m.title), Text(m.year), {"movie": "Film", "series": "Serie", "anime": "Anime", "tv": "TV", "channel": "Canale"}.get(m.type, m.type), Text(m.source), key=str(i))
+            kind = {"movie": "Film", "series": "Serie", "anime": "Anime", "tv": "TV", "channel": "Canale"}.get(m.type, m.type)
+            table.add_row(Text(m.title), Text(m.year), Text(kind), Text(("★ "+m.rating) if m.rating else "—"), Text(m.source), key=str(i))
         self.query_one("#result-count", Static).update(f"{len(self.visible_items)} RISULTATI")
         if not self.visible_items:
             self.clear_detail()
+        self.render_empty()
+        self.call_after_refresh(self.resize_result_columns)
 
     @on(DataTable.RowHighlighted, "#results")
     def highlight(self, event: DataTable.RowHighlighted):
@@ -258,11 +403,14 @@ class CinemaApp(App):
         if not self.is_running:
             return
         self.current = media
+        self.query_one("#detail").display = True
         for bid in ("favorite", "browser"):
             self.query_one("#"+bid, Button).disabled = False
-        self.query_one("#media-title", Static).update(media.title)
-        self.query_one("#media-meta", Static).update("")
-        self.query_one("#media-overview", Static).update(media.overview)
+        self.query_one("#detail").set_class(True, "selected")
+        self.query_one("#media-title", Static).update(Text(media.title, style="bold #f2f6fa"))
+        self.query_one("#media-meta", Static).update(self.detail_meta(media))
+        self.query_one("#media-overview", Static).update(self.detail_overview(media))
+        self.update_favorite_button(media)
         self.query_one("#episode-row").display = False
         self.query_one("#streams", Button).disabled = True
         try:
@@ -271,10 +419,10 @@ class CinemaApp(App):
                 return
             detail.resume_video_id = media.resume_video_id
             self.current = detail
-            self.query_one("#media-title", Static).update(detail.title)
-            meta = [detail.year, " / ".join(detail.genres), "★ "+detail.rating if detail.rating else "", "Regia: "+", ".join(detail.directors) if detail.directors else ""]
-            self.query_one("#media-meta", Static).update(" · ".join(v for v in meta if v))
-            self.query_one("#media-overview", Static).update(detail.overview+("\n\nCast: "+", ".join(detail.cast) if detail.cast else ""))
+            self.query_one("#media-title", Static).update(Text(detail.title, style="bold #f2f6fa"))
+            self.query_one("#media-meta", Static).update(self.detail_meta(detail))
+            self.query_one("#media-overview", Static).update(self.detail_overview(detail))
+            self.update_favorite_button(detail)
             series = detail.type in {"series", "anime"}
             self.query_one("#episode-row").display = series
             if series:
@@ -293,6 +441,37 @@ class CinemaApp(App):
         finally:
             if generation == self.detail_generation and self.is_running:
                 self.query_one("#streams", Button).disabled = False
+
+    def detail_meta(self, media):
+        text = Text()
+        if media.year:
+            text.append(media.year, style="bold #d8e4ef")
+            text.append("  ")
+        kind = {"movie": "FILM", "series": "SERIE", "anime": "ANIME", "tv": "TV", "channel": "CANALE"}.get(media.type, media.type.upper())
+        text.append(f" {kind} ", style="bold #142012 on #a8ee78")
+        if media.rating:
+            text.append(f"  ★ {media.rating}", style="bold #a8ee78")
+        if media.genres:
+            text.append("  ·  "+" / ".join(media.genres[:4]), style="#91a3b5")
+        if media.directors:
+            text.append("\nRegia: "+", ".join(media.directors[:3]), style="#7f90a2")
+        return text
+
+    def detail_overview(self, media):
+        text = Text(media.overview or "Nessuna trama disponibile per questo titolo.", style="#c3d0dc")
+        if media.cast:
+            text.append("\n\nCast: "+", ".join(media.cast[:8]), style="#8fa1b3")
+        return text
+
+    def is_favorite(self, media):
+        return any(item.get("id") == media.id and item.get("type") == media.type
+                   for item in self.service.store.data.get("favorites", []) if isinstance(item, dict))
+
+    def update_favorite_button(self, media):
+        active = self.is_favorite(media)
+        button = self.query_one("#favorite", Button)
+        button.label = "★ Nei preferiti" if active else "☆ Preferito"
+        button.set_class(active, "active")
 
     @on(Select.Changed, "#season")
     def change_season(self, event):
@@ -341,7 +520,9 @@ class CinemaApp(App):
         except OSError:
             self.notify("Non posso salvare i preferiti.", severity="error")
             return
-        self.notify("Aggiunto ai preferiti" if added else "Rimosso dai preferiti")
+        self.update_favorite_button(self.current)
+        self.notify("Aggiunto ai preferiti" if added else "Rimosso dai preferiti",
+                    title="Termovies", severity="information" if added else "warning")
 
     @on(Button.Pressed, "#browser")
     def browser(self):
@@ -389,11 +570,20 @@ class CinemaApp(App):
     def action_search_focus(self):
         self.query_one("#search").focus()
 
+    def action_refresh(self):
+        if self.query_one("#search", Input).value.strip():
+            self.search()
+        else:
+            self.query_one("#search", Input).focus()
+
+    def action_help(self):
+        self.push_screen(HelpScreen())
+
     def action_settings(self):
-        self.push_screen(SettingsScreen())
+        self.push_screen(SettingsScreen(), lambda _: self.refresh_status())
 
     def action_addons(self):
-        self.push_screen(AddonsScreen())
+        self.push_screen(AddonsScreen(), lambda _: self.refresh_status())
 
     def action_prompt(self):
         self.push_screen(PromptScreen())

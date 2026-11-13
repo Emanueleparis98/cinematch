@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import pyperclip
+from rich.table import Table as RichTable
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
@@ -39,7 +40,62 @@ def copy_text(app, value):
 
 class DialogScreen(ModalScreen):
     def on_resize(self, event):
-        self.set_class(event.size.height < 34, "small")
+        self.set_class(event.size.height < 40, "small")
+
+
+class HelpScreen(DialogScreen):
+    BINDINGS: ClassVar[list] = [("escape", "dismiss", "Chiudi"), ("f1", "dismiss", "Chiudi")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="help-dialog", classes="dialog"):
+            yield Static("GUIDA RAPIDA", classes="dialog-title")
+            yield Static("Tutto raggiungibile da tastiera; il mouse resta supportato.", classes="dialog-subtitle")
+            with VerticalScroll(id="help-scroll"):
+                yield Static(self.shortcuts(), classes="help-table")
+                yield Static("COSE DA SAPERE", classes="section-label")
+                yield Static(self.notes(), classes="help-notes")
+            with Horizontal(classes="actions"):
+                yield Button("Chiudi", id="close")
+
+    @staticmethod
+    def shortcuts():
+        table = RichTable.grid(padding=(0, 2))
+        table.add_column(style="bold #a8ee78", no_wrap=True)
+        table.add_column(style="#cbd8e4")
+        for keys, action in [
+            ("/", "Cerca"),
+            ("↑ / ↓", "Naviga i risultati"),
+            ("Invio", "Apri il pannello Flussi"),
+            ("F1", "Questa guida"),
+            ("Ctrl+R", "Ripeti l’ultima ricerca"),
+            ("Ctrl+K", "Correnti cinematografiche"),
+            ("Ctrl+P", "Componi un prompt"),
+            ("Ctrl+A", "Addon e flussi"),
+            ("Ctrl+S", "Impostazioni"),
+            ("Ctrl+O", "Apri URL o JSON"),
+            ("Ctrl+X", "Ferma il video"),
+            ("Esc", "Chiudi il pannello attivo"),
+            ("Ctrl+Q", "Esci da Termovies"),
+        ]:
+            table.add_row(keys, action)
+        return table
+
+    @staticmethod
+    def notes():
+        text = Text()
+        for line in [
+            "La ricerca predefinita usa Kitsu e TMDB; scegli Addon collegati per i cataloghi personali.",
+            "I flussi arrivano dagli addon. I torrent richiedono Real-Debrid o TorBox configurato.",
+            "Preferiti e cronologia restano sul tuo computer, nella cartella dati locale.",
+            "TMDB serve per film e serie; il catalogo Anime Kitsu funziona senza chiavi.",
+        ]:
+            text.append("• ", style="bold #a8ee78")
+            text.append(line+"\n", style="#91a3b5")
+        return text
+
+    @on(Button.Pressed, "#close")
+    def close(self):
+        self.dismiss()
 
 
 class SettingsScreen(DialogScreen):
@@ -48,21 +104,40 @@ class SettingsScreen(DialogScreen):
     def compose(self) -> ComposeResult:
         config = self.app.service.store.config
         with Vertical(id="settings-dialog", classes="dialog"):
-            yield Static("IL TUO TERMOVIES", classes="dialog-title")
+            yield Static("IMPOSTAZIONI", classes="dialog-title")
+            yield Static("Collega i servizi che vuoi usare. Le chiavi restano solo su questo computer.", classes="dialog-subtitle")
             with VerticalScroll():
-                yield Label("TMDB · API v3 oppure Read Access Token")
-                yield Input(value=config["tmdb_key"], password=True, id="tmdb-key", placeholder="Consigliato: ricerca e metadati in italiano per film e serie")
-                yield Label("Servizio debrid · una chiave per tutti gli addon")
-                yield Select([("Nessuno", ""), ("Real-Debrid", "rd"), ("TorBox", "torbox")], value=config["debrid_provider"], allow_blank=False, id="debrid-provider")
-                yield Input(value=config["debrid_key"], password=True, id="debrid-key", placeholder="Chiave personale del servizio")
-                yield Label("Player video")
-                yield Select([("Automatico · mpv, VLC, ffplay", "auto"), ("mpv · consigliato", "mpv"), ("VLC", "vlc"), ("ffplay", "ffplay")], value=config.get("player", "auto"), allow_blank=False, id="player-choice")
-                yield Static("Le chiavi restano nel file di configurazione locale e non sono cifrate. Su Linux il file è accessibile solo al tuo utente. La chiave debrid viene inviata solo al servizio scelto.", classes="muted")
-                yield Static(Text(str(self.app.service.store.config_path)), classes="muted")
+                yield Static("METADATI", classes="section-label")
+                with Vertical(classes="panel"):
+                    yield Label("TMDB · API v3 oppure Read Access Token")
+                    yield Input(value=config["tmdb_key"], password=True, id="tmdb-key",
+                                placeholder="Consigliato per film e serie: ricerca e metadati in italiano")
+                    yield Static("Senza chiave restano disponibili gli anime del catalogo Kitsu e i tuoi addon.", classes="hint")
+                yield Static("DEBRID", classes="section-label")
+                with Vertical(classes="panel"):
+                    yield Label("Servizio per i torrent restituiti dagli addon")
+                    with Horizontal(classes="form-row"):
+                        yield Select([("Nessuno", ""), ("Real-Debrid", "rd"), ("TorBox", "torbox")],
+                                     value=config["debrid_provider"], allow_blank=False, id="debrid-provider")
+                        yield Input(value=config["debrid_key"], password=True, id="debrid-key",
+                                    placeholder="Chiave personale del servizio")
+                    yield Static("Una sola chiave globale per tutti gli addon. Termovies non avvia client torrent P2P.", classes="hint")
+                yield Static("PLAYER", classes="section-label")
+                with Vertical(classes="panel"):
+                    yield Label("Player video")
+                    yield Select([("Automatico · mpv, VLC, ffplay", "auto"), ("mpv · consigliato", "mpv"),
+                                  ("VLC", "vlc"), ("ffplay", "ffplay")],
+                                 value=config.get("player", "auto"), allow_blank=False, id="player-choice")
+                    yield Static("mpv offre la ripresa della visione su Linux; VLC è l'alternativa più diffusa.", classes="hint")
+                yield Static("DATI LOCALI", classes="section-label")
+                with Vertical(classes="panel"):
+                    yield Static("Configurazione  "+str(self.app.service.store.config_path), classes="path")
+                    yield Static("Libreria           "+str(self.app.service.store.data_path), classes="path")
+                    yield Static("Le chiavi non sono cifrate, ma il file è leggibile solo dal tuo utente (0600 su Linux).", classes="hint")
             yield Static("", id="settings-status", markup=False)
             with Horizontal(classes="actions"):
                 yield Button("Salva", variant="primary", id="save-settings")
-                yield Button("Verifica", id="verify-settings")
+                yield Button("Verifica connessioni", id="verify-settings")
                 yield Button("Chiudi", id="close")
 
     def save(self):
@@ -110,27 +185,39 @@ class AddonsScreen(DialogScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="addons-dialog", classes="dialog"):
-            yield Static("LE TUE FONTI", classes="dialog-title")
-            yield Static("Aggiungi un manifest Stremio compatibile. Le configurazioni specifiche dell’addon restano nel suo link.", classes="muted")
-            yield Input(placeholder="https://…/manifest.json oppure stremio://…", password=True, id="addon-url")
-            yield Button("Aggiungi addon", variant="primary", id="add-addon")
-            yield DataTable(id="addon-table", cursor_type="row", zebra_stripes=True)
+            yield Static("ADDON E FONTI", classes="dialog-title")
+            yield Static("Aggiungi un manifest Stremio/Nuvio. Le configurazioni personali restano nel link dell’addon.", classes="dialog-subtitle")
+            yield Label("Manifest JSON", classes="field-label")
+            with Horizontal(id="addon-form"):
+                yield Input(placeholder="https://…/manifest.json oppure stremio://…", password=True, id="addon-url")
+                yield Button("Aggiungi", variant="primary", id="add-addon")
+            with Vertical(id="addon-table-wrap"):
+                yield DataTable(id="addon-table", cursor_type="row", zebra_stripes=True)
+                yield Static("Nessun addon personale.\nKitsu è già integrato; aggiungi un manifest per cataloghi e flussi extra.",
+                             id="addon-empty", classes="empty-panel")
             yield Static("", id="addon-status", markup=False)
             with Horizontal(classes="actions"):
                 yield Button("Attiva / disattiva", id="toggle-addon")
                 yield Button("Rimuovi", id="remove-addon")
                 yield Button("Chiudi", id="close")
-            yield Static("Per vedere i flussi collega i tuoi addon. Nessun addon video viene installato automaticamente.", classes="muted")
 
     def on_mount(self):
-        self.query_one(DataTable).add_columns("Addon", "Stato", "Tipi", "Cataloghi")
+        table = self.query_one(DataTable)
+        for label, width in [("Addon", 46), ("Stato", 11), ("Tipi", 20), ("Cataloghi", 10)]:
+            table.add_column(label, width=width)
         self.fill()
 
     def fill(self):
         table = self.query_one(DataTable)
         table.clear()
-        for i, a in enumerate(self.app.service.store.config["addons"]):
-            table.add_row(Text(a["name"]), "Attivo" if a.get("enabled", True) else "Spento", Text(", ".join(a["types"])), str(len(a.get("catalogs", []))), key=str(i))
+        items = [a for a in self.app.service.store.config["addons"] if isinstance(a, dict)]
+        for i, a in enumerate(items):
+            active = a.get("enabled", True)
+            table.add_row(Text(a["name"]), Text("● Attivo", style="#a8ee78") if active else Text("○ Spento", style="#7f90a2"),
+                          Text(", ".join(a["types"])), str(len(a.get("catalogs", []))), key=str(i))
+        table.display = bool(items)
+        empty = self.query_one("#addon-empty", Static)
+        empty.display = not items
 
     @on(Input.Submitted, "#addon-url")
     @on(Button.Pressed, "#add-addon")
@@ -192,6 +279,7 @@ class StreamsScreen(DialogScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="streams-dialog", classes="dialog"):
             yield Static(Text(self.media.title), classes="dialog-title")
+            yield Static("Scegli una sorgente, controlla lingua e definizione, poi premi Riproduci.", classes="dialog-subtitle")
             with Horizontal(id="stream-episode-row"):
                 yield Select([("Stagione 1", 1)], value=1, allow_blank=False, id="stream-season")
                 yield Select([("Caricamento episodi…", "")], value="", allow_blank=False, id="stream-episode")
@@ -207,11 +295,14 @@ class StreamsScreen(DialogScreen):
             with Horizontal(classes="actions"):
                 yield Button("Riproduci", variant="primary", id="play", disabled=True)
                 yield Button("Apri fonte", id="browser", disabled=True)
+                yield Button("Riprova", id="retry-streams")
+                yield Button("Gestisci addon", id="manage-addons")
                 yield Button("Chiudi", id="close")
 
     def on_mount(self):
         self.query_one(DataTable).add_columns("Definizione", "Lingua", "Fonte", "Nome", "Tipo")
         self.call_after_refresh(self.resize_stream_columns)
+        self.query_one("#retry-streams").display = self.imported is None
         self.query_one("#stream-episode-row").display = self.has_episode_picker
         if self.has_episode_picker:
             seasons = self.media.available_seasons
@@ -382,7 +473,19 @@ class StreamsScreen(DialogScreen):
         if not self.is_mounted or not self.display:
             return
         stream = self.selected()
-        self.query_one("#stream-description", Static).update(stream.description if stream else "")
+        if not stream:
+            self.query_one("#stream-description", Static).update("")
+            return
+        info = source_info(stream)
+        text = Text()
+        text.append(info.quality if info.quality != "unknown" else "Qualità non indicata", style="bold #a8ee78")
+        text.append("  ·  "+info.language_label, style="#d8e4ef")
+        text.append("  ·  "+stream.addon, style="#91a3b5")
+        if stream.filename:
+            text.append("\n"+stream.filename, style="#7f90a2")
+        if stream.description:
+            text.append("\n"+stream.description, style="#c3d0dc")
+        self.query_one("#stream-description", Static).update(text)
 
     @on(DataTable.RowSelected)
     @on(Button.Pressed, "#play")
@@ -416,6 +519,14 @@ class StreamsScreen(DialogScreen):
         elif self.media.url:
             webbrowser.open(self.media.url)
 
+    @on(Button.Pressed, "#retry-streams")
+    def retry(self):
+        self.reload_streams()
+
+    @on(Button.Pressed, "#manage-addons")
+    def manage_addons(self):
+        self.app.push_screen(AddonsScreen())
+
     @on(Button.Pressed, "#close")
     def close(self):
         self.dismiss()
@@ -427,12 +538,26 @@ class ImportScreen(DialogScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog", id="import-dialog"):
             yield Static("APRI UN FLUSSO", classes="dialog-title")
-            yield Static("Incolla un URL video HTTP/HTTPS, una lista streams JSON oppure il percorso di un file JSON locale.", classes="muted")
+            yield Static("Incolla un URL video HTTP/HTTPS, una lista streams JSON o il percorso di un file JSON locale.", classes="dialog-subtitle")
+            yield Label("URL o JSON", classes="field-label")
             yield TextArea(id="import-value")
+            yield Static("Esempi: https://cdn.example.org/video.mkv · {\"streams\": [{\"name\": \"Video\", \"url\": \"…\"}]} · ./flussi.json",
+                         id="import-examples", classes="hint")
             yield Static("", id="import-status", markup=False)
             with Horizontal(classes="actions"):
                 yield Button("Apri", variant="primary", id="import-open")
+                yield Button("Incolla appunti", id="paste-import")
                 yield Button("Chiudi", id="close")
+
+    @on(Button.Pressed, "#paste-import")
+    def paste(self):
+        try:
+            value = pyperclip.paste()
+        except (pyperclip.PyperclipException, OSError, RuntimeError, subprocess.SubprocessError):
+            self.query_one("#import-status", Static).update("Gli appunti non sono disponibili: incolla con il terminale.")
+            return
+        if value:
+            self.query_one(TextArea).load_text(value)
 
     @on(Button.Pressed, "#import-open")
     def submit(self):
@@ -461,7 +586,8 @@ class CurrentsScreen(DialogScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog", id="currents-dialog"):
-            yield Static("74 MODI DI GUARDARE IL CINEMA", classes="dialog-title")
+            yield Static("74 CORRENTI CINEMATOGRAFICHE", classes="dialog-title")
+            yield Static("Cerca per corrente, autore, opera o paese. Le selezioni restano nel compositore prompt.", classes="dialog-subtitle")
             yield Input(placeholder="Corrente, autore, opera, paese…", id="current-search")
             yield DataTable(id="current-table", cursor_type="row", zebra_stripes=True)
             with VerticalScroll(id="current-detail-scroll"):
@@ -473,7 +599,9 @@ class CurrentsScreen(DialogScreen):
                 yield Button("Chiudi", id="close")
 
     def on_mount(self):
-        self.query_one(DataTable).add_columns("", "Corrente", "Periodo", "Categoria")
+        table = self.query_one(DataTable)
+        for label, width in [("", 2), ("Corrente", 38), ("Periodo", 14), ("Categoria", 24)]:
+            table.add_column(label, width=width)
         self.fill()
 
     @on(Input.Changed, "#current-search")
@@ -482,16 +610,35 @@ class CurrentsScreen(DialogScreen):
         table = self.query_one(DataTable)
         table.clear()
         for m in self.items:
-            table.add_row("●" if m["id"] in self.app.selected_currents else "", Text(m["label"]), f"{m['start']}–{m['end'] or 'oggi'}", KINDS[m["kind"]], key=m["id"])
-        self.query_one("#current-selection", Static).update(f"{len(self.app.selected_currents)}/4 selezionate · le selezioni restano disponibili nel compositore")
+            table.add_row(Text("●", style="#a8ee78") if m["id"] in self.app.selected_currents else " ",
+                          Text(m["label"]), f"{m['start']}–{m['end'] or 'oggi'}", KINDS[m["kind"]], key=m["id"])
+        selected = len(self.app.selected_currents)
+        self.query_one("#current-selection", Static).update(
+            f"{selected}/4 selezionate"+(" · pronte nel compositore" if selected else " · nessuna corrente selezionata"))
 
     @on(DataTable.RowHighlighted)
     def detail(self):
         row = self.query_one(DataTable).cursor_row
         if not 0 <= row < len(self.items):
+            self.query_one("#current-detail", Static).update(Text("Nessuna corrente corrisponde alla ricerca.", style="#91a3b5"))
             return
         m = self.items[row]
-        self.query_one("#current-detail", Static).update(f"{m['label']} / {m['original_name']}\n{period(m)} · {', '.join(m['regions'])}\n\n{m['summary']}\n{m['scope_note']}\n\nCaratteristiche: {'; '.join(m['traits'])}\nAutori: {', '.join(m['authors'])}\nOpere: {'; '.join(w['title']+' ('+str(w['year'])+')' for w in m['works'])}\n\nFonti:\n"+"\n".join(s["title"]+" — "+s["url"] for s in m["sources"]))
+        text = Text()
+        text.append(m["label"], style="bold #f2f6fa")
+        text.append("  /  "+m["original_name"], style="#91a3b5")
+        text.append("\n"+period(m)+"  ·  "+", ".join(m["regions"]), style="#a8ee78")
+        text.append("\n\n"+m["summary"], style="#c3d0dc")
+        text.append("\n"+m["scope_note"], style="#91a3b5")
+        text.append("\n\nCARATTERISTICHE", style="bold #a8ee78")
+        text.append("\n"+" · ".join(m["traits"]), style="#c3d0dc")
+        text.append("\n\nAUTORI", style="bold #a8ee78")
+        text.append("\n"+", ".join(m["authors"]), style="#c3d0dc")
+        text.append("\n\nOPERE", style="bold #a8ee78")
+        text.append("\n"+" · ".join(f"{w['title']} ({w['year']})" for w in m["works"]), style="#c3d0dc")
+        text.append("\n\nFONTI", style="bold #a8ee78")
+        for source in m["sources"]:
+            text.append("\n"+source["title"]+" — "+source["url"], style="#7f90a2")
+        self.query_one("#current-detail", Static).update(text)
 
     @on(DataTable.RowSelected)
     @on(Button.Pressed, "#toggle-current")
@@ -526,21 +673,37 @@ class PromptScreen(DialogScreen):
         draft = self.app.prompt_draft
         with Vertical(classes="dialog", id="prompt-dialog"):
             yield Static("DA UN’IDEA AL PROSSIMO FILM", classes="dialog-title")
+            yield Static("Generazione locale e gratuita: nessuna API AI, nessun messaggio inviato automaticamente.", classes="dialog-subtitle")
             with TabbedContent():
                 with TabPane("Componi", id="compose-tab"), VerticalScroll():
+                    yield Static("MODALITÀ", classes="section-label")
                     yield Select([(v, k) for k, v in MODES.items()], value=draft.get("mode", "free"), allow_blank=False, id="prompt-mode")
-                    yield Static("Correnti: "+(", ".join(m["label"] for m in search_currents() if m["id"] in self.app.selected_currents) or "nessuna · selezionale da Correnti"), classes="muted", markup=False)
-                    yield Label("La tua richiesta")
+                    yield Static("Correnti: "+(", ".join(m["label"] for m in search_currents() if m["id"] in self.app.selected_currents) or "nessuna · selezionale da Correnti"), classes="prompt-currents", markup=False)
+                    yield Static("LA TUA RICHIESTA", classes="section-label")
                     yield TextArea(draft.get("question", ""), id="prompt-question")
+                    yield Static("DETTAGLI", classes="section-label")
                     with Horizontal(classes="form-row"):
-                        yield Input(value=draft.get("count", ""), placeholder="Quantità · vuota = automatica", id="prompt-count")
-                        yield Select([("Sintetico", "concise"), ("Approfondito", "detailed")], value=draft.get("depth", "concise"), allow_blank=False, id="prompt-depth")
+                        with Vertical(classes="form-col"):
+                            yield Label("Quantità", classes="field-label")
+                            yield Input(value=draft.get("count", ""), placeholder="Vuota = automatica", id="prompt-count")
+                        with Vertical(classes="form-col"):
+                            yield Label("Profondità", classes="field-label")
+                            yield Select([("Sintetico", "concise"), ("Approfondito", "detailed")], value=draft.get("depth", "concise"), allow_blank=False, id="prompt-depth")
+                    yield Label("Relazione con le correnti", classes="field-label")
                     yield Select([("Appartenenza storica", "historical"), ("Anche eredità e influenze", "legacy")], value=draft.get("relation", "historical"), allow_blank=False, id="prompt-relation")
-                    yield Input(value=draft.get("preferences", ""), placeholder="Preferenze · lingua, durata, atmosfera…", id="prompt-preferences")
-                    yield Input(value=draft.get("exclusions", ""), placeholder="Esclusioni", id="prompt-exclusions")
-                    yield Input(value=draft.get("watched", ""), placeholder="Già visti · separati da punto e virgola", id="prompt-watched")
+                    yield Static("RIFINITURE", classes="section-label")
+                    with Horizontal(classes="form-row"):
+                        with Vertical(classes="form-col"):
+                            yield Label("Preferenze", classes="field-label")
+                            yield Input(value=draft.get("preferences", ""), placeholder="Lingua, durata, atmosfera…", id="prompt-preferences")
+                        with Vertical(classes="form-col"):
+                            yield Label("Esclusioni", classes="field-label")
+                            yield Input(value=draft.get("exclusions", ""), placeholder="Cosa evitare", id="prompt-exclusions")
+                    yield Label("Già visti", classes="field-label")
+                    yield Input(value=draft.get("watched", ""), placeholder="Titoli separati da punto e virgola", id="prompt-watched")
                 with TabPane("Prompt modificabile", id="result-tab"):
                     yield TextArea(draft.get("output", ""), id="prompt-output")
+                    yield Label("Apri la chat con", classes="field-label")
                     yield Select([(k, k) for k in PROVIDERS], value="DeepSeek", allow_blank=False, id="chat-provider")
                     with Horizontal(classes="actions"):
                         yield Button("Copia", id="copy-prompt")

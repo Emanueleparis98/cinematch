@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "termovies"
-version = "0.4.2"
+version = "0.5.0"
 description = "Cinema, serie, anime, TV e correnti cinematografiche nel terminale"
 requires-python = ">=3.11"
 readme = "terminal/README.md"

@@ -10,6 +10,7 @@ from termovies.net import Network
 from termovies.screens import (
     AddonsScreen,
     CurrentsScreen,
+    HelpScreen,
     ImportScreen,
     PromptScreen,
     SettingsScreen,
@@ -279,6 +280,26 @@ async def test_stream_picker_is_wider_and_fits_all_columns(tmp_path):
         await service.close()
 
 
+async def test_favorite_button_reflects_saved_state(tmp_path):
+    service = cinema(tmp_path)
+    app = CinemaApp(service, autoload=False)
+    media = Media("tt12345", "movie", "Film preferito", year="2024")
+    try:
+        async with app.run_test(size=(120, 44)) as pilot:
+            app.current = media
+            app.query_one("#favorite", Button).disabled = False
+            app.favorite()
+            await pilot.pause()
+            assert "Nei preferiti" in str(app.query_one("#favorite", Button).label)
+            assert app.query_one("#favorite", Button).has_class("active")
+            app.favorite()
+            await pilot.pause()
+            assert str(app.query_one("#favorite", Button).label) == "☆ Preferito"
+            assert not app.query_one("#favorite", Button).has_class("active")
+    finally:
+        await service.close()
+
+
 async def test_current_selection_prompt_generation_edit_and_escape_preserves_draft(tmp_path):
     service = cinema(tmp_path)
     app = CinemaApp(service, autoload=False)
@@ -319,7 +340,7 @@ async def test_every_screen_opens_and_closes_at_supported_sizes(tmp_path, size):
         async with app.run_test(size=size) as pilot:
             await pilot.pause()
             series = Media("tt12345", "series", "Una serie", videos=[{"id": "tt12345:1:1", "season": 1, "episode": 1}])
-            for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen(), StreamsScreen(Media("demo", "movie", "Un film"), imported=[]), StreamsScreen(series)]:
+            for screen in [SettingsScreen(), AddonsScreen(), CurrentsScreen(), PromptScreen(), ImportScreen(), HelpScreen(), StreamsScreen(Media("demo", "movie", "Un film"), imported=[]), StreamsScreen(series)]:
                 app.push_screen(screen)
                 await pilot.pause()
                 close = screen.query_one("#close", Button)
