@@ -5,8 +5,8 @@ from pathlib import Path
 
 import httpx
 import pytest
-from cinematch import __version__
-from cinematch.addons import (
+from termovies import __version__
+from termovies.addons import (
     Addons,
     endpoint,
     manifest_url,
@@ -14,8 +14,8 @@ from cinematch.addons import (
     parse_streams,
     supports,
 )
-from cinematch.debrid import Debrid, choose_file
-from cinematch.models import (
+from termovies.debrid import Debrid, choose_file
+from termovies.models import (
     CineError,
     Media,
     Stream,
@@ -23,11 +23,11 @@ from cinematch.models import (
     parse_media,
     web_url,
 )
-from cinematch.net import Network
-from cinematch.player import Player
-from cinematch.prompts import catalog, generate, search_currents
-from cinematch.service import Cinema
-from cinematch.store import Store
+from termovies.net import Network
+from termovies.player import Player
+from termovies.prompts import catalog, generate, search_currents
+from termovies.service import Cinema
+from termovies.store import Store
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,7 +44,7 @@ def test_release_metadata_matches_package_version():
     project = tomllib.loads((ROOT/"pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     assert __version__ == project
     assert json.loads((ROOT/"terminal/latest.json").read_text(encoding="utf-8"))["version"] == project
-    assert json.loads((ROOT/"bucket/cinematch.json").read_text(encoding="utf-8"))["version"] == project
+    assert json.loads((ROOT/"bucket/termovies.json").read_text(encoding="utf-8"))["version"] == project
 
 
 def test_prompts_free_does_not_inject_preserved_currents():
@@ -112,7 +112,7 @@ def test_streams_preserve_file_selection_headers_and_subtitles():
     assert len(items[1].subtitles) == 1 and items[2].kind == "external"
 
 
-def test_nullable_cinemeta_fields_keep_all_episodes():
+def test_nullable_catalog_fields_keep_all_episodes():
     m = parse_media({"id": "tt0903747", "type": "series", "name": "Breaking Bad", "director": None, "cast": None,
                      "genres": None, "videos": [{"id": "tt0903747:1:1", "season": 1, "episode": 1}]})
     assert len(m.videos) == 1 and m.directors == []
@@ -142,6 +142,29 @@ async def test_tmdb_only_search_does_not_report_stale_addon_errors(tmp_path):
     try:
         assert await service.search("prova", source="tmdb") == []
         assert service.errors == []
+    finally:
+        await service.close()
+
+
+async def test_source_all_searches_kitsu_and_tmdb_but_not_personal_addons(tmp_path):
+    store = Store(tmp_path)
+    store.config["tmdb_key"] = "a"*32
+    net = Network(httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={}))))
+    service = Cinema(net, store)
+    calls = []
+    async def addon_search(query, section, skip, defaults_only=False):
+        calls.append(("addons", defaults_only))
+        return []
+    async def tmdb_search(query, section, skip):
+        calls.append(("tmdb",))
+        return []
+    service.addons.search, service.tmdb.search = addon_search, tmdb_search
+    try:
+        await service.search("prova", source="all")
+        assert set(calls) == {("addons", True), ("tmdb",)}
+        calls.clear()
+        await service.search("prova", source="addons")
+        assert calls == [("addons", False)]
     finally:
         await service.close()
 
@@ -233,13 +256,13 @@ async def test_redirect_keeps_only_public_client_headers():
     async def api(request):
         if request.url.host == "before.example.org":
             return httpx.Response(302, headers={"Location": "https://after.example.org/player"})
-        assert request.headers["user-agent"] == "CineMatch-compatibility-client"
+        assert request.headers["user-agent"] == "Termovies-compatibility-client"
         assert not any(key in request.headers for key in ["authorization", "cookie", "referer", "origin"])
         return httpx.Response(200, text="Player")
     net = Network(httpx.AsyncClient(transport=httpx.MockTransport(api)))
     try:
         assert await net.request("https://before.example.org/player", redirects=True,
-            headers={"User-Agent": "CineMatch-compatibility-client", "Authorization": "Bearer private", "Cookie": "private=value", "Referer": "https://private.example/", "Origin": "https://private.example"}) == b"Player"
+            headers={"User-Agent": "Termovies-compatibility-client", "Authorization": "Bearer private", "Cookie": "private=value", "Referer": "https://private.example/", "Origin": "https://private.example"}) == b"Player"
     finally:
         await net.close()
 
@@ -353,7 +376,7 @@ def test_player_uses_argv_and_never_shell(monkeypatch, tmp_path):
 
 
 def test_player_finds_vlc_app_outside_path(monkeypatch, tmp_path):
-    import cinematch.player as module
+    import termovies.player as module
     executable = tmp_path/"VLC"
     executable.write_text("", encoding="utf-8")
     monkeypatch.setattr(module.shutil, "which", lambda name: None)
@@ -364,7 +387,7 @@ def test_player_finds_vlc_app_outside_path(monkeypatch, tmp_path):
 async def test_default_user_agent_uses_package_version():
     net = Network()
     try:
-        assert net.client.headers["user-agent"] == f"CineMatch-Terminal/{__version__} (+https://github.com/Emanueleparis98/cinematch)"
+        assert net.client.headers["user-agent"] == f"Termovies-Terminal/{__version__} (+https://github.com/Emanueleparis98/termovies)"
     finally:
         await net.close()
 
@@ -417,7 +440,7 @@ async def test_addon_streams_are_cached_deduplicated_and_bounded(tmp_path):
 
 
 async def test_addon_streams_timeout_keeps_completed_sources(tmp_path, monkeypatch):
-    import cinematch.addons as module
+    import termovies.addons as module
     store = Store(tmp_path)
     fast = parse_manifest({"id": "fast", "name": "Fast", "types": ["movie"], "resources": ["stream"], "catalogs": []}, "https://fast.test/manifest.json")
     slow = parse_manifest({"id": "slow", "name": "Slow", "types": ["movie"], "resources": ["stream"], "catalogs": []}, "https://slow.test/manifest.json")

@@ -31,7 +31,7 @@ class Cinema:
         tasks = []
         search_addons = source in {"all", "addons"}
         if search_addons:
-            tasks.append(self.addons.search(query, section, skip))
+            tasks.append(self.addons.search(query, section, skip, defaults_only=source == "all"))
         if source in {"all", "tmdb"} and self.store.config["tmdb_key"]:
             tasks.append(self.tmdb.search(query, section, skip))
         results = await asyncio.gather(*tasks, return_exceptions=True)

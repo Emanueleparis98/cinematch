@@ -3,18 +3,18 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from cinematch.app import CinemaApp
-from cinematch.net import Network
-from cinematch.prompts import catalog
-from cinematch.screens import (
+from termovies.app import CinemaApp
+from termovies.net import Network
+from termovies.prompts import catalog
+from termovies.screens import (
     AddonsScreen,
     CurrentsScreen,
     ImportScreen,
     PromptScreen,
     SettingsScreen,
 )
-from cinematch.service import Cinema
-from cinematch.store import Store
+from termovies.service import Cinema
+from termovies.store import Store
 
 
 async def main():

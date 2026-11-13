@@ -17,7 +17,7 @@ class _Transient(Exception):
 class Network:
     def __init__(self, client=None):
         self.client = client or httpx.AsyncClient(timeout=httpx.Timeout(15, connect=6), follow_redirects=False,
-                                                headers={"User-Agent": f"CineMatch-Terminal/{__version__} (+https://github.com/Emanueleparis98/cinematch)"})
+                                                headers={"User-Agent": f"Termovies-Terminal/{__version__} (+https://github.com/Emanueleparis98/termovies)"})
 
     async def close(self):
         await self.client.aclose()

@@ -1,14 +1,14 @@
 # Cinema Currents 1.0
 
 Plugin locale e indipendente per consultare le correnti cinematografiche e generare
-prompt utilizzabili in qualsiasi chat. CineMatch Terminal usa il catalogo incluso
+prompt utilizzabili in qualsiasi chat. Termovies Terminal usa il catalogo incluso
 in questa cartella. Il plugin non chiama servizi AI, non invia messaggi, non legge account e non salva
 richieste o risposte. La raccolta di riferimento è incorporata nel pacchetto.
 
 ## Uso autonomo
 
 Il pacchetto Windows contiene `cinema-currents.exe`. Puoi copiarlo in un'altra
-cartella: non richiede CineMatch, chiavi API o un'installazione. Per altri sistemi
+cartella: non richiede Termovies, chiavi API o un'installazione. Per altri sistemi
 compila i sorgenti Rust di questa cartella con `cargo build --release`.
 
 ```powershell

@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 from .cache import AsyncTTLCache
 from .models import CineError, Stream, parse_media, plain, web_url
 
-DEFAULTS = ["https://v3-cinemeta.strem.io/manifest.json", "https://anime-kitsu.strem.fun/manifest.json"]
+DEFAULTS = ["https://anime-kitsu.strem.fun/manifest.json"]
 REQUEST_TIMEOUT = 12.0
 SEARCH_TIMEOUT = 25.0
 STREAMS_TIMEOUT = 18.0
@@ -178,10 +178,11 @@ class Addons:
     async def json(self, url):
         return await self._json_cache.get(url, lambda: self._load_json(url))
 
-    async def search(self, query, section="all", skip=0):
+    async def search(self, query, section="all", skip=0, defaults_only=False):
         self.errors = []
         if not skip:
             self.offsets = {}
+        pool = self.defaults if defaults_only else self.all
         async def one(addon, cat):
             kind, cid = cat.get("type"), cat.get("id")
             if not isinstance(kind, str) or not isinstance(cid, str):
@@ -215,7 +216,7 @@ class Addons:
                 self.errors.append(addon["name"]+": catalogo non disponibile.")
                 return []
         tasks = []
-        for addon in self.all:
+        for addon in pool:
             anime = "kitsu" in addon["id"].lower() or "anime" in addon["name"].lower()
             if section == "anime" and not anime:
                 continue

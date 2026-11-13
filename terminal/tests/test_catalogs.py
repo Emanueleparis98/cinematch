@@ -1,10 +1,10 @@
 import httpx
 import pytest
-from cinematch.addons import Addons, parse_manifest
-from cinematch.models import Media
-from cinematch.net import Network
-from cinematch.store import Store
-from cinematch.tmdb import Tmdb
+from termovies.addons import Addons, parse_manifest
+from termovies.models import Media
+from termovies.net import Network
+from termovies.store import Store
+from termovies.tmdb import Tmdb
 
 
 async def test_mixed_catalog_pagination_tracks_each_source_offset(tmp_path):

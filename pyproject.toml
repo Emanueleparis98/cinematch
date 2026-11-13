@@ -3,8 +3,8 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cinematch"
-version = "0.3.3"
+name = "termovies"
+version = "0.4.0"
 description = "Cinema, serie, anime, TV e correnti cinematografiche nel terminale"
 requires-python = ">=3.11"
 readme = "terminal/README.md"
@@ -16,13 +16,13 @@ dependencies = ["textual>=8.2,<9", "httpx>=0.28,<1", "platformdirs>=4.5,<5", "py
 dev = ["pytest>=9,<10", "pytest-asyncio>=1.3,<2"]
 
 [project.scripts]
-cinematch = "cinematch.cli:main"
+termovies = "termovies.cli:main"
 
 [project.urls]
-Repository = "https://github.com/Emanueleparis98/cinematch"
+Repository = "https://github.com/Emanueleparis98/termovies"
 
 [tool.hatch.build.targets.wheel]
-packages = ["terminal/src/cinematch"]
+packages = ["terminal/src/termovies"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/terminal", "/pyproject.toml", "/plugins/cinema-currents/assets/movements.json"]

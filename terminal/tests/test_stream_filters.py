@@ -1,7 +1,7 @@
 import pytest
-from cinematch.addons import parse_streams
-from cinematch.models import Stream
-from cinematch.stream_filters import matches_stream, source_info
+from termovies.addons import parse_streams
+from termovies.models import Stream
+from termovies.stream_filters import matches_stream, source_info
 
 
 @pytest.mark.parametrize(("name", "quality"), [

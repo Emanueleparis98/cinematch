@@ -13,8 +13,8 @@ from .models import CineError, Media
 
 class Store:
     def __init__(self, root: Path | None = None):
-        self.config_path = (root or user_config_path("cinematch", appauthor=False))/"settings.json"
-        self.data_path = (root or user_data_path("cinematch", appauthor=False))/"library.json"
+        self.config_path = (root or user_config_path("termovies", appauthor=False))/"settings.json"
+        self.data_path = (root or user_data_path("termovies", appauthor=False))/"library.json"
         self.config = self.read(self.config_path, {"addons": [], "tmdb_key": "", "debrid_provider": "", "debrid_key": "", "player": "auto"})
         self.data = self.read(self.data_path, {"favorites": [], "history": [], "tasks": {}})
 
@@ -28,12 +28,12 @@ class Store:
                 raise TypeError()
             return {**default, **value}
         except (OSError, ValueError, TypeError):
-            raise CineError("Un file locale di CineMatch è illeggibile. Ripristinalo prima di salvare le impostazioni.") from None
+            raise CineError("Un file locale di Termovies è illeggibile. Ripristinalo prima di salvare le impostazioni.") from None
 
     @staticmethod
     def write(path, data):
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd, temporary = tempfile.mkstemp(prefix=".cinematch-", dir=path.parent)
+        fd, temporary = tempfile.mkstemp(prefix=".termovies-", dir=path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(data, handle, ensure_ascii=False, indent=2)

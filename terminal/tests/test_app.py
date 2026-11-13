@@ -3,11 +3,11 @@ import json
 
 import httpx
 import pytest
-from cinematch.addons import parse_manifest
-from cinematch.app import CinemaApp
-from cinematch.models import CineError, Media, Stream
-from cinematch.net import Network
-from cinematch.screens import (
+from termovies.addons import parse_manifest
+from termovies.app import CinemaApp
+from termovies.models import CineError, Media, Stream
+from termovies.net import Network
+from termovies.screens import (
     AddonsScreen,
     CurrentsScreen,
     ImportScreen,
@@ -15,8 +15,8 @@ from cinematch.screens import (
     SettingsScreen,
     StreamsScreen,
 )
-from cinematch.service import Cinema
-from cinematch.store import Store
+from termovies.service import Cinema
+from termovies.store import Store
 from textual.widgets import Button, DataTable, Input, Select, Static, TextArea
 from textual.worker import WorkerCancelled
 
@@ -72,6 +72,7 @@ async def test_complete_series_flow_selects_season_episode_and_stream(tmp_path):
     try:
         async with app.run_test(size=(120, 44)) as pilot:
             app.query_one("#section", Select).value = "series"
+            app.query_one("#source", Select).value = "addons"
             app.query_one("#search", Input).value = "prova"
             app.search()
             await pilot.pause()
@@ -124,6 +125,7 @@ async def test_explore_filters_apply_to_episode_picker_and_persist(tmp_path):
             app.query_one("#language", Select).value = "ITA"
             app.query_one("#quality", Select).value = "1080p"
             app.query_one("#section", Select).value = "series"
+            app.query_one("#source", Select).value = "addons"
             app.query_one("#search", Input).value = "prova"
             app.search()
             await pilot.pause()
@@ -156,6 +158,7 @@ async def test_empty_search_cannot_play_previous_selection(tmp_path):
     app = CinemaApp(service, autoload=False)
     try:
         async with app.run_test(size=(120, 44)) as pilot:
+            app.query_one("#source", Select).value = "addons"
             app.query_one("#search", Input).value = "prova"
             app.search()
             await pilot.pause()
@@ -223,6 +226,7 @@ async def test_late_episode_load_does_not_replace_new_season(tmp_path):
     try:
         async with app.run_test(size=(120, 44)) as pilot:
             app.query_one("#section", Select).value = "series"
+            app.query_one("#source", Select).value = "addons"
             app.query_one("#search", Input).value = "prova"
             app.search()
             await wait_until(pilot, started.is_set)
@@ -478,14 +482,14 @@ async def test_kitsu_episode_id_is_not_misread_as_season_number(tmp_path):
     service = cinema(tmp_path)
     captured = {}
     async def resolve(stream, **kwargs):
-        from cinematch.models import Stream
+        from termovies.models import Stream
         captured.update(kwargs)
         return Stream("Video", url="https://cdn.example.org/video.mp4")
     async def play(stream, **kwargs):
         pass
     service.debrid.resolve = resolve
     service.player.play = play
-    from cinematch.models import Stream
+    from termovies.models import Stream
     media = Media("kitsu:747", "series", "Anime", videos=[{"id": "kitsu:747:8", "season": 1, "episode": 8}])
     try:
         await service.play(Stream("Torrent", kind="torrent", info_hash="a"*40), media, "kitsu:747:8")

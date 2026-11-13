@@ -1,15 +1,15 @@
 ﻿# CI-only check in a disposable Scoop installation on the Windows runner.
 $ErrorActionPreference = 'Stop'
-$CinematchScoop = Join-Path $env:RUNNER_TEMP 'cinematch-scoop-check'
-$env:SCOOP = $CinematchScoop
-$CinematchInstaller = Join-Path $env:RUNNER_TEMP 'install-scoop.ps1'
-Invoke-WebRequest 'https://get.scoop.sh' -OutFile $CinematchInstaller
-& $CinematchInstaller -ScoopDir $CinematchScoop -RunAsAdmin
+$TermoviesScoop = Join-Path $env:RUNNER_TEMP 'termovies-scoop-check'
+$env:SCOOP = $TermoviesScoop
+$TermoviesInstaller = Join-Path $env:RUNNER_TEMP 'install-scoop.ps1'
+Invoke-WebRequest 'https://get.scoop.sh' -OutFile $TermoviesInstaller
+& $TermoviesInstaller -ScoopDir $TermoviesScoop -RunAsAdmin
 if ($LASTEXITCODE -ne 0) { throw 'Cannot install Scoop in CI' }
-$CinematchScoopCommand = Join-Path $CinematchScoop 'shims/scoop.ps1'
-& $CinematchScoopCommand bucket add cinematch https://github.com/Emanueleparis98/cinematch
-if ($LASTEXITCODE -ne 0) { throw 'Cannot add CineMatch bucket' }
-& $CinematchScoopCommand install cinematch/cinematch
-if ($LASTEXITCODE -ne 0) { throw 'Cannot install CineMatch through Scoop' }
-& (Join-Path $CinematchScoop 'shims/cinematch.exe') --version
-if ($LASTEXITCODE -ne 0) { throw 'Scoop shim cannot launch CineMatch' }
+$TermoviesScoopCommand = Join-Path $TermoviesScoop 'shims/scoop.ps1'
+& $TermoviesScoopCommand bucket add termovies https://github.com/Emanueleparis98/termovies
+if ($LASTEXITCODE -ne 0) { throw 'Cannot add Termovies bucket' }
+& $TermoviesScoopCommand install termovies/termovies
+if ($LASTEXITCODE -ne 0) { throw 'Cannot install Termovies through Scoop' }
+& (Join-Path $TermoviesScoop 'shims/termovies.exe') --version
+if ($LASTEXITCODE -ne 0) { throw 'Scoop shim cannot launch Termovies' }

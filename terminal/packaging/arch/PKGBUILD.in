@@ -1,14 +1,14 @@
-pkgname=cinematch
+pkgname=termovies
 pkgver=@VERSION@
 pkgrel=1
 pkgdesc='Film, serie, anime, TV e prompt dal terminale'
 arch=('any')
-url='https://github.com/Emanueleparis98/cinematch'
+url='https://github.com/Emanueleparis98/termovies'
 license=('MIT')
 depends=('python>=3.11' 'python-textual>=8.2' 'python-httpx>=0.28' 'python-platformdirs' 'python-pyperclip')
 makedepends=('python-build' 'python-installer' 'python-hatchling')
 optdepends=('mpv: riproduzione video e punto di ripresa' 'vlc: player video alternativo' 'wl-clipboard: copia prompt su Wayland' 'xclip: copia prompt su X11')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v$pkgver/$pkgname-$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Emanueleparis98/termovies/releases/download/terminal-v$pkgver/$pkgname-$pkgver.tar.gz")
 sha256sums=('@SOURCE_SHA256@')
 
 build() {

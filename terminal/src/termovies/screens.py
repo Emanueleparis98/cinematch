@@ -48,10 +48,10 @@ class SettingsScreen(DialogScreen):
     def compose(self) -> ComposeResult:
         config = self.app.service.store.config
         with Vertical(id="settings-dialog", classes="dialog"):
-            yield Static("IL TUO CINEMATCH", classes="dialog-title")
+            yield Static("IL TUO TERMOVIES", classes="dialog-title")
             with VerticalScroll():
                 yield Label("TMDB · API v3 oppure Read Access Token")
-                yield Input(value=config["tmdb_key"], password=True, id="tmdb-key", placeholder="Facoltativo: migliora ricerca e metadati in italiano")
+                yield Input(value=config["tmdb_key"], password=True, id="tmdb-key", placeholder="Consigliato: ricerca e metadati in italiano per film e serie")
                 yield Label("Servizio debrid · una chiave per tutti gli addon")
                 yield Select([("Nessuno", ""), ("Real-Debrid", "rd"), ("TorBox", "torbox")], value=config["debrid_provider"], allow_blank=False, id="debrid-provider")
                 yield Input(value=config["debrid_key"], password=True, id="debrid-key", placeholder="Chiave personale del servizio")
@@ -96,7 +96,7 @@ class SettingsScreen(DialogScreen):
             if self.app.service.store.config["debrid_provider"]:
                 await self.app.service.debrid.verify()
                 messages.append("Debrid collegato")
-            status.update(" · ".join(messages) or "Nessun servizio da verificare. I cataloghi pubblici funzionano senza chiavi.")
+            status.update(" · ".join(messages) or "Nessun servizio da verificare. Kitsu funziona senza chiavi; TMDB serve per film e serie.")
         except (CineError, OSError) as e:
             status.update(str(e) if isinstance(e, CineError) else "Non posso salvare le impostazioni.")
 

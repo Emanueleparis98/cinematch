@@ -1,22 +1,22 @@
-# CineMatch Terminal
+# Termovies Terminal
 
 Film, serie, anime, TV, 74 correnti cinematografiche e prompt in una sola
-interfaccia da terminale. Avvio: `cinematch`.
+interfaccia da terminale. Avvio: `termovies`.
 
-![CineMatch Terminal](docs/terminal.png)
+![Termovies Terminal](docs/terminal.png)
 
 ## Installazione rapida — Linux / Ubuntu / Arch
 
 ```sh
-curl -fsSL https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.sh | sh
-cinematch
+curl -fsSL https://github.com/Emanueleparis98/termovies/releases/latest/download/install.sh | sh
+termovies
 ```
 
 L’installer scarica l’ultima release pubblicata, verifica lo SHA-256 e crea un
 ambiente isolato con uv e Python 3.13. Non richiede Git, Node, Rust o un login
 GitHub. Non usa pip di sistema. Se il comando non compare subito, riapri il
 terminale. Per aggiornare riesegui la stessa riga: impostazioni e libreria
-restano in `~/.config/cinematch` e `~/.local/share/cinematch`.
+restano in `~/.config/termovies` e `~/.local/share/termovies`.
 
 Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 `sudo apt install mpv` su Ubuntu. VLC e ffplay sono alternative.
@@ -24,33 +24,33 @@ Installa anche un player: `sudo pacman -S mpv` su Arch/CachyOS oppure
 ### Arch · pacchetto nativo
 
 ```sh
-curl -fLO https://github.com/Emanueleparis98/cinematch/releases/download/terminal-v0.3.3/cinematch-0.3.3-1-any.pkg.tar.zst
-sudo pacman -U ./cinematch-0.3.3-1-any.pkg.tar.zst
-cinematch
+curl -fLO https://github.com/Emanueleparis98/termovies/releases/download/terminal-v0.4.0/termovies-0.4.0-1-any.pkg.tar.zst
+sudo pacman -U ./termovies-0.4.0-1-any.pkg.tar.zst
+termovies
 ```
 
 È un pacchetto del progetto, non un pacchetto nei repository ufficiali Arch o
-nell’AUR. Se passi dall’installer uv a pacman, esegui prima `uv tool uninstall cinematch`
+nell’AUR. Se passi dall’installer uv a pacman, esegui prima `uv tool uninstall termovies`
 per evitare che la copia in `~/.local/bin` preceda quella di sistema.
-La release contiene anche `PKGBUILD`, `cinematch-0.3.3-arch-build.tar.gz` e i
+La release contiene anche `PKGBUILD`, `termovies-0.4.0-arch-build.tar.gz` e i
 sorgenti per una build con `makepkg`.
 
 ## Windows · PowerShell
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/Emanueleparis98/cinematch/releases/latest/download/install.ps1 | iex"
-cinematch
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/Emanueleparis98/termovies/releases/latest/download/install.ps1 | iex"
+termovies
 ```
 
 ## Windows · Scoop
 
 ```powershell
-scoop bucket add cinematch https://github.com/Emanueleparis98/cinematch
-scoop install cinematch/cinematch
-cinematch
+scoop bucket add termovies https://github.com/Emanueleparis98/termovies
+scoop install termovies/termovies
+termovies
 ```
 
-Aggiornamento: `scoop update; scoop update cinematch`.
+Aggiornamento: `scoop update; scoop update termovies`.
 È un bucket del progetto; non è una pubblicazione nel catalogo WinGet.
 Installa [mpv](https://mpv.io/installation/) o [VLC](https://www.videolan.org/vlc/).
 Il player trova anche VLC nella cartella standard di Windows e in `/Applications` su macOS.
@@ -60,35 +60,38 @@ Il player trova anche VLC nella cartella standard di Windows e in `/Applications
 Con uv già presente:
 
 ```sh
-uv tool install --python 3.13 git+https://github.com/Emanueleparis98/cinematch.git
-cinematch
+uv tool install --python 3.13 git+https://github.com/Emanueleparis98/termovies.git
+termovies
 ```
 
-È supportato anche `pipx install git+https://github.com/Emanueleparis98/cinematch.git`
+È supportato anche `pipx install git+https://github.com/Emanueleparis98/termovies.git`
 con Python 3.11 o successivo e Git installato. I wheel della release sono comuni
 a Linux, macOS e Windows; per installarli manualmente:
-`uv tool install --python 3.13 ./cinematch-0.3.3-py3-none-any.whl`.
+`uv tool install --python 3.13 ./termovies-0.4.0-py3-none-any.whl`.
 
 ## Aggiornamento
 
 - Installer rapido Linux/Windows: riesegui lo stesso comando; le impostazioni restano.
-- Scoop: `scoop update; scoop update cinematch`.
+- Scoop: `scoop update; scoop update termovies`.
 - Arch: scarica il nuovo pacchetto e installalo con `sudo pacman -U`.
-- uv/pipx da Git: reinstalla con `uv tool install --force …` o `pipx reinstall cinematch`.
-- Rimozione: `uv tool uninstall cinematch`.
+- uv/pipx da Git: reinstalla con `uv tool install --force …` o `pipx reinstall termovies`.
+- Rimozione: `uv tool uninstall termovies`.
 
 Gli indici ufficiali apt/Ubuntu, Arch e WinGet seguono procedure separate: il
-progetto non dichiara `apt install cinematch`, `pacman -S cinematch` o
-`winget install cinematch` come comandi già disponibili.
+progetto non dichiara `apt install termovies`, `pacman -S termovies` o
+`winget install termovies` come comandi già disponibili.
 
 ## Come si usa
 
 1. In **Esplora**, scegli Contenuto (Film, Serie TV, Anime o Canali TV) e Fonte.
+   **Kitsu + TMDB** cerca nelle fonti integrate, **Addon collegati** include i tuoi
+   addon personali, **TMDB** limita la ricerca al solo TMDB.
    Scrivi il titolo nella barra e premi **Cerca**: i risultati appaiono subito sotto.
    La schermata iniziale è vuota e non carica cataloghi popolari.
    Preferiti e Cronologia si scelgono da Contenuto.
 2. La scheda mostra trama, anno, generi, valutazione, regia e cast quando presenti.
-   Collega TMDB per ricerca e metadati in italiano; Cinemeta e Anime Kitsu non richiedono chiavi.
+   Collega TMDB per ricerca e metadati in italiano di film e serie; il catalogo
+   Anime Kitsu è integrato e non richiede chiavi.
 3. Da **Addon** aggiungi il link `manifest.json` del tuo addon, anche `stremio://`.
    Puoi attivarlo, disattivarlo e rimuoverlo. Sono rispettati tipi e prefissi degli ID.
 4. In **Impostazioni** collega Real-Debrid oppure TorBox una volta. I torrent
@@ -125,8 +128,10 @@ intero sono gestiti dal player. HTTP, HLS, DASH e i codec dipendono dal player e
 dalla sorgente. Gli header di richiesta degli addon sono inoltrati a mpv; le fonti
 che richiedono header non gestiti da VLC chiedono di scegliere mpv.
 
-La ricerca funziona con i cataloghi pubblici integrati; TMDB è facoltativo.
-Per la riproduzione aggiungi i tuoi addon manifest JSON e installa mpv o VLC.
+La ricerca predefinita usa TMDB per film e serie e il catalogo Anime Kitsu
+integrato; per film e serie è consigliata una chiave TMDB. Scegli **Addon
+collegati** per cercare anche nei cataloghi degli addon personali. Per la
+riproduzione aggiungi i tuoi addon manifest JSON e installa mpv o VLC.
 Le chiavi Real-Debrid/TorBox vengono configurate una sola volta per i torrent
 restituiti dagli addon. I servizi mantengono le proprie restrizioni.
 
@@ -160,24 +165,24 @@ se il terminale lo consente.
 ## Comandi senza interfaccia
 
 ```sh
-cinematch search "The Matrix" --type movie
-cinematch search "Cowboy Bebop" --type anime --json
-cinematch currents "Rossellini"
-cinematch prompt "Consigliami tre anime brevi, senza spoiler"
-cinematch doctor
-cinematch configure
-cinematch addons add
-cinematch addons list
+termovies search "The Matrix" --type movie
+termovies search "Cowboy Bebop" --type anime --json
+termovies currents "Rossellini"
+termovies prompt "Consigliami tre anime brevi, senza spoiler"
+termovies doctor
+termovies configure
+termovies addons add
+termovies addons list
 ```
 
 `configure` e `addons add` chiedono le credenziali e i manifest personali in modo nascosto,
 così non finiscono nella cronologia della shell. `doctor` mostra percorsi e stato della
 configurazione senza stampare chiavi o manifest personali. Credenziali e manifest
-restano nella configurazione locale di CineMatch Terminal.
+restano nella configurazione locale di Termovies Terminal.
 
 ## Dati locali e disponibilità
 
-Configurazione e libreria usano le cartelle standard dell’utente (`cinematch doctor`
+Configurazione e libreria usano le cartelle standard dell’utente (`termovies doctor`
 mostra i percorsi). Le chiavi sono memorizzate localmente **senza cifratura**, con file
 0600 su Linux. Non vengono inviate alle chat AI. TMDB riceve le ricerche quando collegato;
 gli addon ricevono ricerche e ID dei titoli; il servizio debrid riceve gli hash selezionati.
@@ -202,7 +207,7 @@ uv pip install -e '.[dev]' build
 ```
 
 Su Windows usa `.venv\Scripts\python.exe`. La wheel comprende le 74 correnti e il
-tema TUI. Il workflow **CineMatch Terminal** controlla Linux e Windows con Python
+tema TUI. Il workflow **Termovies Terminal** controlla Linux e Windows con Python
 3.11, 3.13 e 3.14, l’installazione in un ambiente isolato e il pacchetto nativo Arch.
 La verifica post-pubblicazione controlla anche il download anonimo e Scoop.
 

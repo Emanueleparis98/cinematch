@@ -8,10 +8,10 @@ import sys
 import threading
 
 import pytest
-from cinematch.models import Media, Stream
-from cinematch.net import Network
-from cinematch.service import Cinema
-from cinematch.store import Store
+from termovies.models import Media, Stream
+from termovies.net import Network
+from termovies.service import Cinema
+from termovies.store import Store
 
 
 @pytest.mark.skipif(sys.platform != "linux" or not shutil.which("mpv") or not shutil.which("ffmpeg"), reason="Requires local Linux mpv and ffmpeg")

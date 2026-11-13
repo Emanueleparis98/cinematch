@@ -6,7 +6,7 @@ $taskPlugin = Join-Path $taskWorkspace 'plugins\cinema-currents'
 $taskBinary = Join-Path $taskPlugin 'target\release\cinema-currents.exe'
 if (-not (Test-Path -LiteralPath $taskBinary)) { throw 'Compila prima: cargo build --release --manifest-path plugins\cinema-currents\Cargo.toml' }
 $taskTempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-$taskStage = [IO.Path]::GetFullPath((Join-Path $taskTempRoot ('CineMatch-Currents-' + [guid]::NewGuid())))
+$taskStage = [IO.Path]::GetFullPath((Join-Path $taskTempRoot ('Termovies-Currents-' + [guid]::NewGuid())))
 if (-not $taskStage.StartsWith($taskTempRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid staging path' }
 New-Item -ItemType Directory -Path $taskStage | Out-Null
 try {

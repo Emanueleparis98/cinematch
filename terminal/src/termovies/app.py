@@ -26,7 +26,7 @@ SECTIONS = [("Tutti i tipi", "all"), ("Film", "movie"), ("Serie TV", "series"), 
 
 
 class CinemaApp(App):
-    TITLE = "CineMatch"
+    TITLE = "Termovies"
     SUB_TITLE = "Cerca il titolo. Scegli il flusso. Guarda."
     CSS_PATH = "app.tcss"
     BINDINGS: ClassVar[list] = [Binding("ctrl+q", "quit", "Esci"), Binding("slash", "search_focus", "Cerca"),
@@ -57,7 +57,7 @@ class CinemaApp(App):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="masthead"):
-            yield Static("[bold]CINE[/bold][#a8ee78 bold]MATCH[/]", id="brand")
+            yield Static("[bold]TERMO[/bold][#a8ee78 bold]VIES[/]", id="brand")
             yield Static("IL TUO CINEMA, DAL TERMINALE", id="tagline")
             yield Static(f"TERMINAL / {__version__}", id="edition")
         with Horizontal(id="workspace"):
@@ -66,7 +66,7 @@ class CinemaApp(App):
                 yield Label("Contenuto", classes="field-label")
                 yield Select(SECTIONS, value="all", allow_blank=False, id="section")
                 yield Label("Fonte", classes="field-label")
-                yield Select([("Fonti integrate", "all"), ("Addon collegati", "addons"), ("TMDB", "tmdb")], value="all", allow_blank=False, id="source")
+                yield Select([("Kitsu + TMDB", "all"), ("Addon collegati", "addons"), ("TMDB", "tmdb")], value="all", allow_blank=False, id="source")
                 yield Label("Lingua dei flussi", classes="field-label")
                 yield Select(LANGUAGES, value=self.stream_language, allow_blank=False, id="language")
                 yield Label("Definizione", classes="field-label")
@@ -207,7 +207,7 @@ class CinemaApp(App):
             if not self.items and section == "tv":
                 status.update("Nessun canale trovato. Collega un addon TV da Addon e flussi.")
             elif not self.items and source == "tmdb" and not self.service.store.config["tmdb_key"]:
-                status.update("Collega TMDB nelle impostazioni oppure scegli Fonti integrate.")
+                status.update("Collega TMDB nelle impostazioni per cercare film e serie; Kitsu copre gli anime.")
             else:
                 status.update(f"{len(self.items)} titoli"+(" · "+errors if errors else " · seleziona un titolo per dettagli ed episodi"))
         except (CineError, OSError, ValueError, TypeError) as e:

@@ -16,13 +16,14 @@ from .store import Store
 
 
 def parser():
-    p = argparse.ArgumentParser(prog="cinematch", description="Cinema, serie, anime, TV e prompt dal terminale.")
-    p.add_argument("--version", action="version", version=f"CineMatch Terminal {__version__}")
+    p = argparse.ArgumentParser(prog="termovies", description="Cinema, serie, anime, TV e prompt dal terminale.")
+    p.add_argument("--version", action="version", version=f"Termovies Terminal {__version__}")
     commands = p.add_subparsers(dest="command")
     search = commands.add_parser("search", help="Cerca nei cataloghi")
     search.add_argument("query", nargs="?", default="")
     search.add_argument("--type", choices=["all", "movie", "series", "anime", "tv"], default="all")
-    search.add_argument("--source", choices=["all", "addons", "tmdb"], default="all")
+    search.add_argument("--source", choices=["all", "addons", "tmdb"], default="all",
+                        help="all = Kitsu + TMDB; addons = addon collegati; tmdb = solo TMDB")
     search.add_argument("--json", action="store_true")
     currents = commands.add_parser("currents", help="Le 74 correnti, disponibili offline")
     currents.add_argument("query", nargs="?", default="")
@@ -57,8 +58,8 @@ async def run(args):
     service = Cinema(Network(), store)
     try:
         if args.command == "doctor":
-            print(f"CineMatch Terminal {__version__}\nConfigurazione: {store.config_path}\nLibreria: {store.data_path}\nPlayer: {service.player.available() or 'non trovato'}")
-            print(f"TMDB: {'configurato' if store.config['tmdb_key'] else 'facoltativo, non configurato'}\nDebrid: {store.config['debrid_provider'] or 'non configurato'}\nAddon personali: {len(store.config['addons'])}\nCorrenti: {len(search_currents())}")
+            print(f"Termovies Terminal {__version__}\nConfigurazione: {store.config_path}\nLibreria: {store.data_path}\nPlayer: {service.player.available() or 'non trovato'}")
+            print(f"TMDB: {'configurato' if store.config['tmdb_key'] else 'non configurato (film e serie)'}\nDebrid: {store.config['debrid_provider'] or 'non configurato'}\nAddon personali: {len(store.config['addons'])}\nCorrenti: {len(search_currents())}")
         elif args.command == "configure":
             print("Invio conserva il valore attuale. '-' rimuove la credenziale.")
             for field, label in [("tmdb_key", "TMDB"), ("debrid_key", "Chiave debrid")]:
@@ -75,7 +76,7 @@ async def run(args):
         elif args.command == "addons":
             if args.action == "add":
                 if args.value:
-                    raise CineError("Per evitare chiavi nella cronologia, usa cinematch addons add senza il link: lo chiederò in modo nascosto.")
+                    raise CineError("Per evitare chiavi nella cronologia, usa termovies addons add senza il link: lo chiederò in modo nascosto.")
                 addon = await service.addons.add(getpass.getpass("Manifest URL: "))
                 print("Aggiunto: "+addon["name"])
             elif args.action == "remove":
@@ -85,7 +86,7 @@ async def run(args):
                         raise ValueError()
                     store.config["addons"].pop(idx)
                 except (ValueError, TypeError, IndexError):
-                    raise CineError("Indica l’indice mostrato da cinematch addons list.") from None
+                    raise CineError("Indica l’indice mostrato da termovies addons list.") from None
                 store.save_config()
             else:
                 for i, addon in enumerate(store.config["addons"], 1):

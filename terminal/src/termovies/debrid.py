@@ -55,7 +55,7 @@ class Debrid:
         except CineError as e:
             status, code = getattr(e, "status", 0), getattr(e, "code", None)
             if provider == "rd" and code == 35:
-                raise CineError("Real-Debrid: file bloccato dal servizio per violazione del copyright (codice 35). Scegli un’altra sorgente; CineMatch non può sbloccarlo.") from None
+                raise CineError("Real-Debrid: file bloccato dal servizio per violazione del copyright (codice 35). Scegli un’altra sorgente; Termovies non può sbloccarlo.") from None
             if status == 451:
                 raise CineError(name+": accesso rifiutato per una restrizione legale (451).") from None
             if provider == "rd" and code == 22:

@@ -1,4 +1,4 @@
-name: CineMatch Terminal
+name: Termovies Terminal
 
 on:
   push:
@@ -47,20 +47,20 @@ jobs:
       - name: Build and install the pacman package
         run: |
           useradd -m builder
-          mkdir -p /tmp/cinematch-arch
-          cinematch_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          cp terminal/build/arch/PKGBUILD "terminal/dist/release/cinematch-$cinematch_version.tar.gz" /tmp/cinematch-arch/
-          chown -R builder:builder /tmp/cinematch-arch
-          cd /tmp/cinematch-arch
+          mkdir -p /tmp/termovies-arch
+          termovies_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          cp terminal/build/arch/PKGBUILD "terminal/dist/release/termovies-$termovies_version.tar.gz" /tmp/termovies-arch/
+          chown -R builder:builder /tmp/termovies-arch
+          cd /tmp/termovies-arch
           runuser -u builder -- makepkg --noconfirm
-          pacman -U --noconfirm cinematch-[0-9]*-1-any.pkg.tar.zst
-          cinematch --version
+          pacman -U --noconfirm termovies-[0-9]*-1-any.pkg.tar.zst
+          termovies --version
           python "$GITHUB_WORKSPACE/terminal/scripts/check-installed-ui.py"
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          cp cinematch-[0-9]*-1-any.pkg.tar.zst "$GITHUB_WORKSPACE/artifacts/"
+          cp termovies-[0-9]*-1-any.pkg.tar.zst "$GITHUB_WORKSPACE/artifacts/"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: cinematch-arch-package
+          name: termovies-arch-package
           path: artifacts/*.pkg.tar.zst
 
   public:

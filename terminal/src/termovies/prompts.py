@@ -12,7 +12,7 @@ PROVIDERS = {"DeepSeek": "https://chat.deepseek.com/", "ChatGPT": "https://chatg
 
 
 def catalog():
-    return json.loads(files("cinematch").joinpath("movements.json").read_text(encoding="utf-8"))
+    return json.loads(files("termovies").joinpath("movements.json").read_text(encoding="utf-8"))
 
 
 def search_currents(query="", kind="all"):

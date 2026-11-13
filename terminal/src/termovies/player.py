@@ -32,7 +32,7 @@ class Player:
 
     def available(self):
         choice = self.store.config.get("player", "auto")
-        override = os.environ.get("CINEMATCH_PLAYER", "")
+        override = os.environ.get("TERMOVIES_PLAYER", "")
         if override and Path(override).is_file():
             return override
         for name in ([choice] if choice != "auto" else ["mpv", "vlc", "ffplay"]):
@@ -45,10 +45,10 @@ class Player:
                     return str(path)
         return None
 
-    def command(self, stream, *, resume=0, title="CineMatch"):
+    def command(self, stream, *, resume=0, title="Termovies"):
         executable = self.available()
         if not executable:
-            raise CineError("Installa mpv o VLC e riapri CineMatch. Arch: sudo pacman -S mpv · Ubuntu: sudo apt install mpv")
+            raise CineError("Installa mpv o VLC e riapri Termovies. Arch: sudo pacman -S mpv · Ubuntu: sudo apt install mpv")
         url = web_url(stream.url)
         name = ntpath.basename(executable).lower()
         headers = stream.headers
@@ -78,7 +78,7 @@ class Player:
             args += ["-headers", "".join(k+": "+v+"\r\n" for k, v in headers.items())]
         return args+["-ss", str(max(0, resume)), "-i", url]
 
-    async def play(self, stream, *, resume=0, title="CineMatch"):
+    async def play(self, stream, *, resume=0, title="Termovies"):
         if stream.kind in {"external", "torrent"}:
             raise CineError("Questa sorgente deve essere risolta prima di avviare il player.")
         await self.stop()
